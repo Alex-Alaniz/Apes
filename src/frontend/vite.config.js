@@ -15,6 +15,12 @@ export default defineConfig({
       external: [],
       output: {
         globals: {}
+      },
+      onwarn(warning, warn) {
+        // Suppress certain warnings
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE') return;
+        if (warning.code === 'UNRESOLVED_IMPORT' && warning.source?.includes('globalThis-config')) return;
+        warn(warning);
       }
     },
     commonjsOptions: {
