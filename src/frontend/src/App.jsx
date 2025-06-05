@@ -28,8 +28,10 @@ import { Buffer } from 'buffer';
 window.Buffer = Buffer;
 
 function App() {
-  // Configure network - using devnet for testing
-  const network = WalletAdapterNetwork.Devnet;
+  // Configure network - using mainnet for production
+  const network = import.meta.env.VITE_SOLANA_NETWORK === 'mainnet' 
+    ? WalletAdapterNetwork.Mainnet 
+    : WalletAdapterNetwork.Devnet;
   const endpoint = React.useMemo(() => {
     const customRpc = import.meta.env.VITE_RPC_URL;
     return customRpc || clusterApiUrl(network);
