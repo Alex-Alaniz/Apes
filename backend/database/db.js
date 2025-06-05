@@ -11,12 +11,11 @@ const connectionConfig = {
   connectionTimeoutMillis: 5000,
 };
 
-if (isProduction && process.env.POSTGRES_URL) {
-  // Production: Use full connection string with SSL
-  connectionConfig.connectionString = process.env.POSTGRES_URL;
+if (isProduction && process.env.POSTGRES_URL_NON_POOLING) {
+  // Production: Use non-pooling connection string with SSL
+  connectionConfig.connectionString = process.env.POSTGRES_URL_NON_POOLING;
   connectionConfig.ssl = { 
-    rejectUnauthorized: false,
-    require: true
+    rejectUnauthorized: false
   };
 } else {
   // Development: Use individual parameters without SSL
