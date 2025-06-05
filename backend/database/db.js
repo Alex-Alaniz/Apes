@@ -8,10 +8,10 @@ const pool = new Pool({
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
-  // SSL is handled by the connection string
-  ssl: process.env.POSTGRES_URL && process.env.POSTGRES_URL.includes('supabase') 
-    ? { rejectUnauthorized: false }
-    : false
+  // Force SSL with rejectUnauthorized: false for Supabase
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 // Test database connection
