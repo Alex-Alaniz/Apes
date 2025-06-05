@@ -1,11 +1,12 @@
 const express = require('express');
-const router = express.Router();
-const db = require('../config/database');
-const supabase = require('../config/supabase');
 const path = require('path');
 const { getAssociatedTokenAddress } = require('@solana/spl-token');
 const { PublicKey, Keypair } = require('@solana/web3.js');
 const { BN } = require('@coral-xyz/anchor');
+const db = require('../config/database');
+const supabase = require('../config/supabase');
+
+const router = express.Router();
 
 // List of authorized admin wallets (same as in frontend config/access.js)
 const AUTHORIZED_WALLETS = [

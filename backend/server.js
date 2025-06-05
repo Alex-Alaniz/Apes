@@ -1,15 +1,15 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import pool from './database/db.js';
-import userRoutes from './routes/users.js';
-import leaderboardRoutes from './routes/leaderboard.js';
-import predictionRoutes from './routes/predictions.js';
-import marketRoutes from './routes/markets.js';
-import adminRoutes from './routes/admin.js';
-import engagementRoutes from './routes/engagement.js';
-import twitterRoutes from './routes/twitter.js';
-import syncService from './services/syncService.js';
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const pool = require('./database/db.js');
+const userRoutes = require('./routes/users.js');
+const leaderboardRoutes = require('./routes/leaderboard.js');
+const predictionRoutes = require('./routes/predictions.js');
+const marketRoutes = require('./routes/markets.js');
+const adminRoutes = require('./routes/admin.js');
+const engagementRoutes = require('./routes/engagement.js');
+const twitterRoutes = require('./routes/twitter.js');
+const syncService = require('./services/syncService.js');
 
 dotenv.config();
 
