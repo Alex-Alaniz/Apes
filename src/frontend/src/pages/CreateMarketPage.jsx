@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useNavigate } from 'react-router-dom';
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
-import { Program, AnchorProvider, web3, BN } from '@project-serum/anchor';
+import { Program, AnchorProvider, web3, BN } from '@coral-xyz/anchor';
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
 import { PROGRAM_ID, TOKEN_MINT, getRpcUrl, config } from '../config/solana';
 import { isWalletAuthorized } from '../config/access';
