@@ -45,31 +45,27 @@ router.post('/clear-devnet', async (req, res) => {
   try {
     console.log('🧹 Clearing devnet markets...');
     
-    // Check what tables exist and have foreign keys
-    const tablesResult = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%prediction%'");
-    console.log('📋 Prediction tables:', tablesResult.rows.map(r => r.table_name));
+    // Temporarily disable foreign key checks
+    await pool.query('SET session_replication_role = replica');
+    console.log('🔓 Disabled foreign key constraints');
     
-    // Delete predictions first (foreign key constraint) - try all possible tables
-    try {
-      await pool.query('DELETE FROM predictions');
-      console.log('✅ Cleared predictions table');
-    } catch (e) {
-      console.log('⚠️ No predictions table:', e.message);
-    }
+    // Delete all markets (they're all devnet since no mainnet markets deployed yet)
+    await pool.query('DELETE FROM markets');
+    console.log('✅ Cleared markets table');
     
     // Delete related data
     await pool.query('DELETE FROM prediction_history');
     console.log('✅ Cleared prediction_history table');
-    
-    // Delete all markets (they're all devnet since no mainnet markets deployed yet)
-    await pool.query('DELETE FROM markets CASCADE');
-    console.log('✅ Cleared markets table');
     
     await pool.query('DELETE FROM markets_cache');
     console.log('✅ Cleared markets_cache table');
     
     await pool.query('DELETE FROM market_metadata');
     console.log('✅ Cleared market_metadata table');
+    
+    // Re-enable foreign key checks
+    await pool.query('SET session_replication_role = DEFAULT');
+    console.log('🔒 Re-enabled foreign key constraints');
     
     // Check counts
     const marketCount = await pool.query('SELECT COUNT(*) FROM markets');
