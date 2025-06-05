@@ -45,29 +45,48 @@ router.post('/clear-devnet', async (req, res) => {
   try {
     console.log('🧹 Clearing devnet markets...');
     
-    // Temporarily disable foreign key checks
-    await pool.query('SET session_replication_role = replica');
-    console.log('🔓 Disabled foreign key constraints');
+    // Check for foreign key constraints
+    const fkResult = await pool.query(`
+      SELECT tc.constraint_name, tc.table_name, kcu.column_name, 
+             ccu.table_name AS foreign_table_name,
+             ccu.column_name AS foreign_column_name 
+      FROM information_schema.table_constraints AS tc 
+      JOIN information_schema.key_column_usage AS kcu
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+      JOIN information_schema.constraint_column_usage AS ccu
+        ON ccu.constraint_name = tc.constraint_name
+        AND ccu.table_schema = tc.table_schema
+      WHERE tc.constraint_type = 'FOREIGN KEY' 
+      AND tc.table_name IN ('markets', 'predictions', 'prediction_history')
+    `);
     
-    // Delete all markets (they're all devnet since no mainnet markets deployed yet)
+    console.log('🔍 Foreign key constraints:', fkResult.rows);
+    
+    // Try to delete all dependent data first
+    const tablesToClear = [
+      'predictions', 
+      'user_predictions', 
+      'market_predictions', 
+      'prediction_history',
+      'markets_cache',
+      'market_metadata'
+    ];
+    
+    for (const table of tablesToClear) {
+      try {
+        await pool.query(`DELETE FROM ${table}`);
+        console.log(`✅ Cleared ${table} table`);
+      } catch (e) {
+        console.log(`⚠️ Table ${table} not found or already empty:`, e.message);
+      }
+    }
+    
+    // Now try to delete markets
     await pool.query('DELETE FROM markets');
     console.log('✅ Cleared markets table');
     
-    // Delete related data
-    await pool.query('DELETE FROM prediction_history');
-    console.log('✅ Cleared prediction_history table');
-    
-    await pool.query('DELETE FROM markets_cache');
-    console.log('✅ Cleared markets_cache table');
-    
-    await pool.query('DELETE FROM market_metadata');
-    console.log('✅ Cleared market_metadata table');
-    
-    // Re-enable foreign key checks
-    await pool.query('SET session_replication_role = DEFAULT');
-    console.log('🔒 Re-enabled foreign key constraints');
-    
-    // Check counts
+    // Check final counts
     const marketCount = await pool.query('SELECT COUNT(*) FROM markets');
     const historyCount = await pool.query('SELECT COUNT(*) FROM prediction_history');
     
