@@ -23,11 +23,10 @@ import PublicProfilePage from './pages/PublicProfilePage';
 import { Toaster } from 'react-hot-toast';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
-// Import Buffer polyfill for browser compatibility
-import { Buffer } from 'buffer';
+// Set up global polyfills for browser compatibility
 if (typeof window !== 'undefined') {
-  window.Buffer = Buffer;
   window.global = window.global || window;
+  // Buffer is configured globally via vite.config.js
 }
 
 function App() {
