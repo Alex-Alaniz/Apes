@@ -45,16 +45,24 @@ router.post('/clear-devnet', async (req, res) => {
   try {
     console.log('🧹 Clearing devnet markets...');
     
-    // Delete predictions first (foreign key constraint)
-    await pool.query('DELETE FROM predictions');
-    console.log('✅ Cleared predictions table');
+    // Check what tables exist and have foreign keys
+    const tablesResult = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%prediction%'");
+    console.log('📋 Prediction tables:', tablesResult.rows.map(r => r.table_name));
+    
+    // Delete predictions first (foreign key constraint) - try all possible tables
+    try {
+      await pool.query('DELETE FROM predictions');
+      console.log('✅ Cleared predictions table');
+    } catch (e) {
+      console.log('⚠️ No predictions table:', e.message);
+    }
     
     // Delete related data
     await pool.query('DELETE FROM prediction_history');
     console.log('✅ Cleared prediction_history table');
     
     // Delete all markets (they're all devnet since no mainnet markets deployed yet)
-    await pool.query('DELETE FROM markets');
+    await pool.query('DELETE FROM markets CASCADE');
     console.log('✅ Cleared markets table');
     
     await pool.query('DELETE FROM markets_cache');
