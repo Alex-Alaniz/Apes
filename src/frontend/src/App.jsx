@@ -23,9 +23,12 @@ import PublicProfilePage from './pages/PublicProfilePage';
 import { Toaster } from 'react-hot-toast';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
-// Import Buffer polyfill for Webpack 5
+// Import Buffer polyfill for browser compatibility
 import { Buffer } from 'buffer';
-window.Buffer = Buffer;
+if (typeof window !== 'undefined') {
+  window.Buffer = Buffer;
+  window.global = window.global || window;
+}
 
 function App() {
   // Configure network - using mainnet for production
@@ -46,9 +49,16 @@ function App() {
     []
   );
 
+  // Handle wallet connection errors gracefully
+  const onError = React.useCallback((error) => {
+    console.log('Wallet connection error (handled):', error.message);
+    // Silently handle wallet connection errors
+    // Don't show error to user for autoConnect failures
+  }, []);
+
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect={false}>
+      <WalletProvider wallets={wallets} autoConnect={true} onError={onError}>
         <WalletModalProvider>
           <ThemeProvider>
             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
