@@ -10,14 +10,15 @@
     "db:migrate": "node scripts/migrate.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
+    "@supabase/supabase-js": "^2.49.10",
     "cors": "^2.8.5",
-    "pg": "^8.8.0",
     "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "node-cron": "^3.0.3",
+    "pg": "^8.8.0",
     "twitter-api-v2": "^1.15.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   }
-} 
+}
