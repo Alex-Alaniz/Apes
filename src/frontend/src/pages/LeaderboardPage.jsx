@@ -376,7 +376,7 @@ const LeaderboardPage = () => {
           </div>
 
           <div className="text-sm text-gray-500">
-            Showing {(sortBy === 'engagement' ? engagementLeaderboard : leaderboardData).length} users
+            Showing {(sortBy === 'engagement' ? (engagementLeaderboard || []) : (leaderboardData || [])).length} users
           </div>
         </div>
 
@@ -416,7 +416,7 @@ const LeaderboardPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {(sortBy === 'engagement' ? engagementLeaderboard : leaderboardData).map((user, index) => (
+                {(sortBy === 'engagement' ? (engagementLeaderboard || []) : (leaderboardData || [])).map((user, index) => (
                   <tr
                     key={user.wallet_address || user.user_address}
                     className="border-t border-gray-800 hover:bg-gray-800/30 cursor-pointer transition-colors"
@@ -533,7 +533,7 @@ const LeaderboardPage = () => {
         </div>
 
         {/* Empty State */}
-        {(sortBy === 'engagement' ? engagementLeaderboard : leaderboardData).length === 0 && (
+        {(sortBy === 'engagement' ? (engagementLeaderboard || []) : (leaderboardData || [])).length === 0 && (
           <div className="text-center py-12">
             <Medal className="w-16 h-16 text-gray-700 mx-auto mb-4" />
             <p className="text-gray-400">No users qualify for the leaderboard yet.</p>
