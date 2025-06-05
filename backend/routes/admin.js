@@ -1,12 +1,20 @@
 const express = require('express');
 const path = require('path');
-const { getAssociatedTokenAddress } = require('@solana/spl-token');
-const { PublicKey, Keypair } = require('@solana/web3.js');
-const { BN } = require('@coral-xyz/anchor');
 const db = require('../config/database');
 const supabase = require('../config/supabase');
 
 const router = express.Router();
+
+// Dynamic imports for Solana packages (loaded when needed)
+let solanaWeb3, splToken, anchor;
+async function loadSolanaModules() {
+  if (!solanaWeb3) {
+    solanaWeb3 = await import('@solana/web3.js');
+    splToken = await import('@solana/spl-token');
+    anchor = await import('@coral-xyz/anchor');
+  }
+  return { solanaWeb3, splToken, anchor };
+}
 
 // List of authorized admin wallets (same as in frontend config/access.js)
 const AUTHORIZED_WALLETS = [

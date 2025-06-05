@@ -15,9 +15,6 @@
     "pg": "^8.8.0",
     "dotenv": "^16.3.1",
     "node-cron": "^3.0.3",
-    "@solana/web3.js": "^1.73.0",
-    "@coral-xyz/anchor": "^0.28.0",
-    "@solana/spl-token": "^0.3.7",
     "twitter-api-v2": "^1.15.0"
   },
   "devDependencies": {

@@ -1,10 +1,6 @@
-import * as web3 from '@solana/web3.js';
-import * as anchor from '@coral-xyz/anchor';
-import { PublicKey } from '@solana/web3.js';
-import pool from '../database/db.js';
-import cron from 'node-cron';
+const pool = require('../database/db');
 
-// Sync service for blockchain synchronization
+// Sync service for blockchain synchronization  
 const syncService = {
   startSync: () => {
     console.log('Sync service started - syncing every 5 minutes');
@@ -25,4 +21,4 @@ const syncService = {
   }
 };
 
-export default syncService; 
+module.exports = syncService; 

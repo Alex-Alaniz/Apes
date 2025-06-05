@@ -1,11 +1,13 @@
-const { Connection, PublicKey } = require('@solana/web3.js');
+// const { Connection, PublicKey } = require('@solana/web3.js'); // Temporarily disabled
 const BelieveAppService = require('./believeAppService');
 
 class BurnEventProcessor {
   constructor(rpcUrl, programId, believeAppApiKey) {
-    this.connection = new Connection(rpcUrl, 'confirmed');
-    this.programId = new PublicKey(programId);
-    this.believeApp = new BelieveAppService(believeAppApiKey);
+    // Temporarily disabled for CommonJS compatibility
+    console.log('BurnEventProcessor temporarily disabled - Solana packages removed');
+    // this.connection = new Connection(rpcUrl, 'confirmed');
+    // this.programId = new PublicKey(programId);
+    // this.believeApp = new BelieveAppService(believeAppApiKey);
     this.processedSignatures = new Set();
   }
 
@@ -13,18 +15,19 @@ class BurnEventProcessor {
    * Start monitoring for burn events
    */
   async startMonitoring() {
-    console.log('🔍 Starting burn event monitoring...');
+    console.log('🔍 BurnEventProcessor temporarily disabled - Solana packages removed');
+    return; // Temporarily disabled
     
     // Subscribe to program logs
-    this.connection.onLogs(
-      this.programId,
-      async (logs) => {
-        await this.processLogs(logs);
-      },
-      'confirmed'
-    );
+    // this.connection.onLogs(
+    //   this.programId,
+    //   async (logs) => {
+    //     await this.processLogs(logs);
+    //   },
+    //   'confirmed'
+    // );
 
-    console.log('✅ Monitoring active for program:', this.programId.toString());
+    // console.log('✅ Monitoring active for program:', this.programId.toString());
   }
 
   /**
