@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const db = require('../database/db');
 const supabase = require('../config/supabase');
 
 // GET /api/markets - Fetch all markets with enhanced data including assets
