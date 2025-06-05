@@ -265,10 +265,10 @@ const AdminPage = () => {
                       <div className="text-sm text-gray-400 mb-1">Option {index + 1}</div>
                       <div className="font-medium text-white mb-2">{option}</div>
                       <div className="text-2xl font-bold text-white">
-                        {market.optionProbabilities[index].toFixed(1)}%
+                        {(market.optionProbabilities?.[index] || 0).toFixed(1)}%
                       </div>
                       <div className="text-sm text-gray-400">
-                        {market.optionPools[index].toFixed(2)} APES
+                        {(market.optionPools?.[index] || 0).toFixed(2)} APES
                       </div>
                     </div>
                   ))}

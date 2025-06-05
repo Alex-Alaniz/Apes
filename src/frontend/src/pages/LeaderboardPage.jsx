@@ -73,7 +73,7 @@ const LeaderboardPage = () => {
       );
       if (response.ok) {
         const data = await response.json();
-        setEngagementLeaderboard(data.leaderboard || []);
+        setEngagementLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []);
       }
     } catch (error) {
       console.error('Error loading engagement leaderboard:', error);
@@ -87,7 +87,7 @@ const LeaderboardPage = () => {
       );
       if (response.ok) {
         const data = await response.json();
-        setTopEngagers(data.leaderboard.slice(0, 3)); // Get top 3 engagers
+        setTopEngagers(Array.isArray(data.leaderboard) ? data.leaderboard.slice(0, 3) : []); // Get top 3 engagers
       }
     } catch (error) {
       console.error('Error loading top engagers:', error);
@@ -180,7 +180,7 @@ const LeaderboardPage = () => {
                 Top Profit Makers
               </h3>
               <div className="space-y-3">
-                {topPerformers.topProfit.slice(0, 3).map((user, index) => (
+                {(topPerformers.topProfit || []).slice(0, 3).map((user, index) => (
                   <div
                     key={user.wallet_address}
                     className="flex items-center justify-between p-3 bg-black/30 rounded-lg cursor-pointer hover:bg-black/50 transition-colors"
@@ -221,7 +221,7 @@ const LeaderboardPage = () => {
                 Most Accurate
               </h3>
               <div className="space-y-3">
-                {topPerformers.topAccuracy.slice(0, 3).map((user, index) => (
+                {(topPerformers.topAccuracy || []).slice(0, 3).map((user, index) => (
                   <div
                     key={user.wallet_address}
                     className="flex items-center justify-between p-3 bg-black/30 rounded-lg cursor-pointer hover:bg-black/50 transition-colors"
@@ -262,7 +262,7 @@ const LeaderboardPage = () => {
                 Highest Volume
               </h3>
               <div className="space-y-3">
-                {topPerformers.topVolume.slice(0, 3).map((user, index) => (
+                {(topPerformers.topVolume || []).slice(0, 3).map((user, index) => (
                   <div
                     key={user.wallet_address}
                     className="flex items-center justify-between p-3 bg-black/30 rounded-lg cursor-pointer hover:bg-black/50 transition-colors"

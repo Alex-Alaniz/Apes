@@ -40,6 +40,46 @@ router.post('/database', async (req, res) => {
   }
 });
 
+// POST /api/setup/clear-devnet - Clear devnet markets
+router.post('/clear-devnet', async (req, res) => {
+  try {
+    console.log('🧹 Clearing devnet markets...');
+    
+    // Delete all markets (they're all devnet since no mainnet markets deployed yet)
+    await pool.query('DELETE FROM markets');
+    console.log('✅ Cleared markets table');
+    
+    // Delete related data
+    await pool.query('DELETE FROM prediction_history');
+    console.log('✅ Cleared prediction_history table');
+    
+    await pool.query('DELETE FROM markets_cache');
+    console.log('✅ Cleared markets_cache table');
+    
+    await pool.query('DELETE FROM market_metadata');
+    console.log('✅ Cleared market_metadata table');
+    
+    // Check counts
+    const marketCount = await pool.query('SELECT COUNT(*) FROM markets');
+    const historyCount = await pool.query('SELECT COUNT(*) FROM prediction_history');
+    
+    res.json({ 
+      success: true, 
+      message: 'Devnet markets cleared successfully',
+      counts: {
+        markets: parseInt(marketCount.rows[0].count),
+        predictions: parseInt(historyCount.rows[0].count)
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error clearing devnet data:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // GET /api/setup/status - Check database status
 router.get('/status', async (req, res) => {
   try {

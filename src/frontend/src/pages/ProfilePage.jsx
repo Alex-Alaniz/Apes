@@ -98,7 +98,7 @@ const ProfilePage = () => {
   const ensureUserExists = async () => {
     try {
       // Create or get user
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/create-or-get`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/create-or-get`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -123,7 +123,7 @@ const ProfilePage = () => {
     setLoading(true);
     try {
       // Fetch user stats
-      const statsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${publicKey.toString()}/stats`);
+      const statsRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/${publicKey.toString()}/stats`);
       if (statsRes.ok) {
         const stats = await statsRes.json();
         setUserStats({
@@ -136,7 +136,7 @@ const ProfilePage = () => {
       }
 
       // Fetch bet history
-      const historyRes = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${publicKey.toString()}/bets`);
+      const historyRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/${publicKey.toString()}/bets`);
       if (historyRes.ok) {
         const history = await historyRes.json();
         setBetHistory(history.bets || []);
@@ -189,7 +189,7 @@ const ProfilePage = () => {
 
     setSavingUsername(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${publicKey.toString()}/username`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/${publicKey.toString()}/username`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
