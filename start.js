@@ -5,6 +5,14 @@
 
 const path = require('path');
 const { spawn } = require('child_process');
+const fs = require('fs');
+
+console.log('🚀 STARTING APES BACKEND - DEBUG MODE');
+console.log('📊 Environment:', process.env.NODE_ENV || 'undefined');
+console.log('🌐 PORT:', process.env.PORT || 'undefined');
+console.log('💾 Database URL set:', !!process.env.POSTGRES_URL);
+console.log('📂 Current working directory:', process.cwd());
+console.log('📋 Available files:', fs.readdirSync('.').slice(0, 10));
 
 // Determine the correct backend directory
 const backendDir = path.join(__dirname, 'backend');
@@ -26,21 +34,38 @@ if (!fs.existsSync(serverFile)) {
 process.chdir(backendDir);
 console.log('📂 Changed working directory to:', process.cwd());
 
-// Spawn the server process
+// Spawn the server process with better error handling
+console.log('🔄 Spawning server process...');
 const server = spawn('node', ['server.js'], {
   stdio: 'inherit',
-  cwd: backendDir
+  cwd: backendDir,
+  env: { ...process.env } // Pass all environment variables
 });
 
 server.on('error', (err) => {
-  console.error('❌ Failed to start server:', err);
+  console.error('❌ Failed to start server process:', err);
+  console.error('📋 Error details:', {
+    code: err.code,
+    errno: err.errno,
+    syscall: err.syscall,
+    path: err.path,
+    spawnargs: err.spawnargs
+  });
   process.exit(1);
 });
 
-server.on('close', (code) => {
-  console.log(`🔴 Server process exited with code ${code}`);
+server.on('close', (code, signal) => {
+  console.log(`🔴 Server process exited with code ${code}, signal: ${signal}`);
+  if (code !== 0) {
+    console.error('💥 Non-zero exit code indicates server crash');
+  }
   process.exit(code);
 });
+
+// Add timeout to detect hanging processes
+setTimeout(() => {
+  console.log('⚠️ Server startup timeout - process may be hanging');
+}, 30000);
 
 // Handle process termination
 process.on('SIGTERM', () => {

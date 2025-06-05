@@ -7,21 +7,7 @@
   "deploy": {
     "startCommand": "node start.js",
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 100,
+    "healthcheckTimeout": 300,
     "restartPolicyType": "on_failure"
-  },
-  "environments": {
-    "production": {
-      "variables": {
-        "NODE_ENV": "production",
-        "PORT": "5000",
-        "SOLANA_NETWORK": "mainnet-beta",
-        "SOLANA_RPC_URL": "https://api.mainnet-beta.solana.com",
-        "APES_PROGRAM_ID": "APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS",
-        "APES_TOKEN_MINT": "9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts",
-        "APES_TREASURY": "APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z",
-        "CORS_ORIGIN": "https://apes-lake.vercel.app"
-      }
-    }
   }
 } 

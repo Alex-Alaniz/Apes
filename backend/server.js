@@ -45,18 +45,28 @@ app.use((err, req, res, next) => {
 
 // Start server
 app.listen(PORT, async () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log('📊 Environment:', process.env.NODE_ENV);
+  console.log('💾 Database URL set:', !!process.env.POSTGRES_URL);
+  console.log('🌐 CORS Origin:', process.env.CORS_ORIGIN);
   
-  // Test database connection
+  // Test database connection (non-blocking)
   try {
     const result = await pool.query('SELECT NOW()');
-    console.log('Database connection test successful:', result.rows[0].now);
+    console.log('✅ Database connection test successful:', result.rows[0].now);
     
     // Start blockchain sync service
     syncService.startSync();
   } catch (error) {
-    console.error('Database connection failed:', error);
-    process.exit(1);
+    console.error('❌ Database connection failed:', error.message);
+    console.error('🔧 Database details:', {
+      host: process.env.POSTGRES_HOST || 'undefined',
+      database: process.env.POSTGRES_DATABASE || 'undefined',
+      user: process.env.POSTGRES_USER || 'undefined',
+      port: process.env.DB_PORT || 'undefined'
+    });
+    console.log('⚠️ Server will continue without database connection');
+    // Don't exit - let server run for debugging
   }
 });
 
