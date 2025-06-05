@@ -7,6 +7,8 @@ import leaderboardRoutes from './routes/leaderboard.js';
 import predictionRoutes from './routes/predictions.js';
 import marketRoutes from './routes/markets.js';
 import adminRoutes from './routes/admin.js';
+import engagementRoutes from './routes/engagement.js';
+import twitterRoutes from './routes/twitter.js';
 import syncService from './services/syncService.js';
 
 dotenv.config();
@@ -29,6 +31,8 @@ app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/predictions', predictionRoutes);
 app.use('/api/markets', marketRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/engagement', engagementRoutes);
+app.use('/api/twitter', twitterRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
