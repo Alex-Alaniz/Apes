@@ -45,13 +45,17 @@ router.post('/clear-devnet', async (req, res) => {
   try {
     console.log('🧹 Clearing devnet markets...');
     
-    // Delete all markets (they're all devnet since no mainnet markets deployed yet)
-    await pool.query('DELETE FROM markets');
-    console.log('✅ Cleared markets table');
+    // Delete predictions first (foreign key constraint)
+    await pool.query('DELETE FROM predictions');
+    console.log('✅ Cleared predictions table');
     
     // Delete related data
     await pool.query('DELETE FROM prediction_history');
     console.log('✅ Cleared prediction_history table');
+    
+    // Delete all markets (they're all devnet since no mainnet markets deployed yet)
+    await pool.query('DELETE FROM markets');
+    console.log('✅ Cleared markets table');
     
     await pool.query('DELETE FROM markets_cache');
     console.log('✅ Cleared markets_cache table');
