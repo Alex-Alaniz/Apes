@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const pool = require('./database/db');
+const pool = require('./config/database');
 const userRoutes = require('./routes/users');
 const leaderboardRoutes = require('./routes/leaderboard');
 const predictionRoutes = require('./routes/predictions');
@@ -49,8 +49,10 @@ app.use((err, req, res, next) => {
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log('📊 Environment:', process.env.NODE_ENV);
-  console.log('💾 Database URL set:', !!process.env.POSTGRES_URL);
+  console.log('💾 Database URL set:', !!(process.env.DATABASE_URL || process.env.POSTGRES_URL));
   console.log('🌐 CORS Origin:', process.env.CORS_ORIGIN);
+  console.log('🔗 Using DATABASE_URL:', !!process.env.DATABASE_URL);
+  console.log('🔗 Using POSTGRES_URL:', !!process.env.POSTGRES_URL);
   
   // Test database connection (non-blocking)
   try {

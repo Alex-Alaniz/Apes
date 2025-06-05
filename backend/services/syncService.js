@@ -1,4 +1,4 @@
-const pool = require('../database/db');
+const pool = require('../config/database');
 
 // Sync service for blockchain synchronization  
 const syncService = {

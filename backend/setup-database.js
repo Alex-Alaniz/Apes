@@ -1,4 +1,4 @@
-const pool = require('./database/db.js');
+const pool = require('./config/database.js');
 const fs = require('fs');
 
 async function createTables() {
