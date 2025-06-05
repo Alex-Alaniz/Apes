@@ -1,0 +1,3 @@
+const { Program, AnchorProvider, web3, BN } = require('@coral-xyz/anchor');
+const { Connection, PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY } = require('@solana/web3.js');
+// ... existing code ... 

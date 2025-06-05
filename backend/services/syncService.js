@@ -1,0 +1,28 @@
+import * as web3 from '@solana/web3.js';
+import * as anchor from '@coral-xyz/anchor';
+import { PublicKey } from '@solana/web3.js';
+import pool from '../database/db.js';
+import cron from 'node-cron';
+
+// Sync service for blockchain synchronization
+const syncService = {
+  startSync: () => {
+    console.log('Sync service started - syncing every 5 minutes');
+    
+    // Initial sync
+    console.log('Starting market sync...');
+    setTimeout(() => {
+      console.log('Market sync completed (simulated)');
+    }, 1000);
+    
+    // Set up periodic sync
+    setInterval(() => {
+      console.log('Starting market sync...');
+      setTimeout(() => {
+        console.log('Market sync completed (simulated)');
+      }, 1000);
+    }, 5 * 60 * 1000); // Every 5 minutes
+  }
+};
+
+export default syncService; 
