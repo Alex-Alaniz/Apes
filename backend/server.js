@@ -1,15 +1,15 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const pool = require('./database/db.js');
-const userRoutes = require('./routes/users.js');
-const leaderboardRoutes = require('./routes/leaderboard.js');
-const predictionRoutes = require('./routes/predictions.js');
-const marketRoutes = require('./routes/markets.js');
-const adminRoutes = require('./routes/admin.js');
-const engagementRoutes = require('./routes/engagement.js');
-const twitterRoutes = require('./routes/twitter.js');
-const syncService = require('./services/syncService.js');
+const pool = require('./database/db');
+const userRoutes = require('./routes/users');
+const leaderboardRoutes = require('./routes/leaderboard');
+const predictionRoutes = require('./routes/predictions');
+const marketRoutes = require('./routes/markets');
+const adminRoutes = require('./routes/admin');
+const engagementRoutes = require('./routes/engagement');
+const twitterRoutes = require('./routes/twitter');
+const syncService = require('./services/syncService');
 
 dotenv.config();
 
