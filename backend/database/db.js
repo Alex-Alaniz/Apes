@@ -14,7 +14,10 @@ const connectionConfig = {
 if (isProduction && process.env.POSTGRES_URL) {
   // Production: Use full connection string with SSL
   connectionConfig.connectionString = process.env.POSTGRES_URL;
-  connectionConfig.ssl = { rejectUnauthorized: false };
+  connectionConfig.ssl = { 
+    rejectUnauthorized: false,
+    require: true
+  };
 } else {
   // Development: Use individual parameters without SSL
   connectionConfig.host = process.env.POSTGRES_HOST || 'localhost';
