@@ -1,4 +1,4 @@
-const db = require('../database/db');
+const db = require('../config/database');
 
 // Activity types and their point values
 const ACTIVITY_POINTS = {

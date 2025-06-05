@@ -38,6 +38,13 @@ router.get('/', async (req, res) => {
     
     console.log(`📊 Found ${result.rows.length} markets in database`);
     
+    // If no markets found, return empty array with helpful message
+    if (result.rows.length === 0) {
+      console.log('📭 No active markets found in database - database may be cleared for mainnet');
+      console.log('🔗 Frontend will fallback to live blockchain data or show empty state');
+      return res.json([]);
+    }
+    
     // Transform the data to include calculated fields
     const markets = result.rows.map(market => {
       // Calculate option percentages
