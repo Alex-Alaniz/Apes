@@ -1,7 +1,6 @@
 import { Connection, PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import idl from '../idl/market_system.json';
 import { config, PROGRAM_ID as programId, TOKEN_MINT as tokenMint } from '../config/solana';
 import { getCachedTokenDecimals, uiToUnits, unitsToUi } from '../utils/tokenUtils';
 import connectionService from './connectionService';
@@ -249,11 +248,18 @@ class MarketService {
     
     console.log('MarketService: Provider created', this.provider);
     
-    // Use the IDL directly since we have it
+    // Load IDL dynamically
     try {
+      // Load IDL from public directory
+      const idlResponse = await fetch('/market_system.json');
+      if (!idlResponse.ok) {
+        throw new Error(`Failed to load IDL: ${idlResponse.status}`);
+      }
+      const idl = await idlResponse.json();
+      
       // Add more debugging
       console.log('MarketService: About to create Program with:', {
-        idl: idl ? 'IDL exists' : 'IDL is null/undefined',
+        idl: idl ? 'IDL loaded successfully' : 'IDL is null/undefined',
         programId: programId,
         provider: this.provider ? 'Provider exists' : 'Provider is null'
       });
