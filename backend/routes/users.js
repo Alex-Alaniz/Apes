@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const db = require('../database/db');
 const engagementService = require('../services/engagementService');
 
 // Create or get user
