@@ -12,11 +12,12 @@ const connectionConfig = {
 };
 
 if (isProduction && process.env.POSTGRES_URL_NON_POOLING) {
-  // Production: Use non-pooling connection string with SSL
-  connectionConfig.connectionString = process.env.POSTGRES_URL_NON_POOLING;
-  connectionConfig.ssl = { 
-    rejectUnauthorized: false
-  };
+  // Production: Use non-pooling connection string, try without SSL first
+  let connectionString = process.env.POSTGRES_URL_NON_POOLING;
+  // Remove SSL requirement from connection string
+  connectionString = connectionString.replace('?sslmode=require', '');
+  connectionConfig.connectionString = connectionString;
+  connectionConfig.ssl = false;
 } else {
   // Development: Use individual parameters without SSL
   connectionConfig.host = process.env.POSTGRES_HOST || 'localhost';
