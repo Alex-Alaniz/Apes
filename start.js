@@ -23,7 +23,6 @@ console.log('📁 Backend directory:', backendDir);
 console.log('📄 Server file:', serverFile);
 
 // Check if server.js exists
-const fs = require('fs');
 if (!fs.existsSync(serverFile)) {
   console.error('❌ Error: server.js not found at:', serverFile);
   console.error('Available files in backend:', fs.readdirSync(backendDir));
