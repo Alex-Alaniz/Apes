@@ -92,12 +92,16 @@ const ProfilePage = () => {
   useEffect(() => {
     if (connected && publicKey) {
       ensureUserExists();
+    } else {
+      setLoading(false);
     }
   }, [connected, publicKey]);
 
   const ensureUserExists = async () => {
     try {
-      // Create or get user
+      console.log('🔄 Profile: Ensuring user exists for', publicKey?.toString());
+      
+      // Create or get user - with better error handling
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/create-or-get`, {
         method: 'POST',
         headers: {
@@ -108,63 +112,146 @@ const ProfilePage = () => {
 
       if (response.ok) {
         const user = await response.json();
+        console.log('✅ Profile: User data loaded successfully');
         setUserProfile(user);
         setUsername(user.username || '');
         setTwitterLinked(!!user.twitter_username);
-        loadUserData();
+        await loadUserData();
+      } else {
+        console.warn('⚠️  Profile: Backend API failed, loading with defaults');
+        setUserProfile({ wallet_address: publicKey.toString() });
+        await loadUserDataWithFallback();
       }
     } catch (error) {
-      console.error('Error ensuring user exists:', error);
-      loadUserData(); // Continue loading even if user creation fails
+      console.error('❌ Profile: Error ensuring user exists:', error);
+      console.log('🔄 Profile: Loading with fallback data');
+      setUserProfile({ wallet_address: publicKey.toString() });
+      await loadUserDataWithFallback();
     }
   };
 
   const loadUserData = async () => {
     setLoading(true);
     try {
-      // Fetch user stats
-      const statsRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/${publicKey.toString()}/stats`);
-      if (statsRes.ok) {
-        const stats = await statsRes.json();
-        setUserStats({
-          totalBets: stats.totalBets || 0,
-          wonBets: stats.wonBets || 0,
-          totalVolume: stats.totalVolume || 0,
-          profit: stats.profit || 0,
-          winRate: stats.winRate || 0
-        });
-      }
-
-      // Fetch bet history
-      const historyRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/${publicKey.toString()}/bets`);
-      if (historyRes.ok) {
-        const history = await historyRes.json();
-        setBetHistory(history.bets || []);
-      }
-
-      // Fetch user's bets with market details
-      const allMarkets = await marketService.fetchMarketsWithStats();
-      const marketMap = new Map();
-      allMarkets.forEach(market => {
-        marketMap.set(market.publicKey, market);
-      });
-      setMarkets(marketMap);
+      console.log('🔄 Profile: Loading user data...');
       
-      // Fetch user positions for each market
-      const positionsByMarket = {};
-      for (const market of allMarkets) {
-        const positions = await marketService.getUserPositionsForMarket(publicKey, market.publicKey);
-        if (positions.length > 0) {
-          positionsByMarket[market.publicKey] = positions;
+      // Fetch user stats with error handling
+      try {
+        const statsRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/${publicKey.toString()}/stats`);
+        if (statsRes.ok) {
+          const stats = await statsRes.json();
+          setUserStats({
+            totalBets: stats.totalBets || 0,
+            wonBets: stats.wonBets || 0,
+            totalVolume: stats.totalVolume || 0,
+            profit: stats.profit || 0,
+            winRate: stats.winRate || 0
+          });
+          console.log('✅ Profile: User stats loaded');
+        } else {
+          console.warn('⚠️  Profile: Stats API failed, using defaults');
         }
+      } catch (error) {
+        console.warn('⚠️  Profile: Stats fetch failed:', error.message);
       }
-      setUserPositionsByMarket(positionsByMarket);
+
+      // Fetch bet history with error handling
+      try {
+        const historyRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/${publicKey.toString()}/bets`);
+        if (historyRes.ok) {
+          const history = await historyRes.json();
+          setBetHistory(history.bets || []);
+          console.log('✅ Profile: Bet history loaded');
+        } else {
+          console.warn('⚠️  Profile: Bet history API failed, using empty array');
+        }
+      } catch (error) {
+        console.warn('⚠️  Profile: Bet history fetch failed:', error.message);
+      }
+
+      // Fetch markets with timeout to prevent hanging
+      try {
+        console.log('🔄 Profile: Fetching markets with timeout...');
+        
+        // Create a timeout promise
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Market fetch timeout')), 10000); // 10 second timeout
+        });
+        
+        // Race between market fetch and timeout
+        const allMarkets = await Promise.race([
+          marketService.fetchMarketsWithStats(),
+          timeoutPromise
+        ]);
+        
+        console.log(`✅ Profile: Found ${allMarkets.length} markets`);
+        
+        const marketMap = new Map();
+        allMarkets.forEach(market => {
+          marketMap.set(market.publicKey, market);
+        });
+        setMarkets(marketMap);
+        
+        // Only fetch user positions if we have markets (skip for now to prevent hanging)
+        const positionsByMarket = {};
+        if (allMarkets.length > 0) {
+          console.log('🔄 Profile: Skipping position fetch for now (performance)');
+          // Skip position fetching to prevent hanging
+          // TODO: Implement position fetching with timeout later
+        } else {
+          console.log('📭 Profile: No markets available, skipping position fetch');
+        }
+        
+        setUserPositionsByMarket(positionsByMarket);
+      } catch (error) {
+        console.warn('⚠️  Profile: Market fetch failed or timed out:', error.message);
+        console.log('📭 Profile: Using empty markets to prevent hang');
+        setMarkets(new Map());
+        setUserPositionsByMarket({});
+      }
+      
+      console.log('✅ Profile: Data loading completed');
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error('❌ Profile: Error loading user data:', error);
       setToast({
-        message: 'Failed to load user data',
-        type: 'error'
+        message: 'Some data failed to load, but you can still use your profile',
+        type: 'warning'
       });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUserDataWithFallback = async () => {
+    setLoading(true);
+    try {
+      console.log('🔄 Profile: Loading with fallback (fast mode)...');
+      
+      // Set default user stats immediately
+      setUserStats({
+        totalBets: 0,
+        wonBets: 0,
+        totalVolume: 0,
+        profit: 0,
+        winRate: 0
+      });
+      
+      // Set empty bet history immediately
+      setBetHistory([]);
+      
+      // Skip market fetching in fallback to prevent hanging
+      console.log('📭 Profile: Skipping market fetch in fallback mode for speed');
+      setMarkets(new Map());
+      setUserPositionsByMarket({});
+      
+      setToast({
+        message: 'Profile loaded in offline mode - limited data available',
+        type: 'info'
+      });
+      
+      console.log('✅ Profile: Fast fallback loading completed');
+    } catch (error) {
+      console.error('❌ Profile: Even fallback failed:', error);
     } finally {
       setLoading(false);
     }

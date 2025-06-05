@@ -48,7 +48,7 @@ function App() {
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider wallets={wallets} autoConnect={false}>
         <WalletModalProvider>
           <ThemeProvider>
             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
