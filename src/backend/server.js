@@ -4,6 +4,7 @@ const cors = require('cors');
 const db = require('./config/database');
 const blockchainSyncService = require('./services/blockchainSyncService');
 const polymarketSyncService = require('./services/polymarketSyncService');
+const BurnEventProcessor = require('./services/burnEventProcessor');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -35,6 +36,13 @@ db.query('SELECT NOW()')
 console.log('Starting blockchain sync service...');
 blockchainSyncService.start();
 
+// Start burn event processor
+console.log('Starting burn event processor...');
+const burnEventProcessor = new BurnEventProcessor();
+burnEventProcessor.start().catch(error => {
+  console.error('Failed to start burn event processor:', error);
+});
+
 // Start Polymarket sync service if enabled
 if (process.env.ENABLE_POLYMARKET_SYNC === 'true') {
   console.log('Starting Polymarket sync service...');
@@ -45,6 +53,9 @@ if (process.env.ENABLE_POLYMARKET_SYNC === 'true') {
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
   blockchainSyncService.stop();
+  if (burnEventProcessor) {
+    burnEventProcessor.stop();
+  }
   if (process.env.ENABLE_POLYMARKET_SYNC === 'true') {
     polymarketSyncService.stop();
   }

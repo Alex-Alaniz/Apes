@@ -279,7 +279,17 @@ const ProfilePage = () => {
 
     setSavingUsername(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/${publicKey.toString()}/username`, {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const endpoint = `${apiUrl}/api/users/${publicKey.toString()}/username`;
+      
+      console.log('Making username update request to:', endpoint);
+      console.log('Request headers:', {
+        'Content-Type': 'application/json',
+        'x-wallet-address': publicKey.toString(),
+      });
+      console.log('Request body:', { username });
+
+      const response = await fetch(endpoint, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -287,6 +297,9 @@ const ProfilePage = () => {
         },
         body: JSON.stringify({ username }),
       });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
       if (response.ok) {
         const updatedUser = await response.json();
@@ -297,16 +310,43 @@ const ProfilePage = () => {
           type: 'success'
         });
       } else {
-        const error = await response.json();
+        // Get response as text first to see if it's HTML
+        const responseText = await response.text();
+        console.error('Error response text:', responseText);
+        
+        // Try to parse as JSON if it looks like JSON
+        let errorMessage = 'Failed to update username';
+        if (responseText.trim().startsWith('{')) {
+          try {
+            const errorData = JSON.parse(responseText);
+            errorMessage = errorData.error || errorMessage;
+          } catch (parseError) {
+            console.error('Failed to parse error response as JSON:', parseError);
+          }
+        } else {
+          // If it's HTML, it means we're hitting the wrong endpoint or server
+          console.error('Received HTML response instead of JSON. Check API URL and server status.');
+          errorMessage = `Server configuration error: received HTML instead of JSON. API URL: ${apiUrl}`;
+        }
+        
         setToast({
-          message: error.error || 'Failed to update username',
+          message: errorMessage,
           type: 'error'
         });
       }
     } catch (error) {
       console.error('Error updating username:', error);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to update username';
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        errorMessage = 'Unable to connect to server. Please check your internet connection.';
+      } else if (error.message.includes('NetworkError')) {
+        errorMessage = 'Network error. Please try again.';
+      }
+      
       setToast({
-        message: 'Failed to update username',
+        message: errorMessage,
         type: 'error'
       });
     } finally {

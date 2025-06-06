@@ -556,16 +556,46 @@ class MarketService {
     const totalPool = unitsToUi(account.totalPool || account.total_pool || new BN(0), decimals);
     const optionPools = account.optionPools || [];
     
+    // Debug logging for percentage calculation issues
+    if (totalPool === 0 && optionPools.length > 0) {
+      console.warn('Market has zero total pool but option pools exist:', {
+        publicKey: publicKey.toString(),
+        question: question.substring(0, 50),
+        totalPool,
+        optionPools: optionPools.map(pool => unitsToUi(pool instanceof BN ? pool : new BN(pool), decimals)),
+        rawTotalPool: account.totalPool?.toString(),
+        rawOptionPools: optionPools.map(p => p?.toString())
+      });
+    }
+
+    // Calculate option percentages with better fallback logic
     const optionProbabilities = optionPools.map((pool, index) => {
       const poolSize = unitsToUi(pool instanceof BN ? pool : new BN(pool), decimals);
-      const percentage = totalPool > 0 ? (poolSize / totalPool) * 100 : (100 / options.length);
-      return percentage;
+      
+      // If totalPool is 0 but we have pools, recalculate totalPool from option pools
+      const actualTotalPool = totalPool > 0 ? totalPool : 
+        optionPools.reduce((sum, p) => sum + unitsToUi(p instanceof BN ? p : new BN(p), decimals), 0);
+      
+      if (actualTotalPool > 0) {
+        return (poolSize / actualTotalPool) * 100;
+      } else {
+        // Only use fallback if there's truly no pool data
+        return 100 / options.length;
+      }
     });
+
+    // Calculate actual total pool for display (sum of all option pools)
+    const calculatedTotalPool = optionPools.reduce((sum, pool) => {
+      return sum + unitsToUi(pool instanceof BN ? pool : new BN(pool), decimals);
+    }, 0);
+
+    // Use the calculated pool if it's greater than the reported totalPool
+    const displayTotalPool = Math.max(totalPool, calculatedTotalPool);
 
     // Calculate user-contributed volume (total pool minus creator stake)
     // Default creator stake is 100 APES
     const creatorStake = 100;
-    const userVolume = Math.max(0, totalPool - creatorStake);
+    const userVolume = Math.max(0, displayTotalPool - creatorStake);
 
     return {
       publicKey: publicKey.toString(),
@@ -575,7 +605,7 @@ class MarketService {
       optionProbabilities,
       optionPercentages: optionProbabilities, // Add this to ensure MarketCard gets the data
       totalVolume: userVolume, // Show only user-contributed volume
-      actualTotalPool: totalPool, // Keep the actual total for calculations
+      actualTotalPool: displayTotalPool, // Keep the actual total for calculations
       participantCount: 0, // This would need to be tracked separately as it's not stored on-chain
       status: this.getMarketStatusString(account.status),
       category: category,
