@@ -14,9 +14,8 @@ const connectionString = process.env.POSTGRES_URL ||
 const databaseConfig = connectionString
   ? {
       connectionString: connectionString,
-      ssl: {
-        rejectUnauthorized: false,
-        require: true
+      ssl: process.env.NODE_ENV === 'production' ? true : {
+        rejectUnauthorized: false
       },
       max: 20,
       idleTimeoutMillis: 30000,
@@ -33,9 +32,8 @@ const databaseConfig = connectionString
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 15000,
-      ssl: {
-        rejectUnauthorized: false,
-        require: true
+      ssl: process.env.NODE_ENV === 'production' ? true : {
+        rejectUnauthorized: false
       }
     };
 
