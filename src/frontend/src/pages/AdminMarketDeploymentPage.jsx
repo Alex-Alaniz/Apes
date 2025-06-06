@@ -55,21 +55,33 @@ const AdminMarketDeploymentPage = () => {
   // Initialize market service when wallet connects
   useEffect(() => {
     const initService = async () => {
-      if (wallet && publicKey) {
+      console.log('🔧 Wallet connection debug:', {
+        wallet: !!wallet,
+        walletAdapter: !!walletAdapter,
+        publicKey: !!publicKey,
+        connected: connected,
+        walletName: wallet?.adapter?.name,
+        walletReady: wallet?.readyState
+      });
+
+      if (wallet && publicKey && connected) {
         try {
+          console.log('🚀 Attempting to initialize MarketService with wallet:', wallet.adapter?.name);
           await marketService.initialize(wallet);
           setServiceInitialized(true);
+          console.log('✅ MarketService initialized successfully');
         } catch (error) {
-          console.error('Failed to initialize market service:', error);
+          console.error('❌ Failed to initialize market service:', error);
           setServiceInitialized(false);
         }
       } else {
+        console.log('⏳ Wallet not ready for MarketService initialization');
         setServiceInitialized(false);
       }
     };
 
     initService();
-  }, [wallet, publicKey]);
+  }, [wallet, walletAdapter, publicKey, connected]);
 
   const fetchPendingMarkets = useCallback(async (showAll = showAllMarkets) => {
     if (!publicKey) return;
@@ -697,7 +709,26 @@ const AdminMarketDeploymentPage = () => {
           <p className="text-sm text-gray-500 mt-2">Connected as: {publicKey?.toString().slice(0, 8)}...{publicKey?.toString().slice(-8)}</p>
           
           {/* Platform Initialization Status */}
-          {serviceInitialized && (
+          {!serviceInitialized ? (
+            <div className="mt-6 p-4 bg-red-900/20 border border-red-600/30 rounded-lg">
+              <h3 className="text-lg font-semibold text-red-300 mb-3 flex items-center gap-2">
+                <XCircle className="w-5 h-5" />
+                Wallet Connection Issue
+              </h3>
+              <p className="text-red-200 text-sm mb-2">
+                MarketService failed to initialize. This prevents platform initialization.
+              </p>
+              <p className="text-red-200 text-xs mb-3">
+                Please check browser console for detailed debugging information.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+              >
+                Reload Page
+              </button>
+            </div>
+          ) : (
             <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
               <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
                 <AlertCircle className="w-5 h-5" />
