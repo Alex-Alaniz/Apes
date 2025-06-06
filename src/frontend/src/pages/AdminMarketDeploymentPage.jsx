@@ -29,6 +29,9 @@ const AdminMarketDeploymentPage = () => {
   const navigate = useNavigate();
   const { publicKey, connected, wallet } = useWallet();
   const walletAdapter = wallet?.adapter;
+  
+  // Get the actual Phantom wallet with signAndSendTransaction method
+  const phantomWallet = window.phantom?.solana;
   const [pendingMarkets, setPendingMarkets] = useState([]);
   const [deployedMarkets, setDeployedMarkets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -64,17 +67,19 @@ const AdminMarketDeploymentPage = () => {
       console.log('🔧 Wallet connection debug:', {
         wallet: !!wallet,
         walletAdapter: !!walletAdapter,
+        phantomWallet: !!phantomWallet,
         publicKey: !!publicKey,
         connected: connected,
         walletName: wallet?.adapter?.name,
         walletReady: wallet?.readyState,
+        phantomSignAndSend: typeof phantomWallet?.signAndSendTransaction,
         serviceInitialized: serviceInitialized
       });
 
       // Only initialize if we have everything and service isn't already initialized
-      if (wallet && publicKey && connected && !serviceInitialized) {
-        // CRITICAL: Capture wallet reference BEFORE any async operations
-        const walletRef = wallet;
+      if (wallet && publicKey && connected && phantomWallet && !serviceInitialized) {
+        // CRITICAL: Use actual Phantom wallet with signAndSendTransaction method
+        const walletRef = phantomWallet;
         const adapterRef = wallet.adapter;
         
         try {
@@ -85,17 +90,27 @@ const AdminMarketDeploymentPage = () => {
             return;
           }
           
+          // Ensure Phantom wallet has the required methods
+          if (typeof walletRef.signAndSendTransaction !== 'function') {
+            console.log('⚠️ Phantom wallet missing signAndSendTransaction method');
+            setServiceInitialized(false);
+            return;
+          }
+          
+          // Add publicKey to phantom wallet object for compatibility
+          walletRef.publicKey = adapterRef.publicKey;
+          
           console.log('🚀 Attempting to initialize MarketService with wallet:', adapterRef?.name);
           console.log('🔍 Wallet validation passed - proceeding with initialization');
-          console.log('🔍 WalletRef type:', typeof walletRef, 'Has signAndSendTransaction:', typeof walletRef.signAndSendTransaction);
+          console.log('🔍 PhantomWallet type:', typeof walletRef, 'Has signAndSendTransaction:', typeof walletRef.signAndSendTransaction);
           
-          // Use captured reference instead of reactive wallet object
+          // Use Phantom wallet with signAndSendTransaction method
           await marketService.initialize(walletRef);
           setServiceInitialized(true);
           console.log('✅ MarketService initialized successfully');
         } catch (error) {
           console.error('❌ Failed to initialize market service:', error);
-          console.log('🔍 WalletRef at error time:', walletRef);
+          console.log('🔍 PhantomWallet at error time:', walletRef);
           console.log('🔍 AdapterRef at error time:', adapterRef);
           setServiceInitialized(false);
         }
@@ -108,7 +123,7 @@ const AdminMarketDeploymentPage = () => {
     };
 
     initService();
-  }, [wallet?.adapter?.name, publicKey?.toString(), connected, serviceInitialized]);
+  }, [wallet?.adapter?.name, publicKey?.toString(), connected, phantomWallet, serviceInitialized]);
 
   const fetchPendingMarkets = useCallback(async (showAll = showAllMarkets) => {
     if (!publicKey) return;

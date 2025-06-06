@@ -7,13 +7,20 @@ require('dotenv').config();
 // Supabase: users, Twitter, leaderboard, engagement system
 // Neon: Polymarket markets only (used elsewhere)
 
-// FORCE connection string usage to avoid SSL issues with individual params
+// FORCE SSL DISABLE for all Supabase connections to fix certificate issues
 let connectionString = process.env.POSTGRES_URL || 
                       process.env.POSTGRES_PRISMA_URL ||
                       process.env.POSTGRES_URL_NON_POOLING ||
                       process.env.DATABASE_URL; // Fallback to Neon only if Supabase not available
 
-// If no connection string but individual params exist, force SSL disable
+// CRITICAL FIX: Force SSL disable for all connection strings to prevent cert errors
+if (connectionString) {
+  // Remove any existing SSL parameters and add sslmode=disable
+  connectionString = connectionString.split('?')[0] + '?sslmode=disable';
+  console.log('🔧 Forced SSL disable in connection string to prevent certificate errors');
+}
+
+// If no connection string but individual params exist, also force SSL disable
 if (!connectionString && process.env.POSTGRES_HOST) {
   connectionString = `postgres://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST}:${process.env.POSTGRES_PORT || 5432}/${process.env.POSTGRES_DATABASE}?sslmode=disable`;
   console.log('🔧 Created connection string from individual params with SSL disabled');
