@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const supabase = require('../config/supabase');
 
 // Activity types and their point values
 const ACTIVITY_POINTS = {
@@ -49,11 +49,18 @@ const TIERS = {
 class EngagementService {
   // Check if user has Twitter linked
   async hasTwitterLinked(userAddress) {
-    const result = await db.query(
-      'SELECT twitter_id FROM users WHERE wallet_address = $1',
-      [userAddress]
-    );
-    return result.rows.length > 0 && result.rows[0].twitter_id !== null;
+    const { data: result, error } = await supabase
+      .from('users')
+      .select('twitter_id')
+      .eq('wallet_address', userAddress)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error checking Twitter link:', error);
+      throw error;
+    }
+    
+    return result && result.twitter_id !== null;
   }
 
   // Track an activity and award points
@@ -81,42 +88,45 @@ class EngagementService {
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         
-        const checkQuery = `
-          SELECT COUNT(*) as count 
-          FROM engagement_points 
-          WHERE user_address = $1 
-            AND activity_type = 'PLACE_PREDICTION'
-            AND created_at >= $2
-        `;
-        const checkResult = await db.query(checkQuery, [userAddress, todayStart]);
+        const { data: checkResult, error: checkError } = await supabase
+          .from('engagement_points')
+          .select('id', { count: 'exact' })
+          .eq('user_address', userAddress)
+          .eq('activity_type', 'PLACE_PREDICTION')
+          .gte('created_at', todayStart.toISOString());
         
-        if (checkResult.rows[0].count === '0') {
+        if (checkError) {
+          console.error('Error checking daily prediction:', checkError);
+        } else if (checkResult.length === 0) {
           // Award bonus for first prediction of the day
           await this.trackActivity(userAddress, 'FIRST_PREDICTION_DAILY', metadata);
         }
       }
 
       // Insert the engagement activity
-      const insertQuery = `
-        INSERT INTO engagement_points (user_address, activity_type, points_earned, metadata, requires_twitter, tweet_id)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING *
-      `;
-      
       const requiresTwitter = TWITTER_REQUIRED_ACTIVITIES.includes(activityType);
       const tweetId = metadata.tweet_id || null;
       
-      const result = await db.query(insertQuery, [
-        userAddress,
-        activityType,
-        finalPoints,
-        JSON.stringify(metadata),
-        requiresTwitter,
-        tweetId
-      ]);
+      const { data: result, error: insertError } = await supabase
+        .from('engagement_points')
+        .insert({
+          user_address: userAddress,
+          activity_type: activityType,
+          points_earned: finalPoints,
+          metadata: metadata,
+          requires_twitter: requiresTwitter,
+          tweet_id: tweetId
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Error inserting engagement points:', insertError);
+        throw insertError;
+      }
 
       console.log(`Awarded ${finalPoints} points to ${userAddress} for ${activityType}`);
-      return result.rows[0];
+      return result;
     } catch (error) {
       console.error('Error tracking activity:', error);
       throw error;
@@ -127,19 +137,18 @@ class EngagementService {
   async getBalance(userAddress) {
     try {
       // Get balance from point_balances table
-      const balanceQuery = `
-        SELECT 
-          total_points,
-          claimed_points,
-          available_points,
-          last_claim_date
-        FROM point_balances
-        WHERE user_address = $1
-      `;
+      const { data: balance, error: balanceError } = await supabase
+        .from('point_balances')
+        .select('total_points, claimed_points, available_points, last_claim_date')
+        .eq('user_address', userAddress)
+        .single();
       
-      const balanceResult = await db.query(balanceQuery, [userAddress]);
+      if (balanceError && balanceError.code !== 'PGRST116') {
+        console.error('Error fetching balance:', balanceError);
+        throw balanceError;
+      }
       
-      if (balanceResult.rows.length === 0) {
+      if (!balance) {
         // User has no points yet
         return {
           total_points: 0,
@@ -152,8 +161,6 @@ class EngagementService {
           has_twitter_linked: await this.hasTwitterLinked(userAddress)
         };
       }
-
-      const balance = balanceResult.rows[0];
       const totalPoints = parseInt(balance.total_points);
       
       // Determine tier
@@ -176,19 +183,30 @@ class EngagementService {
       }
 
       // Get recent activities
-      const activitiesQuery = `
-        SELECT activity_type, points_earned, created_at
-        FROM engagement_points
-        WHERE user_address = $1
-        ORDER BY created_at DESC
-        LIMIT 10
-      `;
-      const activitiesResult = await db.query(activitiesQuery, [userAddress]);
+      const { data: activitiesResult, error: activitiesError } = await supabase
+        .from('engagement_points')
+        .select('activity_type, points_earned, created_at')
+        .eq('user_address', userAddress)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (activitiesError) {
+        console.error('Error fetching activities:', activitiesError);
+        // Continue without activities
+      }
 
       // Check follower count for bonus
-      const userQuery = `SELECT twitter_followers FROM users WHERE wallet_address = $1`;
-      const userResult = await db.query(userQuery, [userAddress]);
-      const followerBonus = userResult.rows[0]?.twitter_followers >= 1000 ? 1.1 : 1.0;
+      const { data: userResult, error: userError } = await supabase
+        .from('users')
+        .select('twitter_followers')
+        .eq('wallet_address', userAddress)
+        .single();
+
+      if (userError && userError.code !== 'PGRST116') {
+        console.error('Error fetching user data:', userError);
+      }
+      
+      const followerBonus = userResult?.twitter_followers >= 1000 ? 1.1 : 1.0;
 
       return {
         total_points: totalPoints,
@@ -198,7 +216,7 @@ class EngagementService {
         multiplier: currentTier.multiplier * followerBonus,
         next_milestone: nextMilestone,
         last_claim_date: balance.last_claim_date,
-        recent_activities: activitiesResult.rows,
+        recent_activities: activitiesResult || [],
         has_twitter_linked: await this.hasTwitterLinked(userAddress),
         follower_bonus: followerBonus
       };

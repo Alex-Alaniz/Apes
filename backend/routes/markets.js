@@ -6,8 +6,11 @@ const supabase = require('../config/supabase');
 // GET /api/markets - Fetch all markets with enhanced data including assets
 router.get('/', async (req, res) => {
   try {
-    const query = `
-      SELECT 
+    console.log('🔄 Fetching markets using Supabase...');
+    
+    const { data: result, error } = await supabase
+      .from('markets')
+      .select(`
         market_address,
         creator,
         question,
@@ -29,24 +32,26 @@ router.get('/', async (req, res) => {
         participant_count,
         created_at,
         updated_at
-      FROM markets 
-      WHERE status = 'Active'
-      ORDER BY created_at DESC
-    `;
+      `)
+      .eq('status', 'Active')
+      .order('created_at', { ascending: false });
 
-    const result = await db.query(query);
+    if (error) {
+      console.error('❌ Supabase query error:', error);
+      throw error;
+    }
     
-    console.log(`📊 Found ${result.rows.length} markets in database`);
+    console.log(`📊 Found ${result.length} markets in database`);
     
     // If no markets found, return empty array with helpful message
-    if (result.rows.length === 0) {
+    if (result.length === 0) {
       console.log('📭 No active markets found in database - database may be cleared for mainnet');
       console.log('🔗 Frontend will fallback to live blockchain data or show empty state');
       return res.json([]);
     }
     
     // Transform the data to include calculated fields
-    const markets = result.rows.map(market => {
+    const markets = result.map(market => {
       // Calculate option percentages
       const optionPercentages = [];
       if (market.total_volume > 0 && market.option_volumes) {
@@ -132,7 +137,7 @@ router.get('/', async (req, res) => {
       };
 
       // Log first market for debugging
-      if (result.rows.indexOf(market) === 0) {
+      if (result.indexOf(market) === 0) {
         console.log('📋 First market data:', {
           question: market.question?.substring(0, 50),
           poly_id: market.poly_id,
@@ -156,8 +161,9 @@ router.get('/', async (req, res) => {
       console.log('⚠️  participant_count column missing, falling back to query without it');
       
       try {
-        const fallbackQuery = `
-          SELECT 
+        const { data: fallbackResult, error: fallbackError } = await supabase
+          .from('markets')
+          .select(`
             market_address,
             creator,
             question,
@@ -178,16 +184,15 @@ router.get('/', async (req, res) => {
             is_trending,
             created_at,
             updated_at
-          FROM markets 
-          WHERE status = 'Active'
-          ORDER BY created_at DESC
-        `;
+          `)
+          .eq('status', 'Active')
+          .order('created_at', { ascending: false });
         
-        const fallbackResult = await db.query(fallbackQuery);
-        console.log(`📊 Fallback query found ${fallbackResult.rows.length} markets`);
+        if (fallbackError) throw fallbackError;
+        console.log(`📊 Fallback query found ${fallbackResult.length} markets`);
         
         // Transform the data with participantCount defaulted to 0
-        const markets = fallbackResult.rows.map(market => {
+        const markets = fallbackResult.map(market => {
           // Same transformation logic but with participantCount: 0
           const optionPercentages = [];
           if (market.total_volume > 0 && market.option_volumes) {
@@ -255,8 +260,9 @@ router.get('/:address', async (req, res) => {
   try {
     const { address } = req.params;
     
-    const query = `
-      SELECT 
+    const { data: result, error } = await supabase
+      .from('markets')
+      .select(`
         market_address,
         creator,
         question,
@@ -276,17 +282,20 @@ router.get('/:address', async (req, res) => {
         assets,
         is_trending,
         created_at
-      FROM markets 
-      WHERE market_address = $1
-    `;
+      `)
+      .eq('market_address', address)
+      .single();
 
-    const result = await db.query(query, [address]);
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+      console.error('❌ Error fetching market:', error);
+      throw error;
+    }
     
-    if (result.rows.length === 0) {
+    if (!result) {
       return res.status(404).json({ error: 'Market not found' });
     }
 
-    const market = result.rows[0];
+    const market = result;
     
     // Calculate option percentages
     const optionPercentages = [];
@@ -380,14 +389,18 @@ router.get('/:address', async (req, res) => {
 // GET /api/markets/pending - Get markets pending creation from Polymarket
 router.get('/sync/pending', async (req, res) => {
   try {
-    const query = `
-      SELECT * FROM market_metadata 
-      WHERE status = 'pending_creation' 
-      ORDER BY created_at ASC
-    `;
+    const { data: result, error } = await supabase
+      .from('market_metadata')
+      .select('*')
+      .eq('status', 'pending_creation')
+      .order('created_at', { ascending: true });
     
-    const result = await db.query(query);
-    res.json(result.rows);
+    if (error) {
+      console.error('❌ Error fetching pending markets:', error);
+      throw error;
+    }
+    
+    res.json(result || []);
   } catch (error) {
     console.error('Error fetching pending markets:', error);
     res.status(500).json({ error: 'Failed to fetch pending markets' });
