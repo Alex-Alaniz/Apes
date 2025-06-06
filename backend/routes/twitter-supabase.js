@@ -2,8 +2,19 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const engagementService = require('../services/engagementService');
+const crypto = require('crypto');
 
-// Generate Twitter OAuth link (simplified version)
+// Helper function to generate PKCE challenge
+function generatePKCE() {
+  const codeVerifier = crypto.randomBytes(32).toString('base64url');
+  const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+  return { codeVerifier, codeChallenge };
+}
+
+// Store PKCE verifiers temporarily (in production, use Redis or database)
+const pkceStore = new Map();
+
+// Generate Twitter OAuth link with PKCE
 router.post('/auth/link', async (req, res) => {
   try {
     const userAddress = req.headers['x-wallet-address'];
@@ -11,12 +22,51 @@ router.post('/auth/link', async (req, res) => {
       return res.status(401).json({ error: 'No wallet address provided' });
     }
 
-    // For now, return a simple auth URL (Twitter OAuth can be implemented later)
-    const authUrl = `https://twitter.com/oauth/authorize?oauth_token=placeholder`;
+    // Check if Twitter OAuth is configured
+    if (!process.env.TWITTER_CLIENT_ID || !process.env.TWITTER_CALLBACK_URL) {
+      console.warn('⚠️ Twitter OAuth not configured, using debug mode');
+      return res.json({
+        auth_url: null,
+        debug_mode: true,
+        message: 'Twitter OAuth not configured. Use /auth/debug-link endpoint for testing.',
+        debug_endpoint: '/api/twitter/auth/debug-link'
+      });
+    }
+
+    // Generate PKCE challenge
+    const { codeVerifier, codeChallenge } = generatePKCE();
+    const state = crypto.randomBytes(16).toString('hex');
+    
+    // Store PKCE verifier and state
+    pkceStore.set(state, { codeVerifier, userAddress, timestamp: Date.now() });
+    
+    // Clean up old entries (older than 10 minutes)
+    for (const [key, value] of pkceStore.entries()) {
+      if (Date.now() - value.timestamp > 600000) {
+        pkceStore.delete(key);
+      }
+    }
+
+    // Build Twitter OAuth URL with PKCE
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: process.env.TWITTER_CLIENT_ID,
+      redirect_uri: process.env.TWITTER_CALLBACK_URL,
+      scope: 'tweet.read users.read offline.access',
+      state: state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256'
+    });
+
+    const authUrl = `https://twitter.com/i/oauth2/authorize?${params.toString()}`;
+    
+    console.log('✅ Generated Twitter OAuth URL for:', userAddress);
     
     res.json({
       auth_url: authUrl,
-      message: 'Twitter OAuth not fully implemented yet. Use debug endpoint for testing.'
+      state: state,
+      debug_mode: false,
+      message: 'Click the auth_url to connect your Twitter account'
     });
   } catch (error) {
     console.error('Error generating Twitter auth link:', error);
@@ -24,22 +74,151 @@ router.post('/auth/link', async (req, res) => {
   }
 });
 
-// Handle OAuth callback (simplified)
+// Handle OAuth callback with PKCE
 router.post('/auth/callback', async (req, res) => {
   try {
-    const userAddress = req.headers['x-wallet-address'];
-    if (!userAddress) {
-      return res.status(401).json({ error: 'No wallet address provided' });
+    const { code, state } = req.body;
+    
+    if (!code || !state) {
+      return res.status(400).json({ error: 'Missing authorization code or state' });
     }
 
-    res.status(501).json({ 
-      error: 'Twitter OAuth callback not fully implemented yet. Use debug endpoint for testing.' 
+    // Retrieve PKCE verifier
+    const storedData = pkceStore.get(state);
+    if (!storedData) {
+      return res.status(400).json({ error: 'Invalid or expired state parameter' });
+    }
+
+    const { codeVerifier, userAddress } = storedData;
+    pkceStore.delete(state); // Clean up
+
+    // Exchange code for access token
+    const tokenResponse = await fetch('https://api.twitter.com/2/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64')}`
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: process.env.TWITTER_CALLBACK_URL,
+        code_verifier: codeVerifier
+      })
     });
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.text();
+      console.error('Twitter token exchange failed:', errorData);
+      return res.status(400).json({ error: 'Failed to exchange authorization code' });
+    }
+
+    const tokenData = await tokenResponse.json();
+    
+    // Get user info from Twitter
+    const userResponse = await fetch('https://api.twitter.com/2/users/me?user.fields=username,public_metrics', {
+      headers: {
+        'Authorization': `Bearer ${tokenData.access_token}`
+      }
+    });
+
+    if (!userResponse.ok) {
+      console.error('Failed to get Twitter user info');
+      return res.status(400).json({ error: 'Failed to get Twitter user info' });
+    }
+
+    const userData = await userResponse.json();
+    const twitterUser = userData.data;
+
+    // Link Twitter account (similar to debug-link logic)
+    await linkTwitterAccount(userAddress, twitterUser.id, twitterUser.username, twitterUser.public_metrics?.followers_count || 0);
+
+    res.json({
+      success: true,
+      message: 'Twitter account linked successfully',
+      twitter_id: twitterUser.id,
+      twitter_username: twitterUser.username,
+      followers: twitterUser.public_metrics?.followers_count || 0
+    });
+
   } catch (error) {
     console.error('Error handling Twitter callback:', error);
     res.status(500).json({ error: 'Failed to link Twitter account' });
   }
 });
+
+// Helper function to link Twitter account
+async function linkTwitterAccount(walletAddress, twitterId, username, followers = 0) {
+  // Check if this Twitter account already exists
+  const { data: existingTwitter, error: twitterCheckError } = await supabase
+    .from('twitter_accounts')
+    .select('twitter_id')
+    .eq('twitter_id', twitterId)
+    .single();
+  
+  if (twitterCheckError && twitterCheckError.code !== 'PGRST116') {
+    throw new Error('Database error checking Twitter account');
+  }
+
+  const isNewTwitterAccount = !existingTwitter;
+
+  // Create Twitter account if it doesn't exist
+  if (isNewTwitterAccount) {
+    const { error: createTwitterError } = await supabase
+      .from('twitter_accounts')
+      .insert({
+        twitter_id: twitterId,
+        twitter_username: username,
+        twitter_followers: followers
+      });
+    
+    if (createTwitterError) {
+      throw new Error('Failed to create Twitter account');
+    }
+  }
+
+  // Update user with Twitter info
+  const { error: userUpdateError } = await supabase
+    .from('users')
+    .upsert({
+      wallet_address: walletAddress,
+      twitter_id: twitterId,
+      twitter_username: username,
+      twitter_followers: followers,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'wallet_address'
+    });
+  
+  if (userUpdateError) {
+    throw new Error('Failed to update user with Twitter info');
+  }
+
+  // Create wallet-Twitter link
+  const { error: linkCreateError } = await supabase
+    .from('wallet_twitter_links')
+    .upsert({
+      wallet_address: walletAddress,
+      twitter_id: twitterId,
+      is_primary_wallet: true,
+      linked_at: new Date().toISOString()
+    }, {
+      onConflict: 'wallet_address,twitter_id'
+    });
+  
+  if (linkCreateError) {
+    throw new Error('Failed to create Twitter link');
+  }
+
+  // Award points for linking Twitter
+  try {
+    await engagementService.trackActivity(walletAddress, 'LINK_TWITTER');
+  } catch (pointsError) {
+    console.error('⚠️ Failed to award Twitter linking points:', pointsError.message);
+  }
+
+  return { isNewTwitterAccount };
+}
 
 // Debug endpoint to manually link Twitter (for testing)
 router.post('/auth/debug-link', async (req, res) => {
@@ -52,121 +231,16 @@ router.post('/auth/debug-link', async (req, res) => {
     
     console.log('🔗 Debug Twitter link attempt:', { walletAddress, twitterId, username });
     
-    // Check if this Twitter account already exists
-    const { data: existingTwitter, error: twitterCheckError } = await supabase
-      .from('twitter_accounts')
-      .select('twitter_id')
-      .eq('twitter_id', twitterId)
-      .single();
-    
-    if (twitterCheckError && twitterCheckError.code !== 'PGRST116') {
-      console.error('Error checking existing Twitter account:', twitterCheckError);
-      return res.status(500).json({ error: 'Database error checking Twitter account' });
-    }
-
-    const isNewTwitterAccount = !existingTwitter;
-
-    // Create Twitter account if it doesn't exist
-    if (isNewTwitterAccount) {
-      const { error: createTwitterError } = await supabase
-        .from('twitter_accounts')
-        .insert({
-          twitter_id: twitterId,
-          twitter_username: username,
-          twitter_followers: 0
-        });
-      
-      if (createTwitterError) {
-        console.error('Error creating Twitter account:', createTwitterError);
-        return res.status(500).json({ error: 'Failed to create Twitter account' });
-      }
-      
-      console.log('✅ Created new Twitter account:', twitterId);
-    }
-
-    // Check if wallet is already linked to a different Twitter account
-    const { data: existingLink, error: linkCheckError } = await supabase
-      .from('wallet_twitter_links')
-      .select('twitter_id')
-      .eq('wallet_address', walletAddress)
-      .single();
-    
-    if (linkCheckError && linkCheckError.code !== 'PGRST116') {
-      console.error('Error checking existing wallet link:', linkCheckError);
-      return res.status(500).json({ error: 'Database error checking wallet link' });
-    }
-
-    if (existingLink && existingLink.twitter_id !== twitterId) {
-      return res.status(409).json({ 
-        error: 'This wallet is already linked to a different Twitter account' 
-      });
-    }
-
-    // Create user if needed
-    const { error: userCreateError } = await supabase
-      .from('users')
-      .upsert({
-        wallet_address: walletAddress,
-        twitter_id: twitterId,
-        twitter_username: username,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'wallet_address'
-      });
-    
-    if (userCreateError) {
-      console.error('Error creating/updating user:', userCreateError);
-      return res.status(500).json({ error: 'Failed to create/update user' });
-    }
-
-    // Check if this is the first wallet for this Twitter account
-    const { data: walletCount, error: countError } = await supabase
-      .from('wallet_twitter_links')
-      .select('*', { count: 'exact' })
-      .eq('twitter_id', twitterId);
-    
-    if (countError) {
-      console.error('Error counting wallets for Twitter:', countError);
-      return res.status(500).json({ error: 'Database error' });
-    }
-
-    const isFirstWallet = walletCount.length === 0;
-
-    // Create wallet-Twitter link
-    const { error: linkCreateError } = await supabase
-      .from('wallet_twitter_links')
-      .upsert({
-        wallet_address: walletAddress,
-        twitter_id: twitterId,
-        is_primary_wallet: isFirstWallet,
-        linked_at: new Date().toISOString()
-      }, {
-        onConflict: 'wallet_address,twitter_id'
-      });
-    
-    if (linkCreateError) {
-      console.error('Error creating wallet-Twitter link:', linkCreateError);
-      return res.status(500).json({ error: 'Failed to create Twitter link' });
-    }
-
-    // Award points for linking Twitter
-    try {
-      await engagementService.trackActivity(walletAddress, 'LINK_TWITTER');
-      console.log('🎯 Awarded 100 points for Twitter linking');
-    } catch (pointsError) {
-      console.error('⚠️ Failed to award Twitter linking points:', pointsError.message);
-      // Don't fail the request if points fail
-    }
+    await linkTwitterAccount(walletAddress, twitterId, username);
 
     console.log('✅ Twitter link successful for:', walletAddress);
 
     res.json({
       success: true,
-      message: 'Twitter account linked successfully',
+      message: 'Twitter account linked successfully (debug mode)',
       twitter_id: twitterId,
       twitter_username: username,
-      is_new_twitter_account: isNewTwitterAccount,
-      is_primary_wallet: isFirstWallet
+      debug_mode: true
     });
     
   } catch (error) {

@@ -125,11 +125,71 @@ class EngagementService {
         throw insertError;
       }
 
+      // **NEW: Update point_balances table immediately for real-time display**
+      await this.updatePointBalance(userAddress);
+
       console.log(`Awarded ${finalPoints} points to ${userAddress} for ${activityType}`);
       return result;
     } catch (error) {
       console.error('Error tracking activity:', error);
       throw error;
+    }
+  }
+
+  // **NEW: Update point_balances table for real-time sync**
+  async updatePointBalance(userAddress) {
+    try {
+      // Calculate total points from engagement_points table
+      const { data: pointsData, error: pointsError } = await supabase
+        .from('engagement_points')
+        .select('points_earned')
+        .eq('user_address', userAddress);
+
+      if (pointsError) {
+        console.error('Error calculating total points:', pointsError);
+        throw pointsError;
+      }
+
+      const totalPoints = pointsData.reduce((sum, record) => sum + (record.points_earned || 0), 0);
+
+      // Check if point_balances record exists
+      const { data: existingBalance, error: balanceError } = await supabase
+        .from('point_balances')
+        .select('claimed_points')
+        .eq('user_address', userAddress)
+        .single();
+
+      const claimedPoints = existingBalance?.claimed_points || 0;
+      const availablePoints = totalPoints - claimedPoints;
+
+      if (balanceError && balanceError.code !== 'PGRST116') {
+        console.error('Error checking point balance:', balanceError);
+        throw balanceError;
+      }
+
+      // Upsert point_balances record
+      const { error: upsertError } = await supabase
+        .from('point_balances')
+        .upsert({
+          user_address: userAddress,
+          total_points: totalPoints,
+          available_points: availablePoints,
+          claimed_points: claimedPoints,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_address'
+        });
+
+      if (upsertError) {
+        console.error('Error updating point balance:', upsertError);
+        throw upsertError;
+      }
+
+      console.log(`✅ Updated point balance for ${userAddress}: ${totalPoints} total, ${availablePoints} available`);
+      return { totalPoints, availablePoints, claimedPoints };
+    } catch (error) {
+      console.error('Error updating point balance:', error);
+      // Don't throw - this is a background update
     }
   }
 

@@ -54,20 +54,22 @@ app.listen(PORT, async () => {
   console.log('🔗 Using DATABASE_URL:', !!process.env.DATABASE_URL);
   console.log('🔗 Using POSTGRES_URL:', !!process.env.POSTGRES_URL);
   
-  // Test database connection (non-blocking)
+  // Test database connection with retry logic
   try {
-    const result = await pool.query('SELECT NOW()');
-    console.log('✅ Database connection test successful:', result.rows[0].now);
+    await pool.testConnection();
+    console.log('✅ Database connection established successfully');
     
     // Start blockchain sync service
     syncService.startSync();
   } catch (error) {
-    console.error('❌ Database connection failed:', error.message);
-    console.error('🔧 Database details:', {
-      host: process.env.POSTGRES_HOST || 'undefined',
-      database: process.env.POSTGRES_DATABASE || 'undefined',
-      user: process.env.POSTGRES_USER || 'undefined',
-      port: process.env.DB_PORT || 'undefined'
+    console.error('❌ Database connection failed after retries:', error.message);
+    console.error('🔧 Environment check:', {
+      DATABASE_URL: process.env.DATABASE_URL ? 'Set' : 'Not set',
+      POSTGRES_URL: process.env.POSTGRES_URL ? 'Set' : 'Not set',
+      POSTGRES_HOST: process.env.POSTGRES_HOST || 'Not set',
+      POSTGRES_USER: process.env.POSTGRES_USER || 'Not set',
+      POSTGRES_DATABASE: process.env.POSTGRES_DATABASE || 'Not set',
+      NODE_ENV: process.env.NODE_ENV
     });
     console.log('⚠️ Server will continue without database connection');
     // Don't exit - let server run for debugging

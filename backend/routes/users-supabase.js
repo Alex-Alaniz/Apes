@@ -98,6 +98,49 @@ router.get('/stats/:walletAddress', async (req, res) => {
   }
 });
 
+// **NEW: Refresh user data endpoint to fix display issues**
+router.post('/refresh/:walletAddress', async (req, res) => {
+  const { walletAddress } = req.params;
+
+  try {
+    console.log('🔄 Refreshing user data for:', walletAddress);
+
+    // Force update point balance
+    await engagementService.updatePointBalance(walletAddress);
+
+    // Get refreshed user balance
+    const balance = await engagementService.getBalance(walletAddress);
+
+    // Get updated leaderboard position
+    const { data: allBalances, error: rankError } = await supabase
+      .from('point_balances')
+      .select('user_address, total_points')
+      .order('total_points', { ascending: false });
+
+    let rank = null;
+    if (!rankError && allBalances) {
+      rank = allBalances.findIndex(b => b.user_address === walletAddress) + 1;
+      if (rank === 0) rank = null;
+    }
+
+    console.log('✅ User data refreshed successfully for:', walletAddress);
+
+    res.json({
+      success: true,
+      message: 'User data refreshed successfully',
+      data: {
+        ...balance,
+        rank: rank,
+        refreshed_at: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error refreshing user data:', error);
+    res.status(500).json({ error: 'Failed to refresh user data' });
+  }
+});
+
 // Update username endpoint
 router.put('/update-username', async (req, res) => {
   const walletAddress = req.headers['x-wallet-address'];
