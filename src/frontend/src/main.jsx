@@ -1,8 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom';
+import { Buffer } from 'buffer';
 import App from './App';
 import './index.css';
+
+// Make Buffer available globally
+window.Buffer = Buffer;
 
 // Error boundary to catch rendering errors
 class ErrorBoundary extends React.Component {
