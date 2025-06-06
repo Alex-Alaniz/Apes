@@ -70,9 +70,10 @@ const AdminMarketDeploymentPage = () => {
     
     try {
       const walletAddress = publicKey.toString();
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       const endpoint = showAll 
-        ? 'http://localhost:5001/api/admin/all-polymarket-markets'
-        : 'http://localhost:5001/api/admin/pending-markets';
+        ? `${apiUrl}/api/admin/all-polymarket-markets`
+        : `${apiUrl}/api/admin/pending-markets`;
         
       console.log(`Fetching markets from: ${endpoint}`);
         
@@ -108,7 +109,8 @@ const AdminMarketDeploymentPage = () => {
     
     try {
       const walletAddress = publicKey.toString();
-      const response = await fetch('http://localhost:5001/api/admin/deployed-markets', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${apiUrl}/api/admin/deployed-markets`, {
         headers: {
           'X-Wallet-Address': walletAddress
         }
@@ -219,7 +221,8 @@ const AdminMarketDeploymentPage = () => {
       const walletAddress = publicKey.toString();
       
       // First, get the market data from backend
-      const response = await fetch(`http://localhost:5001/api/admin/deploy-market/${polyId}`, {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${apiUrl}/api/admin/deploy-market/${polyId}`, {
         method: 'POST',
         headers: {
           'X-Wallet-Address': walletAddress,
@@ -389,7 +392,7 @@ const AdminMarketDeploymentPage = () => {
       
       // Save deployment to backend
       if (createResult.success && createResult.marketPubkey) {
-        const saveResponse = await fetch('http://localhost:5001/api/admin/save-deployed-market', {
+        const saveResponse = await fetch(`${apiUrl}/api/admin/save-deployed-market`, {
           method: 'POST',
           headers: {
             'X-Wallet-Address': walletAddress,
@@ -466,7 +469,8 @@ const AdminMarketDeploymentPage = () => {
     
     try {
       const walletAddress = publicKey.toString();
-      const response = await fetch(`http://localhost:5001/api/admin/decline-market/${polyId}`, {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${apiUrl}/api/admin/decline-market/${polyId}`, {
         method: 'POST',
         headers: {
           'X-Wallet-Address': walletAddress,
