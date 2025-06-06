@@ -14,11 +14,12 @@ const connectionString = process.env.POSTGRES_URL ||
 const databaseConfig = connectionString
   ? {
       connectionString: connectionString,
-      ssl: process.env.NODE_ENV === 'production' ? {
-        rejectUnauthorized: false
-      } : {
-        rejectUnauthorized: false
-      },
+      // Only add SSL config if connection string doesn't disable SSL
+      ...(connectionString.includes('sslmode=disable') ? {} : {
+        ssl: {
+          rejectUnauthorized: false
+        }
+      }),
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 15000,
@@ -36,9 +37,7 @@ const databaseConfig = connectionString
       connectionTimeoutMillis: 15000,
       ssl: process.env.NODE_ENV === 'production' ? {
         rejectUnauthorized: false
-      } : {
-        rejectUnauthorized: false
-      }
+      } : false
     };
 
 // Enhanced debug configuration for two-database setup
@@ -51,6 +50,8 @@ console.log('🔧 Database Configuration:', {
   database: databaseConfig.database || 'From connection string',
   user: databaseConfig.user || 'From connection string',
   ssl: !!databaseConfig.ssl,
+  sslMode: connectionString?.includes('sslmode=disable') ? 'disabled' : 
+           connectionString?.includes('sslmode=require') ? 'required' : 'default',
   // Don't log sensitive info in production
   debug: process.env.NODE_ENV !== 'production' ? {
     POSTGRES_URL_exists: !!process.env.POSTGRES_URL,
