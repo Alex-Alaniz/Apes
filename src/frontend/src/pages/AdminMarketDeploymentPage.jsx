@@ -73,22 +73,30 @@ const AdminMarketDeploymentPage = () => {
 
       // Only initialize if we have everything and service isn't already initialized
       if (wallet && publicKey && connected && !serviceInitialized) {
+        // CRITICAL: Capture wallet reference BEFORE any async operations
+        const walletRef = wallet;
+        const adapterRef = wallet.adapter;
+        
         try {
           // Final validation before initialization
-          if (!wallet || !wallet.adapter || !wallet.adapter.publicKey) {
+          if (!walletRef || !adapterRef || !adapterRef.publicKey) {
             console.log('⚠️ Wallet validation failed');
             setServiceInitialized(false);
             return;
           }
           
-          console.log('🚀 Attempting to initialize MarketService with wallet:', wallet.adapter?.name);
+          console.log('🚀 Attempting to initialize MarketService with wallet:', adapterRef?.name);
           console.log('🔍 Wallet validation passed - proceeding with initialization');
+          console.log('🔍 WalletRef type:', typeof walletRef, 'Has signAndSendTransaction:', typeof walletRef.signAndSendTransaction);
           
-          await marketService.initialize(wallet);
+          // Use captured reference instead of reactive wallet object
+          await marketService.initialize(walletRef);
           setServiceInitialized(true);
           console.log('✅ MarketService initialized successfully');
         } catch (error) {
           console.error('❌ Failed to initialize market service:', error);
+          console.log('🔍 WalletRef at error time:', walletRef);
+          console.log('🔍 AdapterRef at error time:', adapterRef);
           setServiceInitialized(false);
         }
       } else {
