@@ -1194,6 +1194,184 @@ class MarketService {
     }
   }
 
+  async initializePlatform() {
+    // Check if program and provider are initialized
+    if (!this.program || !this.provider) {
+      throw new Error('Market service not initialized. Please try reconnecting your wallet.');
+    }
+    
+    // Get wallet public key from the stored wallet reference
+    const walletPubkey = this.wallet?.publicKey;
+    if (!walletPubkey) {
+      throw new Error('Wallet public key not found. Please ensure your wallet is connected.');
+    }
+
+    try {
+      // Get token decimals
+      const decimals = await getCachedTokenDecimals(this.connection);
+      
+      // Find PDAs
+      const [platformState] = PublicKey.findProgramAddressSync(
+        [Buffer.from("platform_state")],
+        this.program.programId
+      );
+
+      // Check if already initialized
+      try {
+        const existingState = await this.program.account.platformState.fetch(platformState);
+        console.log('✅ Platform already initialized:', existingState);
+        return { success: true, message: 'Platform already initialized', alreadyInitialized: true };
+      } catch (error) {
+        console.log('Platform not initialized, proceeding with initialization...');
+      }
+
+      // Call initialize instruction
+      const tx = await this.program.methods
+        .initialize(
+          new BN(250), // 2.5% bet burn rate
+          new BN(150), // 1.5% claim burn rate  
+          new BN(100)  // 1% platform fee
+        )
+        .accounts({
+          platformState: platformState,
+          authority: walletPubkey,
+          tokenMint: new PublicKey(tokenMint),
+          treasury: new PublicKey(treasuryAddress),
+          systemProgram: SystemProgram.programId,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          rent: SYSVAR_RENT_PUBKEY,
+        })
+        .rpc({ skipPreflight: false });
+
+      console.log('Platform initialization transaction sent:', tx);
+      
+      // Use our custom confirmation method
+      try {
+        await this.confirmTransaction(tx);
+        console.log('Platform initialized successfully:', tx);
+        return { success: true, transaction: tx, message: 'Platform initialized successfully' };
+      } catch (confirmError) {
+        console.warn('Transaction confirmation timeout, but initialization may have succeeded:', tx);
+        return { 
+          success: true, 
+          transaction: tx,
+          warning: 'Transaction sent but confirmation timed out. Please check your wallet for the result.'
+        };
+      }
+    } catch (error) {
+      console.error('Error initializing platform:', error);
+      throw new Error(`Platform initialization failed: ${error.message}`);
+    }
+  }
+
+  async initializeAccessControl() {
+    // Check if program and provider are initialized
+    if (!this.program || !this.provider) {
+      throw new Error('Market service not initialized. Please try reconnecting your wallet.');
+    }
+    
+    // Get wallet public key from the stored wallet reference
+    const walletPubkey = this.wallet?.publicKey;
+    if (!walletPubkey) {
+      throw new Error('Wallet public key not found. Please ensure your wallet is connected.');
+    }
+
+    try {
+      // Find access control PDA
+      const [accessControl] = PublicKey.findProgramAddressSync(
+        [Buffer.from("access_control")],
+        this.program.programId
+      );
+
+      // Check if already initialized
+      try {
+        const existingAccessControl = await this.program.account.accessControl.fetch(accessControl);
+        console.log('✅ Access control already initialized:', existingAccessControl);
+        return { success: true, message: 'Access control already initialized', alreadyInitialized: true };
+      } catch (error) {
+        console.log('Access control not initialized, proceeding with initialization...');
+      }
+
+      // Call initialize_access_control instruction
+      const tx = await this.program.methods
+        .initializeAccessControl()
+        .accounts({
+          accessControl: accessControl,
+          admin: walletPubkey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc({ skipPreflight: false });
+
+      console.log('Access control initialization transaction sent:', tx);
+      
+      // Use our custom confirmation method
+      try {
+        await this.confirmTransaction(tx);
+        console.log('Access control initialized successfully:', tx);
+        return { success: true, transaction: tx, message: 'Access control initialized successfully' };
+      } catch (confirmError) {
+        console.warn('Transaction confirmation timeout, but initialization may have succeeded:', tx);
+        return { 
+          success: true, 
+          transaction: tx,
+          warning: 'Transaction sent but confirmation timed out. Please check your wallet for the result.'
+        };
+      }
+    } catch (error) {
+      console.error('Error initializing access control:', error);
+      throw new Error(`Access control initialization failed: ${error.message}`);
+    }
+  }
+
+  async addMarketCreator(creatorPubkey) {
+    // Check if program and provider are initialized
+    if (!this.program || !this.provider) {
+      throw new Error('Market service not initialized. Please try reconnecting your wallet.');
+    }
+    
+    // Get wallet public key from the stored wallet reference
+    const walletPubkey = this.wallet?.publicKey;
+    if (!walletPubkey) {
+      throw new Error('Wallet public key not found. Please ensure your wallet is connected.');
+    }
+
+    try {
+      // Find access control PDA
+      const [accessControl] = PublicKey.findProgramAddressSync(
+        [Buffer.from("access_control")],
+        this.program.programId
+      );
+
+      // Call add_market_creator instruction
+      const tx = await this.program.methods
+        .addMarketCreator(creatorPubkey)
+        .accounts({
+          accessControl: accessControl,
+          admin: walletPubkey,
+        })
+        .rpc({ skipPreflight: false });
+
+      console.log('Add market creator transaction sent:', tx);
+      
+      // Use our custom confirmation method
+      try {
+        await this.confirmTransaction(tx);
+        console.log('Market creator added successfully:', tx);
+        return { success: true, transaction: tx, message: 'Market creator added successfully' };
+      } catch (confirmError) {
+        console.warn('Transaction confirmation timeout, but operation may have succeeded:', tx);
+        return { 
+          success: true, 
+          transaction: tx,
+          warning: 'Transaction sent but confirmation timed out. Please check your wallet for the result.'
+        };
+      }
+    } catch (error) {
+      console.error('Error adding market creator:', error);
+      throw new Error(`Failed to add market creator: ${error.message}`);
+    }
+  }
+
   async resolveMarket(marketPubkey, winningOption) {
     // Check if program and provider are initialized
     if (!this.program || !this.provider) {

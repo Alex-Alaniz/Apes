@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { PublicKey } from '@solana/web3.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Loader2, 
@@ -45,6 +46,11 @@ const AdminMarketDeploymentPage = () => {
   // Edit functionality state
   const [editingMarket, setEditingMarket] = useState(null);
   const [editedValues, setEditedValues] = useState({});
+  
+  // Platform initialization state
+  const [platformInitialized, setPlatformInitialized] = useState(null); // null = unknown, true/false = status
+  const [accessControlInitialized, setAccessControlInitialized] = useState(null);
+  const [initializing, setInitializing] = useState({});
 
   // Initialize market service when wallet connects
   useEffect(() => {
@@ -462,6 +468,103 @@ const AdminMarketDeploymentPage = () => {
     }
   };
 
+  // Platform initialization functions
+  const checkPlatformStatus = async () => {
+    if (!serviceInitialized) return;
+    
+    try {
+      // Check platform state
+      try {
+        const [platformState] = PublicKey.findProgramAddressSync(
+          [Buffer.from("platform_state")],
+          marketService.program.programId
+        );
+        await marketService.program.account.platformState.fetch(platformState);
+        setPlatformInitialized(true);
+      } catch (error) {
+        setPlatformInitialized(false);
+      }
+      
+      // Check access control
+      try {
+        const [accessControl] = PublicKey.findProgramAddressSync(
+          [Buffer.from("access_control")],
+          marketService.program.programId
+        );
+        await marketService.program.account.accessControl.fetch(accessControl);
+        setAccessControlInitialized(true);
+      } catch (error) {
+        setAccessControlInitialized(false);
+      }
+    } catch (error) {
+      console.error('Error checking platform status:', error);
+    }
+  };
+
+  const initializePlatform = async () => {
+    setInitializing(prev => ({ ...prev, platform: true }));
+    
+    try {
+      const result = await marketService.initializePlatform();
+      if (result.success) {
+        setPlatformInitialized(true);
+        setToast({
+          message: result.message || 'Platform initialized successfully!',
+          type: 'success'
+        });
+      }
+    } catch (error) {
+      console.error('Platform initialization failed:', error);
+      setToast({
+        message: error.message || 'Platform initialization failed',
+        type: 'error'
+      });
+    } finally {
+      setInitializing(prev => ({ ...prev, platform: false }));
+    }
+  };
+
+  const initializeAccessControl = async () => {
+    setInitializing(prev => ({ ...prev, accessControl: true }));
+    
+    try {
+      const result = await marketService.initializeAccessControl();
+      if (result.success) {
+        setAccessControlInitialized(true);
+        setToast({
+          message: result.message || 'Access control initialized successfully!',
+          type: 'success'
+        });
+        
+        // Also add the current wallet as a market creator
+        try {
+          await marketService.addMarketCreator(publicKey);
+          setToast({
+            message: 'Access control initialized and admin added as market creator!',
+            type: 'success'
+          });
+        } catch (addError) {
+          console.warn('Failed to add admin as market creator:', addError);
+        }
+      }
+    } catch (error) {
+      console.error('Access control initialization failed:', error);
+      setToast({
+        message: error.message || 'Access control initialization failed',
+        type: 'error'
+      });
+    } finally {
+      setInitializing(prev => ({ ...prev, accessControl: false }));
+    }
+  };
+
+  // Check platform status when service is initialized
+  useEffect(() => {
+    if (serviceInitialized && isAuthorized) {
+      checkPlatformStatus();
+    }
+  }, [serviceInitialized, isAuthorized]);
+
   const declineMarket = async (polyId, reason = '') => {
     setDeploying(prev => ({ ...prev, [`decline_${polyId}`]: true }));
     setError('');
@@ -592,6 +695,98 @@ const AdminMarketDeploymentPage = () => {
           <h1 className="text-4xl font-bold text-white mb-2">Market Deployment</h1>
           <p className="text-gray-400">Review and deploy markets from Polymarket to Solana</p>
           <p className="text-sm text-gray-500 mt-2">Connected as: {publicKey?.toString().slice(0, 8)}...{publicKey?.toString().slice(-8)}</p>
+          
+          {/* Platform Initialization Status */}
+          {serviceInitialized && (
+            <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
+              <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                Platform Status
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Platform State Status */}
+                <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+                  <div>
+                    <p className="text-white font-medium">Platform State</p>
+                    <p className="text-sm text-gray-400">Core platform configuration</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {platformInitialized === null ? (
+                      <Loader2 className="w-4 h-4 text-yellow-500 animate-spin" />
+                    ) : platformInitialized ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <>
+                        <XCircle className="w-5 h-5 text-red-500" />
+                        <button
+                          onClick={initializePlatform}
+                          disabled={initializing.platform}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded transition-colors flex items-center gap-1"
+                        >
+                          {initializing.platform ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            'Initialize'
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Access Control Status */}
+                <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+                  <div>
+                    <p className="text-white font-medium">Access Control</p>
+                    <p className="text-sm text-gray-400">Market creator permissions</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {accessControlInitialized === null ? (
+                      <Loader2 className="w-4 h-4 text-yellow-500 animate-spin" />
+                    ) : accessControlInitialized ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <>
+                        <XCircle className="w-5 h-5 text-red-500" />
+                        <button
+                          onClick={initializeAccessControl}
+                          disabled={initializing.accessControl}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded transition-colors flex items-center gap-1"
+                        >
+                          {initializing.accessControl ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            'Initialize'
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Warning message if not initialized */}
+              {(platformInitialized === false || accessControlInitialized === false) && (
+                <div className="mt-3 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
+                  <p className="text-red-300 text-sm flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    Platform must be fully initialized before you can deploy markets. Click the Initialize buttons above.
+                  </p>
+                </div>
+              )}
+              
+              {/* Success message when fully initialized */}
+              {platformInitialized === true && accessControlInitialized === true && (
+                <div className="mt-3 p-3 bg-green-900/20 border border-green-600/30 rounded-lg">
+                  <p className="text-green-300 text-sm flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Platform is fully initialized! You can now deploy markets.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
           
           {/* Tab Navigation */}
           <div className="mt-6">
