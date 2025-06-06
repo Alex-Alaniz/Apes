@@ -387,7 +387,7 @@ const AdminMarketDeploymentPage = () => {
         resolutionDate: new Date(marketData.end_time),
         creatorFeeRate: 200, // 2% default
         minBetAmount: 10,
-        creatorStakeAmount: 100
+        creatorStakeAmount: 10 // Reduced from 100 to 10 APES for admin deployment
       });
       
       // Save deployment to backend

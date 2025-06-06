@@ -775,7 +775,31 @@ class MarketService {
       }
     } catch (error) {
       console.error('Error creating market:', error);
-      throw error;
+      
+      // Provide more specific error messages based on common issues
+      if (error.message?.includes('insufficient funds')) {
+        throw new Error(`Insufficient APES tokens. Admin wallet needs ${creatorStakeAmount} APES tokens and SOL for transaction fees.`);
+      }
+      
+      if (error.message?.includes('TokenAccountNotFoundError') || error.message?.includes('AccountNotFound')) {
+        throw new Error('APES token account not found. Please create an associated token account for this wallet first.');
+      }
+      
+      if (error.message?.includes('InvalidAccountData') || error.message?.includes('AccountDataSizeChanged')) {
+        throw new Error('Account data error. Please ensure the program is properly initialized.');
+      }
+      
+      if (error.message?.includes('Unauthorized') || error.message?.includes('ConstraintHasOne')) {
+        throw new Error('Unauthorized: Only admin wallets can create markets.');
+      }
+      
+      if (error.message?.includes('Custom program error: 0x1')) {
+        throw new Error('Platform not initialized. Please contact admin to initialize the platform first.');
+      }
+      
+      // Include the original error for debugging
+      const originalError = error.message || error.toString();
+      throw new Error(`Market creation failed: ${originalError}. Please check wallet balance (need ${creatorStakeAmount} APES + SOL for fees).`);
     }
   }
 
