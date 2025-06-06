@@ -3,6 +3,89 @@ const router = express.Router();
 const supabase = require('../config/supabase');
 const engagementService = require('../services/engagementService');
 
+// Wallet connection endpoint - ensures points are awarded immediately
+router.post('/connect-wallet', async (req, res) => {
+  const walletAddress = req.headers['x-wallet-address'];
+  
+  if (!walletAddress) {
+    return res.status(400).json({ error: 'Wallet address required in x-wallet-address header' });
+  }
+
+  try {
+    console.log('🔌 Wallet connection initiated for:', walletAddress);
+    
+    // Check if user exists
+    const { data: existingUser, error: selectError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('wallet_address', walletAddress)
+      .single();
+
+    if (selectError && selectError.code !== 'PGRST116') {
+      console.error('❌ Error checking existing user:', selectError);
+      return res.status(500).json({ error: 'Database query failed' });
+    }
+
+    let user = existingUser;
+    let isNewUser = false;
+
+    if (!existingUser) {
+      // Create new user
+      const newUser = {
+        wallet_address: walletAddress,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: createdUser, error: insertError } = await supabase
+        .from('users')
+        .insert(newUser)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('❌ Error creating user:', insertError);
+        return res.status(500).json({ error: 'Failed to create user' });
+      }
+
+      user = createdUser;
+      isNewUser = true;
+      console.log('✅ New user created:', createdUser.wallet_address);
+    }
+
+    // Always try to award connection points (will be skipped if already awarded)
+    let pointsAwarded = false;
+    try {
+      await engagementService.trackActivity(walletAddress, 'CONNECT_WALLET');
+      pointsAwarded = true;
+      console.log('🎯 Awarded 25 points for wallet connection');
+    } catch (pointsError) {
+      console.error('⚠️ Points error (may already be awarded):', pointsError.message);
+      // Don't fail the request if points fail, just log it
+    }
+
+    // Get current point balance
+    let pointBalance = null;
+    try {
+      pointBalance = await engagementService.getBalance(walletAddress);
+    } catch (balanceError) {
+      console.error('⚠️ Could not fetch point balance:', balanceError.message);
+    }
+
+    res.json({
+      user: user,
+      isNewUser: isNewUser,
+      pointsAwarded: pointsAwarded,
+      currentPoints: pointBalance?.total_points || 0,
+      message: isNewUser ? 'Welcome! You earned 25 points for connecting your wallet.' : 'Welcome back!'
+    });
+
+  } catch (error) {
+    console.error('❌ Error in wallet connection:', error);
+    res.status(500).json({ error: 'Failed to process wallet connection' });
+  }
+});
+
 // Create or get user endpoint
 router.post('/create-or-get', async (req, res) => {
   const walletAddress = req.headers['x-wallet-address'];

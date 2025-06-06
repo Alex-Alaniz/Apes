@@ -72,6 +72,23 @@ class EngagementService {
         return null;
       }
 
+      // Check for one-time activities (like wallet connection)
+      if (activityType === 'CONNECT_WALLET') {
+        const { data: existingConnection, error: checkError } = await supabase
+          .from('engagement_points')
+          .select('id')
+          .eq('user_address', userAddress)
+          .eq('activity_type', 'CONNECT_WALLET')
+          .single();
+
+        if (checkError && checkError.code !== 'PGRST116') {
+          console.error('Error checking existing connection points:', checkError);
+        } else if (existingConnection) {
+          console.log(`Wallet connection points already awarded to ${userAddress}`);
+          return null; // Don't award duplicate connection points
+        }
+      }
+
       // Check if activity requires Twitter
       if (TWITTER_REQUIRED_ACTIVITIES.includes(activityType)) {
         const hasTwitter = await this.hasTwitterLinked(userAddress);

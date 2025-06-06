@@ -27,6 +27,7 @@ router.post('/auth/link', async (req, res) => {
       console.warn('⚠️ Twitter OAuth not configured, using debug mode');
       return res.json({
         auth_url: null,
+        code_verifier: null,
         debug_mode: true,
         message: 'Twitter OAuth not configured. Use /auth/debug-link endpoint for testing.',
         debug_endpoint: '/api/twitter/auth/debug-link'
@@ -64,6 +65,7 @@ router.post('/auth/link', async (req, res) => {
     
     res.json({
       auth_url: authUrl,
+      code_verifier: codeVerifier, // Frontend expects this field
       state: state,
       debug_mode: false,
       message: 'Click the auth_url to connect your Twitter account'
