@@ -3,6 +3,9 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { FaXTwitter } from 'react-icons/fa6';
 import { FaCheckCircle, FaExternalLinkAlt } from 'react-icons/fa';
 
+// Temporary flag to disable X features for launch
+const TWITTER_FEATURES_ENABLED = import.meta.env.VITE_TWITTER_ENABLED !== 'false';
+
 const TwitterLink = ({ onLinked }) => {
   const { publicKey } = useWallet();
   const [isLinked, setIsLinked] = useState(false);
@@ -11,7 +14,7 @@ const TwitterLink = ({ onLinked }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (publicKey) {
+    if (publicKey && TWITTER_FEATURES_ENABLED) {
       checkTwitterStatus();
     }
   }, [publicKey]);
@@ -79,6 +82,26 @@ const TwitterLink = ({ onLinked }) => {
       setIsLinking(false);
     }
   };
+
+  if (!TWITTER_FEATURES_ENABLED) {
+    return (
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+        <div className="flex items-center space-x-3">
+          <FaXTwitter className="text-gray-900 dark:text-gray-100 text-xl" />
+          <div>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">𝕏 Integration</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Coming soon! Link your 𝕏 account to earn points for social engagement.</p>
+          </div>
+        </div>
+        
+        <div className="mt-3 space-y-1 text-xs text-gray-500 dark:text-gray-400">
+          <p>• Earn points for likes, reposts & comments</p>
+          <p>• Exclusive rewards for social engagement</p>
+          <p>• Multi-wallet 𝕏 account linking</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!publicKey) {
     return (
