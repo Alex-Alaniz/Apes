@@ -26,12 +26,12 @@ APES_TOKEN_MINT=9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts
 APES_TREASURY=APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z
 
 # CORS Configuration
-CORS_ORIGIN=https://apes-lake.vercel.app
+CORS_ORIGIN=https://primape.app
 
 # Twitter OAuth Configuration
 TWITTER_CLIENT_ID=your-twitter-client-id
 TWITTER_CLIENT_SECRET=your-twitter-client-secret
-TWITTER_CALLBACK_URL=https://apes-lake.vercel.app/auth/twitter/callback
+TWITTER_CALLBACK_URL=https://primape.app/auth/twitter/callback
 TWITTER_ENCRYPTION_KEY=your-32-byte-hex-encryption-key
 PRIMAPE_TWITTER_ID=your-primape-twitter-account-id
 
