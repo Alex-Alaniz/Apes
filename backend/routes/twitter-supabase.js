@@ -53,7 +53,7 @@ router.post('/auth/link', async (req, res) => {
       response_type: 'code',
       client_id: process.env.TWITTER_CLIENT_ID,
       redirect_uri: process.env.TWITTER_CALLBACK_URL,
-      scope: 'users.read tweet.read offline.access',  // Include offline.access for better session handling
+      scope: 'users.read',  // Minimal scope for testing production
       state: state,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256'
