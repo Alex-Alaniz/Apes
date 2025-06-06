@@ -58,7 +58,7 @@ const TwitterLink = ({ onLinked }) => {
         throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
-      const { auth_url } = await response.json();
+      const { auth_url, oauth_token } = await response.json();
 
       if (!auth_url) {
         throw new Error('Invalid response from server - missing auth URL');
@@ -67,7 +67,8 @@ const TwitterLink = ({ onLinked }) => {
       // Store wallet address in sessionStorage for callback handling
       sessionStorage.setItem('twitter_linking_wallet', publicKey.toString());
 
-      console.log('Stored wallet in session:', {
+      console.log('OAuth 1.0a auth initiated:', {
+        oauth_token: !!oauth_token,
         wallet: sessionStorage.getItem('twitter_linking_wallet')
       });
 

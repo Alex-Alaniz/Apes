@@ -14,17 +14,17 @@ const TwitterCallback = () => {
   }, []);
 
   const handleCallback = async () => {
-    const code = searchParams.get('code');
-    const state = searchParams.get('state');
-    const error = searchParams.get('error');
+    const oauthToken = searchParams.get('oauth_token');
+    const oauthVerifier = searchParams.get('oauth_verifier');
+    const denied = searchParams.get('denied');
 
-    console.log('Callback received:', { code: !!code, state, error });
+    console.log('OAuth 1.0a callback received:', { oauth_token: !!oauthToken, oauth_verifier: !!oauthVerifier, denied });
     console.log('Session storage:', {
       wallet: sessionStorage.getItem('twitter_linking_wallet')
     });
 
-    if (error) {
-      // Add small delay to prevent flash
+    if (denied) {
+      // User denied authorization
       setTimeout(() => {
         setStatus('error');
         setError('𝕏 authorization was cancelled');
@@ -32,10 +32,10 @@ const TwitterCallback = () => {
       return;
     }
 
-    if (!code) {
+    if (!oauthToken || !oauthVerifier) {
       setTimeout(() => {
         setStatus('error');
-        setError('No authorization code received');
+        setError('OAuth verification failed. Please try again.');
       }, 500);
       return;
     }
@@ -43,16 +43,12 @@ const TwitterCallback = () => {
     try {
       const walletAddress = sessionStorage.getItem('twitter_linking_wallet');
 
-      if (!state) {
-        throw new Error('Invalid authorization state. Please try linking again.');
-      }
-
       if (!walletAddress) {
         console.error('Missing wallet address in session storage');
         throw new Error('Wallet information missing. Please try linking again.');
       }
 
-      // Exchange code for access token
+      // Exchange oauth_token and oauth_verifier for access token
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/twitter/auth/callback`, {
         method: 'POST',
         headers: {
@@ -60,8 +56,8 @@ const TwitterCallback = () => {
           'x-wallet-address': sessionStorage.getItem('twitter_linking_wallet'),
         },
         body: JSON.stringify({
-          code,
-          state,
+          oauth_token: oauthToken,
+          oauth_verifier: oauthVerifier,
         }),
       });
 
