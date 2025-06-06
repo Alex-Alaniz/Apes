@@ -8,7 +8,7 @@ const predictionRoutes = require('./routes/predictions');
 const marketRoutes = require('./routes/markets');
 const adminRoutes = require('./routes/admin');
 const engagementRoutes = require('./routes/engagement');
-const twitterRoutes = require('./routes/twitter');
+const twitterRoutes = require('./routes/twitter-supabase');
 const setupRoutes = require('./routes/setup');
 const syncService = require('./services/syncService');
 
