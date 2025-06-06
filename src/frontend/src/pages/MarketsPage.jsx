@@ -17,16 +17,14 @@ const MarketsPage = () => {
 
   useEffect(() => {
     if (wallet && connected && publicKey) {
-      // Create a wallet object that matches what AnchorProvider expects
-      const walletAdapter = {
-        publicKey: publicKey,
-        signTransaction: signTransaction,
-        signAllTransactions: signAllTransactions
-      };
-      marketService.initialize(walletAdapter);
+      // Use actual Phantom wallet with signAndSendTransaction method
+      const phantomWallet = window.phantom?.solana;
+      if (phantomWallet && typeof phantomWallet.signAndSendTransaction === 'function') {
+        marketService.initialize(phantomWallet);
+      }
     }
     loadMarkets();
-  }, [wallet, connected, publicKey, signTransaction, signAllTransactions]);
+  }, [wallet, connected, publicKey]);
 
   // Restore scroll position after markets update
   useEffect(() => {

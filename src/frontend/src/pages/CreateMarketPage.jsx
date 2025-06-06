@@ -44,22 +44,32 @@ const CreateMarketPage = () => {
     const initService = async () => {
       if (walletAdapter && publicKey) {
         try {
-          await marketService.initialize(walletAdapter);
-          setServiceInitialized(true);
-          
-          // Check if wallet is authorized
-          const walletAddress = publicKey.toString();
-          const authorized = isWalletAuthorized(walletAddress);
-          setIsAuthorized(authorized);
-          
-          if (!authorized) {
-            setToast({
-              message: 'Only authorized wallets can create markets',
-              type: 'error'
-            });
+          // Use actual Phantom wallet with signAndSendTransaction method
+          const phantomWallet = window.phantom?.solana;
+          if (phantomWallet && typeof phantomWallet.signAndSendTransaction === 'function') {
+            await marketService.initialize(phantomWallet);
+            setServiceInitialized(true);
+            
+            // Check if wallet is authorized
+            const walletAddress = publicKey.toString();
+            const authorized = isWalletAuthorized(walletAddress);
+            setIsAuthorized(authorized);
+            
+            if (!authorized) {
+              setToast({
+                message: 'Only authorized wallets can create markets',
+                type: 'error'
+              });
+            }
+          } else {
+            throw new Error('Please use Phantom wallet to create markets');
           }
         } catch (error) {
           console.error('Failed to initialize market service:', error);
+          setToast({
+            message: error.message || 'Failed to initialize market service',
+            type: 'error'
+          });
           setServiceInitialized(false);
         }
       } else {

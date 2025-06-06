@@ -74,12 +74,14 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
     
     // Ensure marketService is initialized before placing bet
     if (wallet && publicKey) {
-      const walletAdapter = {
-        publicKey: publicKey,
-        signTransaction: signTransaction,
-        signAllTransactions: signAllTransactions
-      };
-      await marketService.initialize(walletAdapter);
+      // Use actual Phantom wallet with signAndSendTransaction method
+      const phantomWallet = window.phantom?.solana;
+      if (phantomWallet && typeof phantomWallet.signAndSendTransaction === 'function') {
+        await marketService.initialize(phantomWallet);
+      } else {
+        alert('Please use Phantom wallet to place predictions');
+        return;
+      }
     }
     
     setIsPlacingBet(true);
