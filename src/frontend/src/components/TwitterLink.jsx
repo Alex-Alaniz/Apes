@@ -55,18 +55,16 @@ const TwitterLink = ({ onLinked }) => {
         throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
-      const { auth_url, code_verifier } = await response.json();
+      const { auth_url } = await response.json();
 
-      if (!auth_url || !code_verifier) {
-        throw new Error('Invalid response from server - missing auth URL or code verifier');
+      if (!auth_url) {
+        throw new Error('Invalid response from server - missing auth URL');
       }
 
-      // Store code verifier in sessionStorage
-      sessionStorage.setItem('twitter_code_verifier', code_verifier);
+      // Store wallet address in sessionStorage for callback handling
       sessionStorage.setItem('twitter_linking_wallet', publicKey.toString());
 
-      console.log('Stored in session:', {
-        code_verifier: sessionStorage.getItem('twitter_code_verifier'),
+      console.log('Stored wallet in session:', {
         wallet: sessionStorage.getItem('twitter_linking_wallet')
       });
 

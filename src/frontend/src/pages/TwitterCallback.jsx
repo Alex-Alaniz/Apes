@@ -20,7 +20,6 @@ const TwitterCallback = () => {
 
     console.log('Callback received:', { code: !!code, state, error });
     console.log('Session storage:', {
-      code_verifier: sessionStorage.getItem('twitter_code_verifier'),
       wallet: sessionStorage.getItem('twitter_linking_wallet')
     });
 
@@ -42,24 +41,15 @@ const TwitterCallback = () => {
     }
 
     try {
-      const codeVerifier = sessionStorage.getItem('twitter_code_verifier');
       const walletAddress = sessionStorage.getItem('twitter_linking_wallet');
 
-      if (!codeVerifier || !walletAddress) {
-        console.error('Missing session data:', { codeVerifier: !!codeVerifier, walletAddress: !!walletAddress });
-        
-        // Try to get wallet from URL state parameter if available
-        if (state && !walletAddress) {
-          sessionStorage.setItem('twitter_linking_wallet', state);
-          console.log('Using wallet from state parameter:', state);
-        }
-        
-        if (!codeVerifier) {
-          throw new Error('Session expired. Please try linking your Twitter account again.');
-        }
-        if (!sessionStorage.getItem('twitter_linking_wallet')) {
-          throw new Error('Wallet information missing. Please try linking again.');
-        }
+      if (!state) {
+        throw new Error('Invalid authorization state. Please try linking again.');
+      }
+
+      if (!walletAddress) {
+        console.error('Missing wallet address in session storage');
+        throw new Error('Wallet information missing. Please try linking again.');
       }
 
       // Exchange code for access token
@@ -71,7 +61,7 @@ const TwitterCallback = () => {
         },
         body: JSON.stringify({
           code,
-          code_verifier: codeVerifier,
+          state,
         }),
       });
 
@@ -84,7 +74,6 @@ const TwitterCallback = () => {
       console.log('Twitter link response:', data);
 
       // Clear session storage
-      sessionStorage.removeItem('twitter_code_verifier');
       sessionStorage.removeItem('twitter_linking_wallet');
 
       // Set success status with a small delay to ensure smooth transition
@@ -167,7 +156,6 @@ const TwitterCallback = () => {
                   <button
                     onClick={() => {
                       // Clear any stale session data and retry
-                      sessionStorage.removeItem('twitter_code_verifier');
                       sessionStorage.removeItem('twitter_linking_wallet');
                       navigate('/profile');
                     }}
