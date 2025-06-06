@@ -64,14 +64,32 @@ const AdminMarketDeploymentPage = () => {
         walletReady: wallet?.readyState
       });
 
+      // Add small delay to ensure wallet object is stable
       if (wallet && publicKey && connected) {
+        // Wait 100ms for wallet to stabilize
+        await new Promise(resolve => setTimeout(resolve, 100));
         try {
+          // Double-check wallet is still valid before using it
+          if (!wallet || !wallet.adapter) {
+            console.log('⚠️ Wallet object became invalid during initialization');
+            setServiceInitialized(false);
+            return;
+          }
+          
           console.log('🚀 Attempting to initialize MarketService with wallet:', wallet.adapter?.name);
+          console.log('🔍 Wallet object type:', typeof wallet, 'Adapter:', !!wallet.adapter);
+          
           await marketService.initialize(wallet);
           setServiceInitialized(true);
           console.log('✅ MarketService initialized successfully');
         } catch (error) {
           console.error('❌ Failed to initialize market service:', error);
+          console.error('🔍 Wallet object at error time:', {
+            wallet: !!wallet,
+            walletType: typeof wallet,
+            adapter: !!wallet?.adapter,
+            publicKey: !!wallet?.adapter?.publicKey
+          });
           setServiceInitialized(false);
         }
       } else {
@@ -81,7 +99,7 @@ const AdminMarketDeploymentPage = () => {
     };
 
     initService();
-  }, [wallet, walletAdapter, publicKey, connected]);
+  }, [wallet?.adapter?.name, publicKey?.toString(), connected]); // Use stable references
 
   const fetchPendingMarkets = useCallback(async (showAll = showAllMarkets) => {
     if (!publicKey) return;
