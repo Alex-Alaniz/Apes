@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const supabase = require('../config/supabase');
 
 // Helper function to calculate user rank
 const calculateRank = (predictions, winRate) => {
@@ -32,80 +32,95 @@ const convertToNumbers = (user) => ({
 // Get main leaderboard
 router.get('/', async (req, res) => {
   try {
-    const { sortBy = 'profit', timeframe = 'all' } = req.query;
+    const { sortBy = 'engagement', timeframe = 'all' } = req.query;
     
-    // Updated query to include ALL connected users (anyone in users table)
-    const query = `
-      WITH user_stats AS (
-        SELECT 
-          u.wallet_address,
-          u.username,
-          u.twitter_username,
-          u.created_at as connected_at,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
-          CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
-            ELSE 0 
-          END as win_rate,
-          -- Add engagement points using MAX() for proper aggregation
-          COALESCE(MAX(pb.total_points), 0) as engagement_points,
-          COALESCE(MAX(pb.available_points), 0) as available_points,
-          -- Flag for airdrop eligibility (requires betting activity)
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible,
-          -- Activity status for cleanup
-          CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 OR COALESCE(MAX(pb.total_points), 0) > 0 THEN 'active'
-            WHEN u.created_at > NOW() - INTERVAL '7 days' THEN 'new'
-            ELSE 'tourist'
-          END as activity_status
-        FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
-        GROUP BY u.wallet_address, u.username, u.twitter_username, u.created_at
-        -- Show ALL connected users (no HAVING clause restriction)
-      )
-      SELECT 
-        wallet_address,
-        username,
-        twitter_username,
-        connected_at,
-        total_predictions::INTEGER,
-        total_invested::DECIMAL,
-        winning_predictions::INTEGER,
-        total_profit::DECIMAL,
-        win_rate::DECIMAL,
-        engagement_points::INTEGER,
-        available_points::INTEGER,
-        airdrop_eligible::BOOLEAN,
-        activity_status,
-        ROW_NUMBER() OVER (
-          ORDER BY 
-            CASE 
-              WHEN '${sortBy}' = 'profit' THEN total_profit
-              WHEN '${sortBy}' = 'engagement' THEN engagement_points
-              WHEN '${sortBy}' = 'volume' THEN total_invested
-              WHEN '${sortBy}' = 'accuracy' THEN win_rate
-              WHEN '${sortBy}' = 'recent' THEN EXTRACT(EPOCH FROM connected_at)
-              ELSE total_profit
-            END DESC
-        ) as position
-      FROM user_stats
-      WHERE activity_status != 'tourist' OR '${sortBy}' = 'recent'  -- Hide tourists unless viewing recent users
-      ORDER BY position
-      LIMIT 100
-    `;
+    console.log('🏆 Fetching leaderboard with sortBy:', sortBy);
     
-    const result = await db.query(query);
-    
-    // Always return database results (empty array if no data)
-    const leaderboard = result.rows.map(user => convertToNumbers({
-      ...user,
-      rank: calculateRank(user.total_predictions, user.win_rate)
-    }));
+    // Simplified leaderboard for current mainnet state (mostly engagement points)
+    const { data: pointBalances, error: pointError } = await supabase
+      .from('point_balances')
+      .select(`
+        user_address,
+        total_points,
+        claimed_points,
+        available_points,
+        users!inner(
+          username,
+          twitter_username,
+          created_at
+        )
+      `)
+      .order('total_points', { ascending: false })
+      .limit(100);
+
+    if (pointError) {
+      console.error('Error fetching point balances:', pointError);
+    }
+
+    // Also get users without point balances but show them with 0 points
+    const { data: allUsers, error: userError } = await supabase
+      .from('users')
+      .select('wallet_address, username, twitter_username, created_at')
+      .limit(100);
+
+    if (userError) {
+      console.error('Error fetching users:', userError);
+    }
+
+    // Combine data and create leaderboard
+    const leaderboard = [];
+    const processedUsers = new Set();
+
+    // Add users with points first
+    if (pointBalances) {
+      pointBalances.forEach((entry, index) => {
+        processedUsers.add(entry.user_address);
+        leaderboard.push({
+          wallet_address: entry.user_address,
+          username: entry.users.username,
+          twitter_username: entry.users.twitter_username,
+          connected_at: entry.users.created_at,
+          total_predictions: 0,
+          total_invested: 0,
+          winning_predictions: 0,
+          total_profit: 0,
+          win_rate: 0,
+          engagement_points: parseInt(entry.total_points) || 0,
+          available_points: parseInt(entry.available_points) || 0,
+          airdrop_eligible: false,
+          activity_status: 'active',
+          position: index + 1,
+          rank: 'Beginner'
+        });
+      });
+    }
+
+    // Add users without points but limit total to 100
+    if (allUsers && leaderboard.length < 100) {
+      allUsers.forEach((user, index) => {
+        if (!processedUsers.has(user.wallet_address) && leaderboard.length < 100) {
+          leaderboard.push({
+            wallet_address: user.wallet_address,
+            username: user.username,
+            twitter_username: user.twitter_username,
+            connected_at: user.created_at,
+            total_predictions: 0,
+            total_invested: 0,
+            winning_predictions: 0,
+            total_profit: 0,
+            win_rate: 0,
+            engagement_points: 0,
+            available_points: 0,
+            airdrop_eligible: false,
+            activity_status: 'new',
+            position: leaderboard.length + 1,
+            rank: 'Beginner'
+          });
+        }
+      });
+    }
+
+    console.log(`📊 Leaderboard found ${leaderboard.length} users`);
     
     res.json({ leaderboard });
   } catch (error) {
@@ -117,154 +132,53 @@ router.get('/', async (req, res) => {
 // Get top performers
 router.get('/top-performers', async (req, res) => {
   try {
-    const topProfitQuery = `
-      WITH user_stats AS (
-        SELECT 
-          u.wallet_address,
-          u.username,
-          u.twitter_username,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
-          CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
-            ELSE 0 
-          END as win_rate,
-          COALESCE(MAX(pb.total_points), 0) as engagement_points,
-          COALESCE(MAX(pb.available_points), 0) as available_points,
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
-        FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
-        GROUP BY u.wallet_address, u.username, u.twitter_username
-        HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
-      )
-      SELECT *
-      FROM user_stats
-      ORDER BY total_profit DESC
-      LIMIT 3
-    `;
+    console.log('🏆 Fetching top performers...');
+    
+    // For current mainnet state, focus on engagement points since that's the main activity
+    const { data: topEngagement, error: engagementError } = await supabase
+      .from('point_balances')
+      .select(`
+        user_address,
+        total_points,
+        claimed_points,
+        available_points,
+        users!inner(
+          username,
+          twitter_username
+        )
+      `)
+      .order('total_points', { ascending: false })
+      .limit(3);
 
-    const topAccuracyQuery = `
-      WITH user_stats AS (
-        SELECT 
-          u.wallet_address,
-          u.username,
-          u.twitter_username,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
-          CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
-            ELSE 0 
-          END as win_rate,
-          COALESCE(MAX(pb.total_points), 0) as engagement_points,
-          COALESCE(MAX(pb.available_points), 0) as available_points,
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
-        FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
-        GROUP BY u.wallet_address, u.username, u.twitter_username
-        HAVING COUNT(DISTINCT p.id) >= 5  -- Keep minimum 5 predictions for accuracy ranking
-      )
-      SELECT *
-      FROM user_stats
-      ORDER BY win_rate DESC
-      LIMIT 3
-    `;
+    if (engagementError) {
+      console.error('Error fetching top engagement:', engagementError);
+    }
 
-    const topVolumeQuery = `
-      WITH user_stats AS (
-        SELECT 
-          u.wallet_address,
-          u.username,
-          u.twitter_username,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
-          CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
-            ELSE 0 
-          END as win_rate,
-          COALESCE(MAX(pb.total_points), 0) as engagement_points,
-          COALESCE(MAX(pb.available_points), 0) as available_points,
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
-        FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
-        GROUP BY u.wallet_address, u.username, u.twitter_username
-        HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
-      )
-      SELECT *
-      FROM user_stats
-      ORDER BY total_invested DESC
-      LIMIT 3
-    `;
-
-    // Add top engagement query
-    const topEngagementQuery = `
-      WITH user_stats AS (
-        SELECT 
-          u.wallet_address,
-          u.username,
-          u.twitter_username,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
-          CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
-            ELSE 0 
-          END as win_rate,
-          COALESCE(MAX(pb.total_points), 0) as engagement_points,
-          COALESCE(MAX(pb.available_points), 0) as available_points,
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
-        FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
-        GROUP BY u.wallet_address, u.username, u.twitter_username
-        HAVING COALESCE(MAX(pb.total_points), 0) > 0  -- Must have engagement points
-      )
-      SELECT *
-      FROM user_stats
-      ORDER BY engagement_points DESC
-      LIMIT 3
-    `;
-
-    const [topProfitResult, topAccuracyResult, topVolumeResult, topEngagementResult] = await Promise.all([
-      db.query(topProfitQuery),
-      db.query(topAccuracyQuery),
-      db.query(topVolumeQuery),
-      db.query(topEngagementQuery)
-    ]);
+    // Create formatted results
+    const formatUser = (user) => ({
+      wallet_address: user.user_address,
+      username: user.users.username,
+      twitter_username: user.users.twitter_username,
+      total_predictions: 0,
+      total_invested: 0,
+      winning_predictions: 0,
+      total_profit: 0,
+      win_rate: 0,
+      engagement_points: parseInt(user.total_points) || 0,
+      available_points: parseInt(user.available_points) || 0,
+      airdrop_eligible: false,
+      rank: 'Beginner'
+    });
 
     const topPerformers = {
-      topProfit: topProfitResult.rows.map(user => convertToNumbers({
-        ...user,
-        rank: calculateRank(user.total_predictions, user.win_rate)
-      })),
-      topAccuracy: topAccuracyResult.rows.map(user => convertToNumbers({
-        ...user,
-        rank: calculateRank(user.total_predictions, user.win_rate)
-      })),
-      topVolume: topVolumeResult.rows.map(user => convertToNumbers({
-        ...user,
-        rank: calculateRank(user.total_predictions, user.win_rate)
-      })),
-      topEngagement: topEngagementResult.rows.map(user => convertToNumbers({
-        ...user,
-        rank: calculateRank(user.total_predictions, user.win_rate)
-      }))
+      topProfit: [], // Empty for mainnet launch
+      topAccuracy: [], // Empty for mainnet launch  
+      topVolume: [], // Empty for mainnet launch
+      topEngagement: topEngagement ? topEngagement.map(formatUser) : []
     };
 
-    // Always return database results (empty arrays if no data)
+    console.log(`📊 Top performers: ${topPerformers.topEngagement.length} engagement leaders`);
+
     res.json(topPerformers);
   } catch (error) {
     console.error('Error fetching top performers:', error);
@@ -277,128 +191,53 @@ router.get('/rank/:walletAddress', async (req, res) => {
   try {
     const { walletAddress } = req.params;
     
-    // Get real user rank from database including engagement points
-    const query = `
-      WITH user_stats AS (
-        SELECT 
-          u.wallet_address,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
-          CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
-            ELSE 0 
-          END as win_rate,
-          COALESCE(MAX(pb.total_points), 0) as engagement_points,
-          COALESCE(MAX(pb.available_points), 0) as available_points,
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
-        FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
-        WHERE u.wallet_address = $1
-        GROUP BY u.wallet_address
-      ),
-      profit_ranks AS (
-        SELECT 
-          wallet_address,
-          ROW_NUMBER() OVER (ORDER BY total_profit DESC) as profit_rank
-        FROM (
-          SELECT 
-            u.wallet_address,
-            COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit
-          FROM users u
-          LEFT JOIN predictions p ON u.wallet_address = p.user_address
-          LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
-          GROUP BY u.wallet_address
-          HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
-        ) ranked_users
-      ),
-      accuracy_ranks AS (
-        SELECT 
-          wallet_address,
-          ROW_NUMBER() OVER (ORDER BY win_rate DESC) as accuracy_rank
-        FROM (
-          SELECT 
-            u.wallet_address,
-            CASE 
-              WHEN COUNT(DISTINCT p.id) > 0 
-              THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
-              ELSE 0 
-            END as win_rate
-          FROM users u
-          LEFT JOIN predictions p ON u.wallet_address = p.user_address
-          LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
-          GROUP BY u.wallet_address
-          HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
-        ) ranked_users
-      ),
-      volume_ranks AS (
-        SELECT 
-          wallet_address,
-          ROW_NUMBER() OVER (ORDER BY total_invested DESC) as volume_rank
-        FROM (
-          SELECT 
-            u.wallet_address,
-            COALESCE(SUM(p.amount), 0) as total_invested
-          FROM users u
-          LEFT JOIN predictions p ON u.wallet_address = p.user_address
-          LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
-          GROUP BY u.wallet_address
-          HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
-        ) ranked_users
-      ),
-      engagement_ranks AS (
-        SELECT 
-          wallet_address,
-          ROW_NUMBER() OVER (ORDER BY engagement_points DESC) as engagement_rank
-        FROM (
-          SELECT 
-            u.wallet_address,
-            COALESCE(MAX(pb.total_points), 0) as engagement_points
-          FROM users u
-          LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
-          GROUP BY u.wallet_address
-          HAVING COALESCE(MAX(pb.total_points), 0) > 0
-        ) ranked_users
-      )
-      SELECT 
-        us.*,
-        pr.profit_rank,
-        ar.accuracy_rank,
-        vr.volume_rank,
-        er.engagement_rank
-      FROM user_stats us
-      LEFT JOIN profit_ranks pr ON us.wallet_address = pr.wallet_address
-      LEFT JOIN accuracy_ranks ar ON us.wallet_address = ar.wallet_address
-      LEFT JOIN volume_ranks vr ON us.wallet_address = vr.wallet_address
-      LEFT JOIN engagement_ranks er ON us.wallet_address = er.wallet_address
-    `;
+    console.log('🎯 Fetching user rank for:', walletAddress);
     
-    const result = await db.query(query, [walletAddress]);
-    
-    if (result.rows.length === 0) {
-      // Return empty/default data for non-existent users
-      return res.json({ 
-        userRank: {
-          wallet_address: walletAddress,
-          total_predictions: 0,
-          total_invested: 0,
-          total_profit: 0,
-          win_rate: 0,
-          engagement_points: 0,
-          available_points: 0,
-          airdrop_eligible: false,
-          profit_rank: null,
-          accuracy_rank: null,
-          volume_rank: null,
-          engagement_rank: null
-        }
-      });
+    // Get user's point balance
+    const { data: pointBalance, error: pointError } = await supabase
+      .from('point_balances')
+      .select('total_points, available_points, claimed_points')
+      .eq('user_address', walletAddress)
+      .single();
+
+    if (pointError && pointError.code !== 'PGRST116') {
+      console.error('Error fetching user points:', pointError);
     }
-    
-    // Convert to numbers for safe frontend usage
-    const userRank = convertToNumbers(result.rows[0]);
+
+    // Get total number of users with points for ranking
+    const { data: allPointBalances, error: rankError } = await supabase
+      .from('point_balances')
+      .select('user_address, total_points')
+      .order('total_points', { ascending: false });
+
+    if (rankError) {
+      console.error('Error fetching all point balances for ranking:', rankError);
+    }
+
+    // Calculate engagement rank
+    let engagementRank = null;
+    if (pointBalance && allPointBalances) {
+      const userPoints = parseInt(pointBalance.total_points) || 0;
+      engagementRank = allPointBalances.findIndex(pb => pb.user_address === walletAddress) + 1;
+      if (engagementRank === 0) engagementRank = null;
+    }
+
+    const userRank = {
+      wallet_address: walletAddress,
+      total_predictions: 0,
+      total_invested: 0,
+      total_profit: 0,
+      win_rate: 0,
+      engagement_points: pointBalance ? parseInt(pointBalance.total_points) || 0 : 0,
+      available_points: pointBalance ? parseInt(pointBalance.available_points) || 0 : 0,
+      airdrop_eligible: false,
+      profit_rank: null,
+      accuracy_rank: null,
+      volume_rank: null,
+      engagement_rank: engagementRank
+    };
+
+    console.log(`📊 User rank: ${engagementRank || 'unranked'}, Points: ${userRank.engagement_points}`);
     
     res.json({ userRank });
   } catch (error) {

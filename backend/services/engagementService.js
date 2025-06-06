@@ -240,16 +240,17 @@ class EngagementService {
       }
       
       // Must have placed predictions to be eligible for airdrops
-      const airdropEligibilityQuery = `
-        SELECT COUNT(DISTINCT p.id) as prediction_count
-        FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        WHERE u.wallet_address = $1
-        GROUP BY u.wallet_address
-      `;
+      const { data: eligibilityResult, error: eligibilityError } = await supabase
+        .from('predictions')
+        .select('id', { count: 'exact' })
+        .eq('user_address', userAddress);
       
-      const eligibilityResult = await db.query(airdropEligibilityQuery, [userAddress]);
-      const predictionCount = eligibilityResult.rows[0]?.prediction_count || 0;
+      if (eligibilityError) {
+        console.error('Error checking prediction eligibility:', eligibilityError);
+        // Continue with predictionCount = 0
+      }
+      
+      const predictionCount = eligibilityResult?.length || 0;
       
       if (predictionCount === 0) {
         return {
@@ -303,27 +304,33 @@ class EngagementService {
   // Get leaderboard for engagement
   async getEngagementLeaderboard(limit = 10) {
     try {
-      const query = `
-        SELECT 
-          pb.user_address,
-          u.username,
-          u.twitter_username,
-          pb.total_points,
-          pb.claimed_points,
-          COUNT(DISTINCT DATE(ep.created_at)) as active_days,
-          COUNT(DISTINCT ep.activity_type) as unique_activities,
-          u.twitter_followers
-        FROM point_balances pb
-        JOIN users u ON pb.user_address = u.wallet_address
-        LEFT JOIN engagement_points ep ON pb.user_address = ep.user_address
-        GROUP BY pb.user_address, u.username, u.twitter_username, pb.total_points, pb.claimed_points, u.twitter_followers
-        ORDER BY pb.total_points DESC
-        LIMIT $1
-      `;
+      // Get point balances with user data using Supabase
+      const { data: result, error: balanceError } = await supabase
+        .from('point_balances')
+        .select(`
+          user_address,
+          total_points,
+          claimed_points,
+          users!inner(
+            username,
+            twitter_username,
+            twitter_followers
+          )
+        `)
+        .order('total_points', { ascending: false })
+        .limit(limit);
+
+      if (balanceError) {
+        console.error('Error fetching leaderboard:', balanceError);
+        throw balanceError;
+      }
+
+      if (!result || result.length === 0) {
+        console.log('📭 No point balances found - empty leaderboard');
+        return [];
+      }
       
-      const result = await db.query(query, [limit]);
-      
-      return result.rows.map((row, index) => {
+      return result.map((row, index) => {
         const totalPoints = parseInt(row.total_points);
         let tier = TIERS.BRONZE;
         
@@ -335,12 +342,17 @@ class EngagementService {
         }
         
         return {
-          ...row,
+          user_address: row.user_address,
+          username: row.users.username,
+          twitter_username: row.users.twitter_username,
+          twitter_followers: row.users.twitter_followers,
           rank: index + 1,
           tier: tier.name,
           total_points: totalPoints,
           claimed_points: parseInt(row.claimed_points),
-          has_twitter: !!row.twitter_username
+          has_twitter: !!row.users.twitter_username,
+          active_days: 0, // Will calculate separately if needed
+          unique_activities: 0 // Will calculate separately if needed
         };
       });
     } catch (error) {
@@ -352,24 +364,29 @@ class EngagementService {
   // Check and award streak bonuses
   async checkStreaks(userAddress) {
     try {
-      const query = `
-        SELECT DISTINCT DATE(created_at) as activity_date
-        FROM engagement_points
-        WHERE user_address = $1
-          AND activity_type = 'PLACE_PREDICTION'
-        ORDER BY activity_date DESC
-      `;
+      const { data: result, error: streakError } = await supabase
+        .from('engagement_points')
+        .select('created_at')
+        .eq('user_address', userAddress)
+        .eq('activity_type', 'PLACE_PREDICTION')
+        .order('created_at', { ascending: false });
+
+      if (streakError) {
+        console.error('Error fetching streak data:', streakError);
+        return;
+      }
       
-      const result = await db.query(query, [userAddress]);
-      
-      if (result.rows.length === 0) return;
+      if (!result || result.length === 0) return;
       
       // Check for consecutive days
       let streak = 1;
-      const dates = result.rows.map(row => new Date(row.activity_date));
+      const dates = result.map(row => new Date(row.created_at).toDateString());
+      const uniqueDates = [...new Set(dates)].sort((a, b) => new Date(b) - new Date(a));
       
-      for (let i = 1; i < dates.length; i++) {
-        const diff = (dates[i-1] - dates[i]) / (1000 * 60 * 60 * 24);
+      for (let i = 1; i < uniqueDates.length; i++) {
+        const prev = new Date(uniqueDates[i-1]);
+        const curr = new Date(uniqueDates[i]);
+        const diff = (prev - curr) / (1000 * 60 * 60 * 24);
         if (diff === 1) {
           streak++;
         } else {
@@ -386,23 +403,25 @@ class EngagementService {
 
       for (const [days, bonus] of Object.entries(streakBonuses)) {
         if (streak >= parseInt(days)) {
-          // Check if already awarded
-          const checkQuery = `
-            SELECT COUNT(*) as count
-            FROM engagement_points
-            WHERE user_address = $1
-              AND activity_type = $2
-              AND created_at >= CURRENT_DATE - INTERVAL '${days} days'
-          `;
+          // Check if already awarded in recent period
+          const recentDate = new Date();
+          recentDate.setDate(recentDate.getDate() - parseInt(days));
           
-          const checkResult = await db.query(checkQuery, [userAddress, bonus.type]);
+          const { data: checkResult, error: checkError } = await supabase
+            .from('engagement_points')
+            .select('id', { count: 'exact' })
+            .eq('user_address', userAddress)
+            .eq('activity_type', bonus.type)
+            .gte('created_at', recentDate.toISOString());
           
-          if (checkResult.rows[0].count === '0') {
+          if (checkError) {
+            console.error('Error checking streak bonus:', checkError);
+            continue;
+          }
+          
+          if (checkResult.length === 0) {
             // Award the streak bonus
-            await db.query(
-              'INSERT INTO engagement_points (user_address, activity_type, points_earned, metadata) VALUES ($1, $2, $3, $4)',
-              [userAddress, bonus.type, bonus.points, JSON.stringify({ streak_days: days })]
-            );
+            await this.trackActivity(userAddress, bonus.type, { streak_days: days });
             console.log(`Awarded ${days}-day streak bonus to ${userAddress}`);
           }
         }
@@ -415,25 +434,38 @@ class EngagementService {
   // Get Twitter engagement stats
   async getTwitterEngagementStats(userAddress) {
     try {
-      const query = `
-        SELECT 
-          COUNT(DISTINCT tweet_id) as tweets_engaged,
-          SUM(CASE WHEN engagement_type = 'like' THEN 1 ELSE 0 END) as likes,
-          SUM(CASE WHEN engagement_type = 'repost' THEN 1 ELSE 0 END) as reposts,
-          SUM(CASE WHEN engagement_type = 'comment' THEN 1 ELSE 0 END) as comments,
-          SUM(points_awarded) as total_twitter_points
-        FROM twitter_engagements
-        WHERE user_address = $1
-      `;
-      
-      const result = await db.query(query, [userAddress]);
+      const { data: result, error: twitterError } = await supabase
+        .from('twitter_engagements')
+        .select('tweet_id, engagement_type, points_awarded')
+        .eq('user_address', userAddress);
+
+      if (twitterError) {
+        console.error('Error fetching Twitter engagement stats:', twitterError);
+        throw twitterError;
+      }
+
+      if (!result || result.length === 0) {
+        return {
+          tweets_engaged: 0,
+          likes: 0,
+          reposts: 0,
+          comments: 0,
+          total_twitter_points: 0
+        };
+      }
+
+      const uniqueTweets = new Set(result.map(r => r.tweet_id)).size;
+      const likes = result.filter(r => r.engagement_type === 'like').length;
+      const reposts = result.filter(r => r.engagement_type === 'repost').length;
+      const comments = result.filter(r => r.engagement_type === 'comment').length;
+      const totalPoints = result.reduce((sum, r) => sum + (r.points_awarded || 0), 0);
       
       return {
-        tweets_engaged: parseInt(result.rows[0].tweets_engaged || 0),
-        likes: parseInt(result.rows[0].likes || 0),
-        reposts: parseInt(result.rows[0].reposts || 0),
-        comments: parseInt(result.rows[0].comments || 0),
-        total_twitter_points: parseInt(result.rows[0].total_twitter_points || 0)
+        tweets_engaged: uniqueTweets,
+        likes: likes,
+        reposts: reposts,
+        comments: comments,
+        total_twitter_points: totalPoints
       };
     } catch (error) {
       console.error('Error getting Twitter engagement stats:', error);
