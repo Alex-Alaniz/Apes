@@ -97,8 +97,8 @@ const AdminMarketDeploymentPage = () => {
             return;
           }
           
-          // Add publicKey to phantom wallet object for compatibility
-          walletRef.publicKey = adapterRef.publicKey;
+          // Phantom wallet already has publicKey property as a getter - no need to set it
+          console.log('🔍 Phantom wallet publicKey:', walletRef.publicKey?.toString());
           
           console.log('🚀 Attempting to initialize MarketService with wallet:', adapterRef?.name);
           console.log('🔍 Wallet validation passed - proceeding with initialization');
