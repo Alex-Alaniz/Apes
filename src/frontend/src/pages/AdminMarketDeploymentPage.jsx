@@ -55,9 +55,9 @@ const AdminMarketDeploymentPage = () => {
   // Initialize market service when wallet connects
   useEffect(() => {
     const initService = async () => {
-      if (walletAdapter && publicKey) {
+      if (wallet && publicKey) {
         try {
-          await marketService.initialize(walletAdapter);
+          await marketService.initialize(wallet);
           setServiceInitialized(true);
         } catch (error) {
           console.error('Failed to initialize market service:', error);
@@ -69,7 +69,7 @@ const AdminMarketDeploymentPage = () => {
     };
 
     initService();
-  }, [walletAdapter, publicKey]);
+  }, [wallet, publicKey]);
 
   const fetchPendingMarkets = useCallback(async (showAll = showAllMarkets) => {
     if (!publicKey) return;
