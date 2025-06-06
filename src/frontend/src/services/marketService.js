@@ -1,4 +1,4 @@
-import { Connection, PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
+import { Connection, PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY, Transaction } from '@solana/web3.js';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config, PROGRAM_ID as programId, TOKEN_MINT as tokenMint } from '../config/solana';
@@ -708,8 +708,8 @@ class MarketService {
         creatorStakeAmount: creatorStakeAmount
       });
       
-      // Call create_market instruction
-      const tx = await this.program.methods
+      // Build transaction using Phantom's recommended signAndSendTransaction method
+      const instruction = await this.program.methods
         .createMarket(
           marketType,
           questionBytes,
@@ -741,8 +741,21 @@ class MarketService {
           tokenProgram: TOKEN_PROGRAM_ID,
           rent: SYSVAR_RENT_PUBKEY,
         })
-        .signers([market])
-        .rpc({ skipPreflight: false });
+        .instruction();
+
+      // Create transaction and add instruction
+      const transaction = new Transaction().add(instruction);
+      
+      // Get recent blockhash
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = walletPubkey;
+      
+      // Sign with market keypair first (partial sign)
+      transaction.partialSign(market);
+      
+      // Use Phantom's recommended signAndSendTransaction method
+      const { signature: tx } = await this.wallet.signAndSendTransaction(transaction);
 
       console.log('Transaction sent:', tx);
       
@@ -844,8 +857,8 @@ class MarketService {
       const amountUnits = uiToUnits(amount, decimals);
       console.log(`MarketService: Converted ${amount} to ${amountUnits.toString()} units`);
 
-      // Call place_prediction instruction
-      const tx = await this.program.methods
+      // Build place_prediction transaction using Phantom's recommended method
+      const instruction = await this.program.methods
         .placePrediction(
           optionIndex,
           amountUnits
@@ -863,7 +876,16 @@ class MarketService {
           tokenProgram: TOKEN_PROGRAM_ID,
           rent: SYSVAR_RENT_PUBKEY,
         })
-        .rpc({ skipPreflight: false });
+        .instruction();
+
+      // Create transaction
+      const transaction = new Transaction().add(instruction);
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = walletPubkey;
+      
+      // Use Phantom's recommended signAndSendTransaction method
+      const { signature: tx } = await this.wallet.signAndSendTransaction(transaction);
 
       console.log('Transaction sent:', tx);
       
@@ -1048,8 +1070,8 @@ class MarketService {
         this.program.programId
       );
 
-      // Call claim_reward instruction with option_index
-      const tx = await this.program.methods
+      // Build claim_reward transaction using Phantom's recommended method
+      const instruction = await this.program.methods
         .claimReward(optionIndex)
         .accounts({
           market: market,
@@ -1062,7 +1084,16 @@ class MarketService {
           burnTokenAccount: await this.getTokenAccount(new PublicKey(platformFeeAddress)),
           tokenProgram: TOKEN_PROGRAM_ID,
         })
-        .rpc({ skipPreflight: false });
+        .instruction();
+
+      // Create transaction
+      const transaction = new Transaction().add(instruction);
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = walletPubkey;
+      
+      // Use Phantom's recommended signAndSendTransaction method
+      const { signature: tx } = await this.wallet.signAndSendTransaction(transaction);
 
       console.log('Transaction sent:', tx);
       
@@ -1225,8 +1256,8 @@ class MarketService {
         console.log('Platform not initialized, proceeding with initialization...');
       }
 
-      // Call initialize instruction
-      const tx = await this.program.methods
+      // Build initialize transaction using Phantom's recommended method
+      const instruction = await this.program.methods
         .initialize(
           new BN(250), // 2.5% bet burn rate
           new BN(150), // 1.5% claim burn rate  
@@ -1241,7 +1272,16 @@ class MarketService {
           tokenProgram: TOKEN_PROGRAM_ID,
           rent: SYSVAR_RENT_PUBKEY,
         })
-        .rpc({ skipPreflight: false });
+        .instruction();
+
+      // Create transaction
+      const transaction = new Transaction().add(instruction);
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = walletPubkey;
+      
+      // Use Phantom's recommended signAndSendTransaction method
+      const { signature: tx } = await this.wallet.signAndSendTransaction(transaction);
 
       console.log('Platform initialization transaction sent:', tx);
       
@@ -1292,15 +1332,24 @@ class MarketService {
         console.log('Access control not initialized, proceeding with initialization...');
       }
 
-      // Call initialize_access_control instruction
-      const tx = await this.program.methods
+      // Build initialize_access_control transaction using Phantom's recommended method
+      const instruction = await this.program.methods
         .initializeAccessControl()
         .accounts({
           accessControl: accessControl,
           admin: walletPubkey,
           systemProgram: SystemProgram.programId,
         })
-        .rpc({ skipPreflight: false });
+        .instruction();
+
+      // Create transaction
+      const transaction = new Transaction().add(instruction);
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = walletPubkey;
+      
+      // Use Phantom's recommended signAndSendTransaction method
+      const { signature: tx } = await this.wallet.signAndSendTransaction(transaction);
 
       console.log('Access control initialization transaction sent:', tx);
       
@@ -1342,14 +1391,23 @@ class MarketService {
         this.program.programId
       );
 
-      // Call add_market_creator instruction
-      const tx = await this.program.methods
+      // Build add_market_creator transaction using Phantom's recommended method
+      const instruction = await this.program.methods
         .addMarketCreator(creatorPubkey)
         .accounts({
           accessControl: accessControl,
           admin: walletPubkey,
         })
-        .rpc({ skipPreflight: false });
+        .instruction();
+
+      // Create transaction
+      const transaction = new Transaction().add(instruction);
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = walletPubkey;
+      
+      // Use Phantom's recommended signAndSendTransaction method
+      const { signature: tx } = await this.wallet.signAndSendTransaction(transaction);
 
       console.log('Add market creator transaction sent:', tx);
       
@@ -1393,8 +1451,8 @@ class MarketService {
         this.program.programId
       );
 
-      // Call resolve_market instruction
-      const tx = await this.program.methods
+      // Build resolve_market transaction using Phantom's recommended method
+      const instruction = await this.program.methods
         .resolveMarket(winningOption)
         .accounts({
           market: market,
@@ -1402,7 +1460,16 @@ class MarketService {
           authority: walletPubkey,
           systemProgram: SystemProgram.programId,
         })
-        .rpc({ skipPreflight: false });
+        .instruction();
+
+      // Create transaction
+      const transaction = new Transaction().add(instruction);
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = walletPubkey;
+      
+      // Use Phantom's recommended signAndSendTransaction method
+      const { signature: tx } = await this.wallet.signAndSendTransaction(transaction);
 
       console.log('Transaction sent:', tx);
       
