@@ -54,6 +54,12 @@ const AdminMarketDeploymentPage = () => {
 
   // Initialize market service when wallet connects
   useEffect(() => {
+    // Prevent duplicate initialization
+    if (serviceInitialized) {
+      console.log('🔄 MarketService already initialized, skipping...');
+      return;
+    }
+
     const initService = async () => {
       console.log('🔧 Wallet connection debug:', {
         wallet: !!wallet,
@@ -61,45 +67,40 @@ const AdminMarketDeploymentPage = () => {
         publicKey: !!publicKey,
         connected: connected,
         walletName: wallet?.adapter?.name,
-        walletReady: wallet?.readyState
+        walletReady: wallet?.readyState,
+        serviceInitialized: serviceInitialized
       });
 
-      // Add small delay to ensure wallet object is stable
-      if (wallet && publicKey && connected) {
-        // Wait 100ms for wallet to stabilize
-        await new Promise(resolve => setTimeout(resolve, 100));
+      // Only initialize if we have everything and service isn't already initialized
+      if (wallet && publicKey && connected && !serviceInitialized) {
         try {
-          // Double-check wallet is still valid before using it
-          if (!wallet || !wallet.adapter) {
-            console.log('⚠️ Wallet object became invalid during initialization');
+          // Final validation before initialization
+          if (!wallet || !wallet.adapter || !wallet.adapter.publicKey) {
+            console.log('⚠️ Wallet validation failed');
             setServiceInitialized(false);
             return;
           }
           
           console.log('🚀 Attempting to initialize MarketService with wallet:', wallet.adapter?.name);
-          console.log('🔍 Wallet object type:', typeof wallet, 'Adapter:', !!wallet.adapter);
+          console.log('🔍 Wallet validation passed - proceeding with initialization');
           
           await marketService.initialize(wallet);
           setServiceInitialized(true);
           console.log('✅ MarketService initialized successfully');
         } catch (error) {
           console.error('❌ Failed to initialize market service:', error);
-          console.error('🔍 Wallet object at error time:', {
-            wallet: !!wallet,
-            walletType: typeof wallet,
-            adapter: !!wallet?.adapter,
-            publicKey: !!wallet?.adapter?.publicKey
-          });
           setServiceInitialized(false);
         }
       } else {
         console.log('⏳ Wallet not ready for MarketService initialization');
-        setServiceInitialized(false);
+        if (!serviceInitialized) {
+          setServiceInitialized(false);
+        }
       }
     };
 
     initService();
-  }, [wallet?.adapter?.name, publicKey?.toString(), connected]); // Use stable references
+  }, [wallet?.adapter?.name, publicKey?.toString(), connected, serviceInitialized]);
 
   const fetchPendingMarkets = useCallback(async (showAll = showAllMarkets) => {
     if (!publicKey) return;
