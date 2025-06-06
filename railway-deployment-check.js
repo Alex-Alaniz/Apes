@@ -25,7 +25,7 @@ const EXPECTED_ENV_VARS = {
   // Other required vars
   app: {
     NODE_ENV: 'production',
-    PORT: '5000',
+    PORT: '5001',
     CORS_ORIGIN: 'https://apes-lake.vercel.app',
     SOLANA_NETWORK: 'mainnet-beta',
     SOLANA_RPC_URL: 'https://api.mainnet-beta.solana.com'

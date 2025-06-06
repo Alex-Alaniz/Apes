@@ -48,17 +48,15 @@ router.post('/auth/link', async (req, res) => {
       }
     }
 
-    // Build Twitter OAuth URL with PKCE and session reuse
+    // Build Twitter OAuth URL with PKCE (official Twitter parameters only)
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: process.env.TWITTER_CLIENT_ID,
       redirect_uri: process.env.TWITTER_CALLBACK_URL,
-      scope: 'users.read tweet.read',  // Simplified scope order
+      scope: 'users.read tweet.read offline.access',  // Include offline.access for better session handling
       state: state,
       code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-      force_login: 'false',  // Allow using existing Twitter sessions
-      include_granted_scopes: 'true'  // Reuse previously granted permissions
+      code_challenge_method: 'S256'
     });
 
     const authUrl = `https://twitter.com/i/oauth2/authorize?${params.toString()}`;
