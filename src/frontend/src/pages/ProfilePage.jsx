@@ -116,7 +116,10 @@ const ProfilePage = () => {
         setUserProfile(user);
         setUsername(user.username || '');
         setTwitterLinked(!!user.twitter_username);
-        await loadUserData();
+        // Force immediate reload of user data to show latest points
+        setTimeout(async () => {
+          await loadUserData();
+        }, 100);
       } else {
         console.warn('⚠️  Profile: Backend API failed, loading with defaults');
         setUserProfile({ wallet_address: publicKey.toString() });
