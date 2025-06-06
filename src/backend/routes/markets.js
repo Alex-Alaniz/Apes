@@ -687,7 +687,7 @@ router.post('/force-sync', async (req, res) => {
     
     // Get all active markets
     const query = `
-      SELECT market_address, question, total_volume, option_volumes
+      SELECT market_address, question, total_volume, option_volumes, participant_count
       FROM markets 
       WHERE status = 'Active'
       ORDER BY created_at DESC
@@ -704,7 +704,7 @@ router.post('/force-sync', async (req, res) => {
         // Create realistic volume data based on current state or generate reasonable defaults
         let optionPools = market.option_volumes || [];
         let totalVolume = parseFloat(market.total_volume || 0);
-        let participantCount = 0;
+        let participantCount = parseInt(market.participant_count || 0);
         
         // If market has no volume, generate some realistic test data
         if (totalVolume === 0 || !optionPools.length) {
@@ -729,11 +729,20 @@ router.post('/force-sync', async (req, res) => {
             ];
           }
           
-          // Generate participant count (5-25 participants per 1000 APES)
+          // Generate realistic participant count (5-25 participants per 1000 APES)
           participantCount = Math.floor((totalVolume / 1000) * (5 + Math.random() * 20));
         } else {
-          // Use existing data and add some participants
-          participantCount = Math.max(1, Math.floor(totalVolume / 100)); // 1 participant per 100 APES
+          // Use existing data but ensure minimum participant count
+          if (participantCount === 0 && totalVolume > 0) {
+            // Generate realistic participant count based on volume
+            participantCount = Math.max(1, Math.floor(totalVolume / 200)); // 1 participant per 200 APES average
+            participantCount = Math.min(participantCount, 50); // Cap at 50 participants
+          }
+        }
+        
+        // Ensure participant count is reasonable and not 0
+        if (participantCount === 0 && totalVolume > 0) {
+          participantCount = Math.max(1, Math.floor(totalVolume / 500)); // Conservative estimate
         }
         
         // Update the market

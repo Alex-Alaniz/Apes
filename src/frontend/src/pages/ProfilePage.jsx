@@ -134,92 +134,79 @@ const ProfilePage = () => {
   };
 
   const loadUserData = async () => {
+    if (!publicKey) return;
+    
     setLoading(true);
     try {
-      console.log('🔄 Profile: Loading user data...');
+      console.log('✅ Profile: Starting data load...');
       
-      // Fetch user stats with error handling
-      try {
-        const statsRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/${publicKey.toString()}/stats`);
-        if (statsRes.ok) {
-          const stats = await statsRes.json();
-          setUserStats({
-            totalBets: stats.totalBets || 0,
-            wonBets: stats.wonBets || 0,
-            totalVolume: stats.totalVolume || 0,
-            profit: stats.profit || 0,
-            winRate: stats.winRate || 0
-          });
-          console.log('✅ Profile: User stats loaded');
-        } else {
-          console.warn('⚠️  Profile: Stats API failed, using defaults');
-        }
-      } catch (error) {
-        console.warn('⚠️  Profile: Stats fetch failed:', error.message);
+      // Fetch user profile and stats
+      const [userResponse, statsResponse] = await Promise.all([
+        fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/users/${publicKey.toString()}`, {
+          headers: { 'x-wallet-address': publicKey.toString() }
+        }),
+        fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/users/${publicKey.toString()}/stats`, {
+          headers: { 'x-wallet-address': publicKey.toString() }
+        })
+      ]);
+
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        setUserProfile(userData);
+        console.log('✅ Profile: User data loaded');
       }
 
-      // Fetch bet history with error handling
-      try {
-        const historyRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/${publicKey.toString()}/bets`);
-        if (historyRes.ok) {
-          const history = await historyRes.json();
-          setBetHistory(history.bets || []);
-          console.log('✅ Profile: Bet history loaded');
-        } else {
-          console.warn('⚠️  Profile: Bet history API failed, using empty array');
-        }
-      } catch (error) {
-        console.warn('⚠️  Profile: Bet history fetch failed:', error.message);
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        setUserStats(statsData);
+        console.log('✅ Profile: Stats loaded');
       }
 
-      // Fetch markets with timeout to prevent hanging
-      try {
-        console.log('🔄 Profile: Fetching markets with timeout...');
-        
-        // Create a timeout promise
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Market fetch timeout')), 10000); // 10 second timeout
-        });
-        
-        // Race between market fetch and timeout
-        const allMarkets = await Promise.race([
-          marketService.fetchMarketsWithStats(),
-          timeoutPromise
-        ]);
-        
-        console.log(`✅ Profile: Found ${allMarkets.length} markets`);
-        
-        const marketMap = new Map();
-        allMarkets.forEach(market => {
-          marketMap.set(market.publicKey, market);
-        });
-        setMarkets(marketMap);
-        
-        // Only fetch user positions if we have markets (skip for now to prevent hanging)
-        const positionsByMarket = {};
-        if (allMarkets.length > 0) {
-          console.log('🔄 Profile: Skipping position fetch for now (performance)');
-          // Skip position fetching to prevent hanging
-          // TODO: Implement position fetching with timeout later
-        } else {
-          console.log('📭 Profile: No markets available, skipping position fetch');
+      // Fetch markets with timeout
+      console.log('🔍 Profile: Fetching markets with timeout...');
+      const marketsData = await Promise.race([
+        marketService.fetchMarketsWithStats(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Markets fetch timeout')), 10000)
+        )
+      ]);
+      
+      setMarkets(new Map(marketsData.map(m => [m.publicKey, m])));
+      console.log(`✅ Profile: Found ${marketsData.length} markets`);
+
+      // Fetch user positions for all markets
+      console.log('🔄 Profile: Fetching user positions...');
+      const allPositions = [];
+      const positionsByMarket = {};
+      
+      if (marketsData.length > 0) {
+        // Use the marketService to get user positions for all markets
+        for (const market of marketsData) {
+          try {
+            const positions = await marketService.getUserPositionsForMarket(publicKey, market.publicKey);
+            if (positions && positions.length > 0) {
+              allPositions.push(...positions);
+              positionsByMarket[market.publicKey] = positions;
+              console.log(`✅ Profile: Found ${positions.length} positions for market ${market.publicKey.slice(0, 8)}`);
+            }
+          } catch (error) {
+            console.warn(`Failed to fetch positions for market ${market.publicKey}:`, error);
+          }
         }
-        
-        setUserPositionsByMarket(positionsByMarket);
-      } catch (error) {
-        console.warn('⚠️  Profile: Market fetch failed or timed out:', error.message);
-        console.log('📭 Profile: Using empty markets to prevent hang');
-        setMarkets(new Map());
-        setUserPositionsByMarket({});
       }
       
+      setUserPositionsByMarket(positionsByMarket);
+      console.log(`✅ Profile: Total positions loaded: ${allPositions.length}`);
+      
+      // Calculate performance metrics
+      calculatePerformanceMetrics();
       console.log('✅ Profile: Data loading completed');
+      
     } catch (error) {
       console.error('❌ Profile: Error loading user data:', error);
-      setToast({
-        message: 'Some data failed to load, but you can still use your profile',
-        type: 'warning'
-      });
+      if (error.message === 'Markets fetch timeout') {
+        console.log('⚠️ Profile: Markets fetch timed out, continuing with cached data');
+      }
     } finally {
       setLoading(false);
     }

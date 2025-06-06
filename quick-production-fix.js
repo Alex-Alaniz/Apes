@@ -9,7 +9,7 @@
  * 3. Restart services to initialize burn processor
  */
 
-const API_URL = process.env.VITE_API_URL || 'https://api.primape.app';
+const API_URL = process.env.VITE_API_URL || 'https://apes-production.up.railway.app';
 
 console.log('🚀 APES Quick Production Fix');
 console.log('============================');

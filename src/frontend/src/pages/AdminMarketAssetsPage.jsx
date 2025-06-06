@@ -35,7 +35,8 @@ const AdminMarketAssetsPage = () => {
       console.log(`Found ${blockchainMarkets.length} markets on blockchain`);
       
       // Then fetch database markets to get any existing assets
-      const response = await fetch('http://localhost:5001/api/markets');
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+      const response = await fetch(`${apiUrl}/api/markets`);
       let dbMarkets = [];
       if (response.ok) {
         dbMarkets = await response.json();
@@ -103,7 +104,8 @@ const AdminMarketAssetsPage = () => {
     
     setSaving(true);
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/update-market-assets/${selectedMarket.market_address}`, {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+      const response = await fetch(`${apiUrl}/api/admin/update-market-assets/${selectedMarket.market_address}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

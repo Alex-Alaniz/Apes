@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
   try {
     const { sortBy = 'profit', timeframe = 'all' } = req.query;
     
-    // Updated query to include ALL connected users (anyone in users table)
+    // Updated query to use prediction_history table for accurate APES tracking
     const query = `
       WITH user_stats AS (
         SELECT 
@@ -42,28 +42,32 @@ router.get('/', async (req, res) => {
           u.username,
           u.twitter_username,
           u.created_at as connected_at,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
+          COUNT(DISTINCT ph.id) as total_predictions,
+          COALESCE(SUM(ph.amount), 0) as total_invested,
+          COUNT(DISTINCT CASE WHEN ph.is_winner = true AND ph.claimed = true THEN ph.id END) as winning_predictions,
+          COALESCE(SUM(CASE 
+            WHEN ph.is_winner = true AND ph.claimed = true THEN (ph.payout_amount - ph.amount)
+            WHEN ph.is_winner = false THEN -ph.amount
+            ELSE 0 
+          END), 0) as total_profit,
           CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
+            WHEN COUNT(DISTINCT ph.id) > 0 
+            THEN (COUNT(DISTINCT CASE WHEN ph.is_winner = true THEN ph.id END)::DECIMAL / COUNT(DISTINCT ph.id)) * 100
             ELSE 0 
           END as win_rate,
           -- Add engagement points using MAX() for proper aggregation
           COALESCE(MAX(pb.total_points), 0) as engagement_points,
           COALESCE(MAX(pb.available_points), 0) as available_points,
           -- Flag for airdrop eligibility (requires betting activity)
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible,
+          CASE WHEN COUNT(DISTINCT ph.id) > 0 THEN true ELSE false END as airdrop_eligible,
           -- Activity status for cleanup
           CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 OR COALESCE(MAX(pb.total_points), 0) > 0 THEN 'active'
+            WHEN COUNT(DISTINCT ph.id) > 0 OR COALESCE(MAX(pb.total_points), 0) > 0 THEN 'active'
             WHEN u.created_at > NOW() - INTERVAL '7 days' THEN 'new'
             ELSE 'tourist'
           END as activity_status
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
+        LEFT JOIN prediction_history ph ON u.wallet_address = ph.wallet_address
         LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
         GROUP BY u.wallet_address, u.username, u.twitter_username, u.created_at
         -- Show ALL connected users (no HAVING clause restriction)
@@ -123,23 +127,27 @@ router.get('/top-performers', async (req, res) => {
           u.wallet_address,
           u.username,
           u.twitter_username,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
+          COUNT(DISTINCT ph.id) as total_predictions,
+          COALESCE(SUM(ph.amount), 0) as total_invested,
+          COUNT(DISTINCT CASE WHEN ph.is_winner = true AND ph.claimed = true THEN ph.id END) as winning_predictions,
+          COALESCE(SUM(CASE 
+            WHEN ph.is_winner = true AND ph.claimed = true THEN (ph.payout_amount - ph.amount)
+            WHEN ph.is_winner = false THEN -ph.amount
+            ELSE 0 
+          END), 0) as total_profit,
           CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
+            WHEN COUNT(DISTINCT ph.id) > 0 
+            THEN (COUNT(DISTINCT CASE WHEN ph.is_winner = true THEN ph.id END)::DECIMAL / COUNT(DISTINCT ph.id)) * 100
             ELSE 0 
           END as win_rate,
           COALESCE(MAX(pb.total_points), 0) as engagement_points,
           COALESCE(MAX(pb.available_points), 0) as available_points,
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
+          CASE WHEN COUNT(DISTINCT ph.id) > 0 THEN true ELSE false END as airdrop_eligible
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
+        LEFT JOIN prediction_history ph ON u.wallet_address = ph.wallet_address
         LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
         GROUP BY u.wallet_address, u.username, u.twitter_username
-        HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
+        HAVING COUNT(DISTINCT ph.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
       )
       SELECT *
       FROM user_stats
@@ -153,23 +161,27 @@ router.get('/top-performers', async (req, res) => {
           u.wallet_address,
           u.username,
           u.twitter_username,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
+          COUNT(DISTINCT ph.id) as total_predictions,
+          COALESCE(SUM(ph.amount), 0) as total_invested,
+          COUNT(DISTINCT CASE WHEN ph.is_winner = true AND ph.claimed = true THEN ph.id END) as winning_predictions,
+          COALESCE(SUM(CASE 
+            WHEN ph.is_winner = true AND ph.claimed = true THEN (ph.payout_amount - ph.amount)
+            WHEN ph.is_winner = false THEN -ph.amount
+            ELSE 0 
+          END), 0) as total_profit,
           CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
+            WHEN COUNT(DISTINCT ph.id) > 0 
+            THEN (COUNT(DISTINCT CASE WHEN ph.is_winner = true THEN ph.id END)::DECIMAL / COUNT(DISTINCT ph.id)) * 100
             ELSE 0 
           END as win_rate,
           COALESCE(MAX(pb.total_points), 0) as engagement_points,
           COALESCE(MAX(pb.available_points), 0) as available_points,
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
+          CASE WHEN COUNT(DISTINCT ph.id) > 0 THEN true ELSE false END as airdrop_eligible
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
+        LEFT JOIN prediction_history ph ON u.wallet_address = ph.wallet_address
         LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
         GROUP BY u.wallet_address, u.username, u.twitter_username
-        HAVING COUNT(DISTINCT p.id) >= 5  -- Keep minimum 5 predictions for accuracy ranking
+        HAVING COUNT(DISTINCT ph.id) >= 5  -- Keep minimum 5 predictions for accuracy ranking
       )
       SELECT *
       FROM user_stats
@@ -183,23 +195,27 @@ router.get('/top-performers', async (req, res) => {
           u.wallet_address,
           u.username,
           u.twitter_username,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
+          COUNT(DISTINCT ph.id) as total_predictions,
+          COALESCE(SUM(ph.amount), 0) as total_invested,
+          COUNT(DISTINCT CASE WHEN ph.is_winner = true AND ph.claimed = true THEN ph.id END) as winning_predictions,
+          COALESCE(SUM(CASE 
+            WHEN ph.is_winner = true AND ph.claimed = true THEN (ph.payout_amount - ph.amount)
+            WHEN ph.is_winner = false THEN -ph.amount
+            ELSE 0 
+          END), 0) as total_profit,
           CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
+            WHEN COUNT(DISTINCT ph.id) > 0 
+            THEN (COUNT(DISTINCT CASE WHEN ph.is_winner = true THEN ph.id END)::DECIMAL / COUNT(DISTINCT ph.id)) * 100
             ELSE 0 
           END as win_rate,
           COALESCE(MAX(pb.total_points), 0) as engagement_points,
           COALESCE(MAX(pb.available_points), 0) as available_points,
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
+          CASE WHEN COUNT(DISTINCT ph.id) > 0 THEN true ELSE false END as airdrop_eligible
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
+        LEFT JOIN prediction_history ph ON u.wallet_address = ph.wallet_address
         LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
         GROUP BY u.wallet_address, u.username, u.twitter_username
-        HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
+        HAVING COUNT(DISTINCT ph.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
       )
       SELECT *
       FROM user_stats
@@ -214,20 +230,24 @@ router.get('/top-performers', async (req, res) => {
           u.wallet_address,
           u.username,
           u.twitter_username,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
+          COUNT(DISTINCT ph.id) as total_predictions,
+          COALESCE(SUM(ph.amount), 0) as total_invested,
+          COUNT(DISTINCT CASE WHEN ph.is_winner = true AND ph.claimed = true THEN ph.id END) as winning_predictions,
+          COALESCE(SUM(CASE 
+            WHEN ph.is_winner = true AND ph.claimed = true THEN (ph.payout_amount - ph.amount)
+            WHEN ph.is_winner = false THEN -ph.amount
+            ELSE 0 
+          END), 0) as total_profit,
           CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
+            WHEN COUNT(DISTINCT ph.id) > 0 
+            THEN (COUNT(DISTINCT CASE WHEN ph.is_winner = true THEN ph.id END)::DECIMAL / COUNT(DISTINCT ph.id)) * 100
             ELSE 0 
           END as win_rate,
           COALESCE(MAX(pb.total_points), 0) as engagement_points,
           COALESCE(MAX(pb.available_points), 0) as available_points,
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
+          CASE WHEN COUNT(DISTINCT ph.id) > 0 THEN true ELSE false END as airdrop_eligible
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
+        LEFT JOIN prediction_history ph ON u.wallet_address = ph.wallet_address
         LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
         GROUP BY u.wallet_address, u.username, u.twitter_username
         HAVING COALESCE(MAX(pb.total_points), 0) > 0  -- Must have engagement points
@@ -277,24 +297,28 @@ router.get('/rank/:walletAddress', async (req, res) => {
   try {
     const { walletAddress } = req.params;
     
-    // Get real user rank from database including engagement points
+    // Get real user rank from database including engagement points using prediction_history
     const query = `
       WITH user_stats AS (
         SELECT 
           u.wallet_address,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit,
+          COUNT(DISTINCT ph.id) as total_predictions,
+          COALESCE(SUM(ph.amount), 0) as total_invested,
+          COALESCE(SUM(CASE 
+            WHEN ph.is_winner = true AND ph.claimed = true THEN (ph.payout_amount - ph.amount)
+            WHEN ph.is_winner = false THEN -ph.amount
+            ELSE 0 
+          END), 0) as total_profit,
           CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
+            WHEN COUNT(DISTINCT ph.id) > 0 
+            THEN (COUNT(DISTINCT CASE WHEN ph.is_winner = true THEN ph.id END)::DECIMAL / COUNT(DISTINCT ph.id)) * 100
             ELSE 0 
           END as win_rate,
           COALESCE(MAX(pb.total_points), 0) as engagement_points,
           COALESCE(MAX(pb.available_points), 0) as available_points,
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
+          CASE WHEN COUNT(DISTINCT ph.id) > 0 THEN true ELSE false END as airdrop_eligible
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
+        LEFT JOIN prediction_history ph ON u.wallet_address = ph.wallet_address
         LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
         WHERE u.wallet_address = $1
         GROUP BY u.wallet_address
@@ -306,12 +330,16 @@ router.get('/rank/:walletAddress', async (req, res) => {
         FROM (
           SELECT 
             u.wallet_address,
-            COALESCE(SUM(CASE WHEN p.claimed = true THEN p.payout - p.amount ELSE 0 END), 0) as total_profit
+            COALESCE(SUM(CASE 
+              WHEN ph.is_winner = true AND ph.claimed = true THEN (ph.payout_amount - ph.amount)
+              WHEN ph.is_winner = false THEN -ph.amount
+              ELSE 0 
+            END), 0) as total_profit
           FROM users u
-          LEFT JOIN predictions p ON u.wallet_address = p.user_address
+          LEFT JOIN prediction_history ph ON u.wallet_address = ph.wallet_address
           LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
           GROUP BY u.wallet_address
-          HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
+          HAVING COUNT(DISTINCT ph.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
         ) ranked_users
       ),
       accuracy_ranks AS (
@@ -322,15 +350,15 @@ router.get('/rank/:walletAddress', async (req, res) => {
           SELECT 
             u.wallet_address,
             CASE 
-              WHEN COUNT(DISTINCT p.id) > 0 
-              THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
+              WHEN COUNT(DISTINCT ph.id) > 0 
+              THEN (COUNT(DISTINCT CASE WHEN ph.is_winner = true THEN ph.id END)::DECIMAL / COUNT(DISTINCT ph.id)) * 100
               ELSE 0 
             END as win_rate
           FROM users u
-          LEFT JOIN predictions p ON u.wallet_address = p.user_address
+          LEFT JOIN prediction_history ph ON u.wallet_address = ph.wallet_address
           LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
           GROUP BY u.wallet_address
-          HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
+          HAVING COUNT(DISTINCT ph.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
         ) ranked_users
       ),
       volume_ranks AS (
@@ -340,12 +368,12 @@ router.get('/rank/:walletAddress', async (req, res) => {
         FROM (
           SELECT 
             u.wallet_address,
-            COALESCE(SUM(p.amount), 0) as total_invested
+            COALESCE(SUM(ph.amount), 0) as total_invested
           FROM users u
-          LEFT JOIN predictions p ON u.wallet_address = p.user_address
+          LEFT JOIN prediction_history ph ON u.wallet_address = ph.wallet_address
           LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
           GROUP BY u.wallet_address
-          HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
+          HAVING COUNT(DISTINCT ph.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
         ) ranked_users
       ),
       engagement_ranks AS (
