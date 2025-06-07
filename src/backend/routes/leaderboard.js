@@ -444,4 +444,62 @@ router.get('/rank/:walletAddress', async (req, res) => {
   }
 });
 
+// Debug endpoint to check specific wallet data
+router.get('/debug/:walletAddress', async (req, res) => {
+  try {
+    const { walletAddress } = req.params;
+    
+    console.log(`🔍 DEBUG: Checking wallet ${walletAddress}`);
+    
+    // Check if user exists
+    const userCheck = await db.query(
+      'SELECT * FROM users WHERE wallet_address = $1',
+      [walletAddress]
+    );
+    
+    // Check predictions
+    const predictionsCheck = await db.query(
+      'SELECT * FROM predictions WHERE user_address = $1',
+      [walletAddress]
+    );
+    
+    // Check if there are any similar wallet addresses
+    const similarCheck = await db.query(
+      'SELECT DISTINCT user_address FROM predictions WHERE user_address LIKE $1',
+      [`%${walletAddress.slice(-8)}%`]
+    );
+    
+    // Check markets table for this creator
+    const marketsCheck = await db.query(
+      'SELECT * FROM markets WHERE creator = $1',
+      [walletAddress]
+    );
+    
+    // Check point balances
+    const pointsCheck = await db.query(
+      'SELECT * FROM point_balances WHERE user_address = $1',
+      [walletAddress]
+    );
+    
+    res.json({
+      wallet_address: walletAddress,
+      user_exists: userCheck.rows.length > 0,
+      user_data: userCheck.rows[0] || null,
+      predictions_count: predictionsCheck.rows.length,
+      predictions: predictionsCheck.rows,
+      similar_addresses: similarCheck.rows,
+      markets_created: marketsCheck.rows.length,
+      markets: marketsCheck.rows,
+      points_data: pointsCheck.rows[0] || null,
+      debug_info: {
+        checked_at: new Date().toISOString(),
+        similar_count: similarCheck.rows.length
+      }
+    });
+  } catch (error) {
+    console.error('Error in debug endpoint:', error);
+    res.status(500).json({ error: 'Failed to debug wallet data' });
+  }
+});
+
 module.exports = router; 
