@@ -2057,6 +2057,75 @@ class MarketService {
       return await this.fetchMarketsWithLiveData();
     }
   }
+
+  // Fetch all markets with optional resolved markets
+  async fetchMarkets(includeResolved = false) {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/markets${includeResolved ? '?include_resolved=true' : ''}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const markets = await response.json();
+      
+      console.log(`📊 Fetched ${markets.length} markets${includeResolved ? ' (including resolved)' : ' (active only)'}`);
+      
+      return markets;
+    } catch (error) {
+      console.error('Error fetching markets:', error);
+      throw error;
+    }
+  }
+
+  // Fetch only resolved markets with winners
+  async fetchResolvedMarkets() {
+    try {
+      console.log('🏆 Fetching resolved markets with blockchain verification...');
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/markets/resolved`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      console.log(`✅ Fetched ${data.total} resolved markets:`, {
+        blockchainVerified: data.summary.blockchainVerified,
+        databaseOnly: data.summary.databaseOnly,
+        lastChecked: data.lastChecked
+      });
+      
+      return data;
+    } catch (error) {
+      console.error('Error fetching resolved markets:', error);
+      throw error;
+    }
+  }
+
+  // Fetch both active and resolved markets separately
+  async fetchAllMarketsWithResolved() {
+    try {
+      const [activeMarketsResponse, resolvedMarketsResponse] = await Promise.all([
+        this.fetchMarkets(false), // Active only
+        this.fetchResolvedMarkets() // Resolved only
+      ]);
+      
+      return {
+        active: activeMarketsResponse,
+        resolved: resolvedMarketsResponse.markets,
+        summary: {
+          totalActive: activeMarketsResponse.length,
+          totalResolved: resolvedMarketsResponse.total,
+          blockchainVerified: resolvedMarketsResponse.summary.blockchainVerified
+        }
+      };
+    } catch (error) {
+      console.error('Error fetching all markets with resolved:', error);
+      throw error;
+    }
+  }
 }
 
 export default new MarketService(); 

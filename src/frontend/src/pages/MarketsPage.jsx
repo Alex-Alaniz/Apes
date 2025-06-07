@@ -14,6 +14,7 @@ const MarketsPage = () => {
   const [selectedMarket, setSelectedMarket] = useState(null);
   const [showPredictionModal, setShowPredictionModal] = useState(false);
   const [toast, setToast] = useState(null);
+  const [resolvedMarkets, setResolvedMarkets] = useState([]);
   const { wallet, publicKey, connected, signTransaction, signAllTransactions } = useWallet();
   const scrollPositionRef = useRef(0);
   const navigate = useNavigate();
@@ -44,11 +45,33 @@ const MarketsPage = () => {
     try {
       setLoading(true);
       
-      console.log('🔄 Loading markets...');
-      const fetchedMarkets = await blockchainMarketsService.fetchMarketsWithFallback();
+      console.log('🔄 Loading markets with real-time blockchain resolution checking...');
       
-      console.log(`✅ Loaded ${fetchedMarkets.length} markets`);
-      setMarkets(fetchedMarkets);
+      // 🔴 NEW: Use enhanced endpoint with blockchain resolution checking
+      try {
+        // Try to fetch from our enhanced local endpoint with blockchain resolution checking
+        const fetchedMarkets = await marketService.fetchMarkets(false); // Active markets only
+        console.log(`✅ Loaded ${fetchedMarkets.length} active markets with blockchain verification`);
+        setMarkets(fetchedMarkets);
+        
+        // Also fetch resolved markets separately for filtering
+        try {
+          const resolvedData = await marketService.fetchResolvedMarkets();
+          setResolvedMarkets(resolvedData.markets || []);
+          console.log(`🏆 Loaded ${resolvedData.markets?.length || 0} resolved markets`);
+        } catch (resolvedError) {
+          console.warn('Could not fetch resolved markets:', resolvedError);
+          setResolvedMarkets([]);
+        }
+        
+      } catch (enhancedError) {
+        console.warn('Enhanced endpoint failed, falling back to blockchain service:', enhancedError);
+        
+        // Fallback to blockchain service if local backend isn't available
+        const fetchedMarkets = await blockchainMarketsService.fetchMarketsWithFallback();
+        console.log(`✅ Fallback: Loaded ${fetchedMarkets.length} markets`);
+        setMarkets(fetchedMarkets);
+      }
       
     } catch (error) {
       console.error('Error loading markets:', error);
@@ -91,16 +114,22 @@ const MarketsPage = () => {
     await loadMarkets();
   };
 
-  const filteredMarkets = markets.filter(market => {
+  // Combine active and resolved markets for filtering
+  const allMarkets = [...markets, ...resolvedMarkets];
+  
+  const filteredMarkets = allMarkets.filter(market => {
     if (filter === 'all') return true;
-    if (filter === 'active') return market.status === 'Active';
-    if (filter === 'resolved') return market.status === 'Resolved';
+    if (filter === 'active') return market.status === 'Active' || market.status === 'active';
+    if (filter === 'resolved') return market.status === 'Resolved' || market.status === 'resolved';
     if (filter === 'my-bets' && publicKey) {
       // This would need to check user's predictions
       return false; // Implement later
     }
     return true;
   });
+
+  const activeCount = allMarkets.filter(m => m.status === 'Active' || m.status === 'active').length;
+  const resolvedCount = allMarkets.filter(m => m.status === 'Resolved' || m.status === 'resolved').length;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -109,7 +138,10 @@ const MarketsPage = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Prediction Markets</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Active markets: {markets.length}
+              Active markets: {activeCount} | Resolved: {resolvedCount}
+              {markets.some(m => m.isBlockchainResolved) && (
+                <span className="ml-2 text-green-600 dark:text-green-400">🔴 Live blockchain data</span>
+              )}
             </p>
           </div>
           
@@ -140,7 +172,7 @@ const MarketsPage = () => {
                 : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
-            Active ({markets.filter(m => m.status === 'Active').length})
+            Active ({activeCount})
           </button>
           <button
             onClick={() => setFilter('resolved')}
@@ -150,7 +182,7 @@ const MarketsPage = () => {
                 : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
-            Resolved ({markets.filter(m => m.status === 'Resolved').length})
+            Resolved ({resolvedCount})
           </button>
           {publicKey && (
             <button
@@ -169,7 +201,7 @@ const MarketsPage = () => {
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading markets...</p>
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading markets with blockchain verification...</p>
           </div>
         ) : filteredMarkets.length === 0 ? (
           <div className="text-center py-12">
