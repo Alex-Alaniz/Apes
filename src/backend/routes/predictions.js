@@ -5,9 +5,14 @@ const engagementService = require('../services/engagementService');
 
 // Record a new prediction
 router.post('/place', async (req, res) => {
+  console.log('🎯 PREDICTION PLACE endpoint called');
+  console.log('🎯 Headers:', req.headers);
+  console.log('🎯 Body:', req.body);
+  
   try {
     const userAddress = req.headers['x-wallet-address'];
     if (!userAddress) {
+      console.log('❌ No wallet address provided');
       return res.status(401).json({ error: 'No wallet address provided' });
     }
 
@@ -18,8 +23,11 @@ router.post('/place', async (req, res) => {
       transaction_signature 
     } = req.body;
 
+    console.log('🎯 Processing prediction:', { userAddress, market_address, option_index, amount });
+
     // Validate inputs
     if (!market_address || option_index === undefined || !amount) {
+      console.log('❌ Missing required fields:', { market_address, option_index, amount });
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -36,6 +44,7 @@ router.post('/place', async (req, res) => {
       RETURNING *
     `;
 
+    console.log('🎯 Inserting prediction into database...');
     const result = await db.query(insertQuery, [
       userAddress,
       market_address,
@@ -45,6 +54,7 @@ router.post('/place', async (req, res) => {
     ]);
 
     const prediction = result.rows[0];
+    console.log('✅ Prediction inserted:', prediction);
 
     // Track engagement points for placing a prediction
     await engagementService.trackActivity(
@@ -58,8 +68,12 @@ router.post('/place', async (req, res) => {
       }
     );
 
+    console.log('✅ Engagement tracked for prediction');
+
     // Check for streaks
     await engagementService.checkStreaks(userAddress);
+
+    console.log('✅ Streaks checked');
 
     res.json({
       success: true,
@@ -67,8 +81,30 @@ router.post('/place', async (req, res) => {
       message: 'Prediction placed successfully'
     });
   } catch (error) {
-    console.error('Error placing prediction:', error);
+    console.error('❌ Error placing prediction:', error);
     res.status(500).json({ error: 'Failed to place prediction' });
+  }
+});
+
+// Test endpoint to check database connectivity
+router.get('/test', async (req, res) => {
+  try {
+    console.log('🧪 Testing predictions table...');
+    const result = await db.query('SELECT COUNT(*) as count FROM predictions');
+    console.log('🧪 Predictions count:', result.rows[0]);
+    
+    const marketsResult = await db.query('SELECT COUNT(*) as count FROM markets');
+    console.log('🧪 Markets count:', marketsResult.rows[0]);
+    
+    res.json({
+      success: true,
+      predictions_count: result.rows[0].count,
+      markets_count: marketsResult.rows[0].count,
+      message: 'Database connectivity test passed'
+    });
+  } catch (error) {
+    console.error('❌ Database test error:', error);
+    res.status(500).json({ error: 'Database test failed', details: error.message });
   }
 });
 

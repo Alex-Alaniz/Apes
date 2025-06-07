@@ -245,9 +245,14 @@ router.get('/', async (req, res) => {
 
 // POST /api/markets - Create a new market (for user-created markets)
 router.post('/', async (req, res) => {
+  console.log('🏗️ MARKET CREATION endpoint called');
+  console.log('🏗️ Headers:', req.headers);
+  console.log('🏗️ Body:', req.body);
+  
   try {
     const walletAddress = req.headers['x-wallet-address'];
     if (!walletAddress) {
+      console.log('❌ No wallet address provided');
       return res.status(401).json({ error: 'Wallet address required' });
     }
 
@@ -262,8 +267,16 @@ router.post('/', async (req, res) => {
       status = 'Active'
     } = req.body;
 
+    console.log('🏗️ Processing market creation:', { 
+      market_address, 
+      question: question?.substring(0, 50), 
+      options: options?.length,
+      walletAddress 
+    });
+
     // Validate required fields
     if (!market_address || !question || !options || !Array.isArray(options)) {
+      console.log('❌ Missing required fields:', { market_address, question: !!question, options: Array.isArray(options) });
       return res.status(400).json({ 
         error: 'Missing required fields: market_address, question, and options array are required' 
       });
@@ -291,6 +304,7 @@ router.post('/', async (req, res) => {
     // Initialize option volumes to 0 for each option
     const optionVolumes = options.map(() => 0);
 
+    console.log('🏗️ Inserting market into database...');
     const result = await db.query(insertQuery, [
       market_address,
       creator_address || walletAddress,
@@ -305,7 +319,11 @@ router.post('/', async (req, res) => {
     ]);
 
     const market = result.rows[0];
-    console.log('✅ User-created market saved to database:', market.market_address);
+    console.log('✅ User-created market saved to database:', {
+      market_address: market.market_address,
+      question: market.question?.substring(0, 50),
+      creator: market.creator
+    });
 
     res.json({
       success: true,
@@ -313,8 +331,8 @@ router.post('/', async (req, res) => {
       message: 'Market created successfully'
     });
   } catch (error) {
-    console.error('Error creating market:', error);
-    res.status(500).json({ error: 'Failed to create market' });
+    console.error('❌ Error creating market:', error);
+    res.status(500).json({ error: 'Failed to create market', details: error.message });
   }
 });
 
@@ -1035,78 +1053,44 @@ router.post('/update-participant', async (req, res) => {
   }
 });
 
-// POST /api/markets - Create a new market (for user-created markets)
-router.post('/', async (req, res) => {
+// Debug endpoint to check what markets exist
+router.get('/debug', async (req, res) => {
   try {
-    const walletAddress = req.headers['x-wallet-address'];
-    if (!walletAddress) {
-      return res.status(401).json({ error: 'Wallet address required' });
-    }
-
-    const {
-      market_address,
-      question,
-      category,
-      options,
-      end_time,
-      creator_address,
-      transaction_hash,
-      status = 'Active'
-    } = req.body;
-
-    // Validate required fields
-    if (!market_address || !question || !options || !Array.isArray(options)) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: market_address, question, and options array are required' 
-      });
-    }
-
-    // Insert market into database
-    const insertQuery = `
-      INSERT INTO markets (
+    console.log('🔍 Debug: Checking all markets in database...');
+    
+    const allMarketsQuery = `
+      SELECT 
         market_address,
-        creator,
         question,
-        category,
-        options,
-        resolution_date,
+        creator,
         status,
-        min_bet,
-        option_volumes,
-        total_volume,
         created_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-      RETURNING *
+      FROM markets 
+      ORDER BY created_at DESC
     `;
-
-    // Initialize option volumes to 0 for each option
-    const optionVolumes = options.map(() => 0);
-
-    const result = await db.query(insertQuery, [
-      market_address,
-      creator_address || walletAddress,
-      question,
-      category || 'General',
-      options,
-      end_time ? new Date(end_time) : null,
-      status,
-      10, // default min_bet
-      optionVolumes,
-      0 // initial total_volume
-    ]);
-
-    const market = result.rows[0];
-    console.log('✅ User-created market saved to database:', market.market_address);
-
+    
+    const result = await db.query(allMarketsQuery);
+    console.log('🔍 All markets in database:');
+    result.rows.forEach((market, index) => {
+      console.log(`${index + 1}. ${market.market_address} - ${market.question?.substring(0, 50)} (${market.status})`);
+    });
+    
+    // Check for specific market
+    const specificMarket = '9pgV5wUSemmuBU54qfneYc3pBbyJs2UK1N7cMf89mWR2';
+    const specificQuery = `SELECT * FROM markets WHERE market_address = $1`;
+    const specificResult = await db.query(specificQuery, [specificMarket]);
+    
+    console.log(`🔍 Looking for specific market ${specificMarket}:`, specificResult.rows.length > 0 ? 'FOUND' : 'NOT FOUND');
+    
     res.json({
-      success: true,
-      market,
-      message: 'Market created successfully'
+      total_markets: result.rows.length,
+      markets: result.rows,
+      specific_market_found: specificResult.rows.length > 0,
+      specific_market_data: specificResult.rows[0] || null
     });
   } catch (error) {
-    console.error('Error creating market:', error);
-    res.status(500).json({ error: 'Failed to create market' });
+    console.error('❌ Debug error:', error);
+    res.status(500).json({ error: 'Debug failed', details: error.message });
   }
 });
 
