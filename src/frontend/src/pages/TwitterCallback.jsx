@@ -14,25 +14,25 @@ const TwitterCallback = () => {
   }, []);
 
   const handleCallback = async () => {
-    const oauthToken = searchParams.get('oauth_token');
-    const oauthVerifier = searchParams.get('oauth_verifier');
-    const denied = searchParams.get('denied');
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+    const error = searchParams.get('error');
 
-    console.log('OAuth 1.0a callback received:', { oauth_token: !!oauthToken, oauth_verifier: !!oauthVerifier, denied });
+    console.log('OAuth 2.0 callback received:', { code: !!code, state: !!state, error });
     console.log('Session storage:', {
       wallet: sessionStorage.getItem('twitter_linking_wallet')
     });
 
-    if (denied) {
-      // User denied authorization
+    if (error) {
+      // User denied authorization or error occurred
       setTimeout(() => {
         setStatus('error');
-        setError('𝕏 authorization was cancelled');
+        setError('𝕏 authorization was cancelled or failed');
       }, 500);
       return;
     }
 
-    if (!oauthToken || !oauthVerifier) {
+    if (!code || !state) {
       setTimeout(() => {
         setStatus('error');
         setError('OAuth verification failed. Please try again.');
@@ -48,7 +48,7 @@ const TwitterCallback = () => {
         throw new Error('Wallet information missing. Please try linking again.');
       }
 
-      // Exchange oauth_token and oauth_verifier for access token
+      // Exchange authorization code for access token
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/twitter/auth/callback`, {
         method: 'POST',
         headers: {
@@ -56,8 +56,8 @@ const TwitterCallback = () => {
           'x-wallet-address': sessionStorage.getItem('twitter_linking_wallet'),
         },
         body: JSON.stringify({
-          oauth_token: oauthToken,
-          oauth_verifier: oauthVerifier,
+          code: code,
+          state: state,
         }),
       });
 
