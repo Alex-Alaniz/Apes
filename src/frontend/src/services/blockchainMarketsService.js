@@ -39,10 +39,17 @@ class BlockchainMarketsService {
 
   async initialize() {
     try {
+      // Create a proper dummy public key for read-only operations
+      const dummyWallet = {
+        publicKey: new PublicKey('11111111111111111111111111111111'),
+        signTransaction: () => { throw new Error('Read-only wallet'); },
+        signAllTransactions: () => { throw new Error('Read-only wallet'); }
+      };
+      
       // Create a read-only provider (no wallet needed for reading)
       const provider = new AnchorProvider(
         this.connection,
-        { publicKey: PublicKey.default }, // Dummy wallet for reading
+        dummyWallet,
         { commitment: 'confirmed' }
       );
       
@@ -51,7 +58,9 @@ class BlockchainMarketsService {
       return true;
     } catch (error) {
       console.error('❌ Failed to initialize blockchain markets service:', error);
-      // Fall back to RPC-only mode
+      // Continue without program - RPC mode will still work
+      this.program = null;
+      console.log('📋 Continuing in RPC-only mode');
       return false;
     }
   }
@@ -206,7 +215,7 @@ class BlockchainMarketsService {
         // Enhance with database metadata if available (use working endpoint)
         try {
           const apiUrl = window.location.origin;
-          const response = await fetch(`${apiUrl}/api/markets/debug/all`);
+          const response = await fetch(`${apiUrl}/api/markets/debug`);
           if (response.ok) {
             const debugData = await response.json();
             const dbMarkets = debugData.markets || [];
@@ -243,7 +252,7 @@ class BlockchainMarketsService {
         // Fallback: Use database with working endpoint
         try {
           const apiUrl = window.location.origin;
-          const response = await fetch(`${apiUrl}/api/markets/debug/all`);
+          const response = await fetch(`${apiUrl}/api/markets/debug`);
           if (response.ok) {
             const debugData = await response.json();
             const dbMarkets = debugData.markets || [];
@@ -282,7 +291,7 @@ class BlockchainMarketsService {
       // Final fallback: try the standard endpoint one more time
       try {
         const apiUrl = window.location.origin;
-        const response = await fetch(`${apiUrl}/api/markets/debug/all`);
+        const response = await fetch(`${apiUrl}/api/markets/debug`);
         if (response.ok) {
           const debugData = await response.json();
           const dbMarkets = debugData.markets || [];
