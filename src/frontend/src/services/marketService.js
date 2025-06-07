@@ -926,6 +926,14 @@ class MarketService {
         
         // Track engagement points for placing a prediction
         try {
+          console.log('🎯 Calling predictions API:', {
+            url: `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/predictions/place`,
+            walletAddress: walletPubkey.toString(),
+            marketAddress: marketPubkey,
+            optionIndex,
+            amount
+          });
+          
           const response = await fetch(
             `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/predictions/place`,
             {
@@ -944,8 +952,11 @@ class MarketService {
             }
           );
           
+          console.log('🎯 Predictions API response status:', response.status);
+          
           if (response.ok) {
-            console.log('Prediction recorded and points awarded');
+            const result = await response.json();
+            console.log('✅ Prediction recorded and points awarded:', result);
             
             // Update participant count for this market
             try {
@@ -962,9 +973,23 @@ class MarketService {
             } catch (participantError) {
               console.warn('Failed to update participant count:', participantError);
             }
+          } else {
+            const errorText = await response.text();
+            console.error('❌ Predictions API failed:', {
+              status: response.status,
+              statusText: response.statusText,
+              error: errorText
+            });
+            
+            // Show user-friendly error message
+            console.warn('⚠️ Failed to track prediction in database. Your bet was placed successfully on the blockchain, but may not appear in leaderboard immediately.');
           }
         } catch (engagementError) {
-          console.error('Failed to track engagement points:', engagementError);
+          console.error('❌ Failed to track engagement points - Network/API Error:', engagementError);
+          console.error('❌ Error details:', {
+            message: engagementError.message,
+            stack: engagementError.stack
+          });
           // Don't throw - bet was successful even if engagement tracking failed
         }
         
@@ -978,6 +1003,14 @@ class MarketService {
         
         // Try to track engagement even on timeout
         try {
+          console.log('🎯 Calling predictions API (timeout fallback):', {
+            url: `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/predictions/place`,
+            walletAddress: walletPubkey.toString(),
+            marketAddress: marketPubkey,
+            optionIndex,
+            amount
+          });
+          
           const response = await fetch(
             `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/predictions/place`,
             {
@@ -994,8 +1027,26 @@ class MarketService {
               })
             }
           );
+          
+          console.log('🎯 Predictions API response status (timeout fallback):', response.status);
+          
+          if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Prediction recorded on timeout fallback:', result);
+          } else {
+            const errorText = await response.text();
+            console.error('❌ Predictions API failed (timeout fallback):', {
+              status: response.status,
+              statusText: response.statusText,
+              error: errorText
+            });
+          }
         } catch (engagementError) {
-          console.error('Failed to track engagement points:', engagementError);
+          console.error('❌ Failed to track engagement points (timeout fallback):', engagementError);
+          console.error('❌ Error details:', {
+            message: engagementError.message,
+            stack: engagementError.stack
+          });
         }
         
         // Invalidate cache even on timeout since transaction might have succeeded
