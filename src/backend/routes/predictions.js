@@ -31,6 +31,21 @@ router.post('/place', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // CRITICAL FIX: Ensure user exists first to avoid foreign key constraint failure
+    const upsertUserQuery = `
+      INSERT INTO users (wallet_address, total_invested)
+      VALUES ($1, 0)
+      ON CONFLICT (wallet_address) 
+      DO NOTHING
+    `;
+    
+    try {
+      await db.query(upsertUserQuery, [userAddress]);
+      console.log('✅ User ensured in database');
+    } catch (userError) {
+      console.log('⚠️ User creation warning:', userError.message);
+    }
+
     // Insert prediction into database
     const insertQuery = `
       INSERT INTO predictions (
@@ -67,7 +82,7 @@ router.post('/place', async (req, res) => {
       await db.query(updateTotalQuery, [amount, userAddress]);
       console.log(`✅ Updated total_invested for ${userAddress} by ${amount}`);
     } catch (updateError) {
-      console.log('⚠️ Could not update total_invested (user may not exist in users table):', updateError.message);
+      console.log('⚠️ Could not update total_invested:', updateError.message);
     }
 
     // Track engagement points for placing a prediction
@@ -273,6 +288,17 @@ router.get('/stats/:walletAddress', async (req, res) => {
 router.get('/debug', async (req, res) => {
   try {
     console.log('🔍 PREDICTIONS DEBUG: Testing database connection...');
+    
+    // CRITICAL: Ensure total_invested column exists
+    try {
+      await db.query(`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS total_invested NUMERIC(20, 6) DEFAULT 0
+      `);
+      console.log('✅ total_invested column ensured');
+    } catch (columnError) {
+      console.log('⚠️ Column setup warning:', columnError.message);
+    }
     
     // Test basic database connection
     const dbTest = await db.query('SELECT NOW() as current_time');
