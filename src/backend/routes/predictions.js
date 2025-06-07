@@ -3,11 +3,20 @@ const router = express.Router();
 const db = require('../config/database');
 const engagementService = require('../services/engagementService');
 
-// Record a new prediction
+// EMERGENCY MINIMAL ROUTE - Test if routing works at all
+router.get('/emergency', async (req, res) => {
+  res.json({
+    success: true,
+    message: 'EMERGENCY ROUTE WORKS - predictions routing is functional',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// CRITICAL MINIMAL PREDICTION ENDPOINT - No dependencies, just save to DB
 router.post('/place', async (req, res) => {
-  console.log('🎯 PREDICTION PLACE endpoint called');
-  console.log('🎯 Headers:', req.headers);
-  console.log('🎯 Body:', req.body);
+  console.log('🚨 MINIMAL PREDICTION PLACE endpoint called');
+  console.log('🚨 Headers:', req.headers);
+  console.log('🚨 Body:', req.body);
   
   try {
     const userAddress = req.headers['x-wallet-address'];
@@ -23,7 +32,7 @@ router.post('/place', async (req, res) => {
       transaction_signature 
     } = req.body;
 
-    console.log('🎯 Processing prediction:', { userAddress, market_address, option_index, amount });
+    console.log('🚨 Processing prediction:', { userAddress, market_address, option_index, amount });
 
     // Validate inputs
     if (!market_address || option_index === undefined || !amount) {
@@ -31,22 +40,25 @@ router.post('/place', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // CRITICAL FIX: Ensure user exists first to avoid foreign key constraint failure
-    const upsertUserQuery = `
-      INSERT INTO users (wallet_address, total_invested)
-      VALUES ($1, 0)
-      ON CONFLICT (wallet_address) 
-      DO NOTHING
-    `;
-    
+    // STEP 1: Ensure user exists (no foreign key crashes)
     try {
-      await db.query(upsertUserQuery, [userAddress]);
+      await db.query(`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS total_invested NUMERIC(20, 6) DEFAULT 0
+      `);
+      
+      await db.query(`
+        INSERT INTO users (wallet_address, total_invested)
+        VALUES ($1, 0)
+        ON CONFLICT (wallet_address) DO NOTHING
+      `, [userAddress]);
+      
       console.log('✅ User ensured in database');
     } catch (userError) {
-      console.log('⚠️ User creation warning:', userError.message);
+      console.log('⚠️ User setup warning:', userError.message);
     }
 
-    // Insert prediction into database
+    // STEP 2: Insert prediction
     const insertQuery = `
       INSERT INTO predictions (
         user_address, 
@@ -59,7 +71,7 @@ router.post('/place', async (req, res) => {
       RETURNING *
     `;
 
-    console.log('🎯 Inserting prediction into database...');
+    console.log('🚨 Inserting prediction into database...');
     const result = await db.query(insertQuery, [
       userAddress,
       market_address,
@@ -71,47 +83,29 @@ router.post('/place', async (req, res) => {
     const prediction = result.rows[0];
     console.log('✅ Prediction inserted:', prediction);
 
-    // Update user's total_invested in users table
-    const updateTotalQuery = `
-      UPDATE users 
-      SET total_invested = COALESCE(total_invested, 0) + $1
-      WHERE wallet_address = $2
-    `;
-    
+    // STEP 3: Update total_invested
     try {
-      await db.query(updateTotalQuery, [amount, userAddress]);
+      await db.query(`
+        UPDATE users 
+        SET total_invested = COALESCE(total_invested, 0) + $1
+        WHERE wallet_address = $2
+      `, [amount, userAddress]);
+      
       console.log(`✅ Updated total_invested for ${userAddress} by ${amount}`);
     } catch (updateError) {
       console.log('⚠️ Could not update total_invested:', updateError.message);
     }
 
-    // Track engagement points for placing a prediction
-    await engagementService.trackActivity(
-      userAddress,
-      'PLACE_PREDICTION',
-      {
-        market_address,
-        option_index,
-        amount,
-        prediction_id: prediction.id
-      }
-    );
-
-    console.log('✅ Engagement tracked for prediction');
-
-    // Check for streaks
-    await engagementService.checkStreaks(userAddress);
-
-    console.log('✅ Streaks checked');
+    console.log('🚨 MINIMAL PREDICTION SUCCESSFUL - NO ENGAGEMENT SERVICE CALLS');
 
     res.json({
       success: true,
       prediction,
-      message: 'Prediction placed successfully'
+      message: 'Prediction placed successfully (minimal version)'
     });
   } catch (error) {
     console.error('❌ Error placing prediction:', error);
-    res.status(500).json({ error: 'Failed to place prediction' });
+    res.status(500).json({ error: 'Failed to place prediction', details: error.message });
   }
 });
 
