@@ -56,6 +56,20 @@ router.post('/place', async (req, res) => {
     const prediction = result.rows[0];
     console.log('✅ Prediction inserted:', prediction);
 
+    // Update user's total_invested in users table
+    const updateTotalQuery = `
+      UPDATE users 
+      SET total_invested = COALESCE(total_invested, 0) + $1
+      WHERE wallet_address = $2
+    `;
+    
+    try {
+      await db.query(updateTotalQuery, [amount, userAddress]);
+      console.log(`✅ Updated total_invested for ${userAddress} by ${amount}`);
+    } catch (updateError) {
+      console.log('⚠️ Could not update total_invested (user may not exist in users table):', updateError.message);
+    }
+
     // Track engagement points for placing a prediction
     await engagementService.trackActivity(
       userAddress,
