@@ -20,7 +20,7 @@ const NETWORK_CONFIG = {
   },
   mainnet: {
     programId: "APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS", 
-    rpcUrl: process.env.SOLANA_RPC_URL || "https://mainnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d",
+    rpcUrl: process.env.SOLANA_RPC_URL || "https://solana-mainnet.g.alchemy.com/v2/LB4s_CFb80irvbKFWL6qN",
     tokenDecimals: 9
   }
 };

@@ -18,9 +18,9 @@ const RPC_ENDPOINTS = {
     'https://devnet.helius-rpc.com',  // Helius public
   ],
   mainnet: [
-    'https://mainnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d',  // Helius (primary for mainnet)
-    'https://api.mainnet-beta.solana.com',  // Public RPC (backup)
-    'https://solana-mainnet.g.alchemy.com/v2/LB4s_CFb80irvbKFWL6qN',  // Alchemy (fallback)
+    'https://solana-mainnet.g.alchemy.com/v2/LB4s_CFb80irvbKFWL6qN',  // Alchemy (primary) - Higher rate limits
+    'https://mainnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d',  // Helius (backup)
+    'https://api.mainnet-beta.solana.com',  // Public RPC (fallback)
   ]
 };
 
