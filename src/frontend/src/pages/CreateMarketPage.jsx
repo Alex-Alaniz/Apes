@@ -130,6 +130,39 @@ const CreateMarketPage = () => {
       
       const result = await marketService.createMarket(marketData);
       
+      // Save market to database so it shows up on /markets page
+      if (result.success && result.marketPubkey) {
+        try {
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+          const saveResponse = await fetch(`${apiUrl}/api/markets`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Wallet-Address': publicKey.toString()
+            },
+            body: JSON.stringify({
+              market_address: result.marketPubkey,
+              question: formData.question,
+              category: formData.category,
+              options: [formData.optionA, formData.optionB],
+              end_time: formData.endDate,
+              creator_address: publicKey.toString(),
+              transaction_hash: result.transaction,
+              status: 'Active'
+            })
+          });
+          
+          if (saveResponse.ok) {
+            console.log('Market saved to database successfully');
+          } else {
+            console.warn('Failed to save market to database, but blockchain creation succeeded');
+          }
+        } catch (saveError) {
+          console.error('Error saving market to database:', saveError);
+          // Don't fail the whole process since blockchain creation succeeded
+        }
+      }
+      
       // Trigger off-chain burn for market creation
       if (isBelieveConfigured() && result.marketId && result.transaction) {
         try {
