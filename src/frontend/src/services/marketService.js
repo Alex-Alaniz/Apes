@@ -1341,9 +1341,16 @@ class MarketService {
       console.log(`📊 Fetching all positions for user: ${userAddress}`);
       
       const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${backendUrl}/api/predictions/user/${userAddress}`, {
+      
+      // Add cache busting to ensure fresh data
+      const cacheBuster = `?t=${Date.now()}&r=${Math.random()}`;
+      const response = await fetch(`${backendUrl}/api/predictions/user/${userAddress}${cacheBuster}`, {
         headers: {
           'Content-Type': 'application/json',
+          'x-wallet-address': userAddress,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
       });
       
@@ -1368,6 +1375,8 @@ class MarketService {
           amount: parseFloat(prediction.amount),
           timestamp: new Date(prediction.timestamp || prediction.created_at),
           claimed: prediction.claimed || false,
+          payout: prediction.payout || '0.000000',
+          claim_timestamp: prediction.claim_timestamp,
           transactionSignature: prediction.transaction_signature,
           market: {
             address: prediction.market_address,
@@ -2268,6 +2277,7 @@ class MarketService {
       throw error;
     }
   }
+
 }
 
 export default new MarketService(); 

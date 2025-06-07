@@ -360,8 +360,17 @@ const ProfilePage = () => {
       });
     }
     
-    // Reload user data
+    // Force refresh of user data with cache busting
+    console.log('🔄 Forcing data refresh after successful claim...');
+    setUserPositionsByMarket({}); // Clear cache
+    setMarkets(new Map()); // Clear cache
     await loadUserData();
+    
+    // Additional refresh after a short delay to ensure backend is updated
+    setTimeout(async () => {
+      console.log('🔄 Secondary data refresh...');
+      await loadUserData();
+    }, 2000);
   };
 
   const canClaimReward = (position, market) => {
@@ -373,7 +382,8 @@ const ProfilePage = () => {
       positionOptionIndexType: typeof position.optionIndex,
       isWinner: (market?.winningOption || market?.winning_option) === position.optionIndex,
       status: market?.status || market?.market_status,
-      claimed: position.claimed
+      claimed: position.claimed,
+      positionClaimed: position.claimed
     });
     
     // Handle both frontend and backend data formats
@@ -384,7 +394,8 @@ const ProfilePage = () => {
            marketStatus === 'Resolved' && 
            winningOption !== null &&
            winningOption === position.optionIndex &&
-           !position.claimed;
+           !position.claimed &&  // Explicitly check not claimed
+           position.claimed !== true; // Double check
   };
 
   const calculatePotentialWinnings = (position, market) => {
@@ -845,7 +856,12 @@ const ProfilePage = () => {
                                       <>
                                         <span className="text-green-400 font-medium">✓ Won</span>
                                         {position.claimed ? (
-                                          <div className="text-xs text-gray-400 mt-1">Claimed</div>
+                                          <div className="text-xs text-green-400 mt-1 font-medium">
+                                            ✅ Claimed: {parseFloat(position.payout || 0).toFixed(2)} APES
+                                            <div className="text-xs text-gray-400 mt-1">
+                                              On {position.claim_timestamp ? new Date(position.claim_timestamp).toLocaleDateString() : 'Unknown'}
+                                            </div>
+                                          </div>
                                         ) : (
                                           <div className="text-xs text-white mt-1">
                                             <div className="bg-gray-900/50 rounded p-2 space-y-1">
@@ -872,7 +888,7 @@ const ProfilePage = () => {
                                   </div>
                                 )}
                                 
-                                {canClaim && (
+                                {canClaim && !position.claimed && (
                                   <button
                                     onClick={() => handleClaimClick(marketAddress, position, market)}
                                     disabled={claimingReward[claimKey]}
