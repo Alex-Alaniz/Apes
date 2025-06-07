@@ -1121,7 +1121,43 @@ class MarketService {
     try {
       console.log(`💰 Claiming reward for prediction ID: ${predictionId}`);
       
+      // CRITICAL FIX: Get market address from prediction first
       const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      
+      // First, get the prediction details to get market address
+      const userPositionsResponse = await fetch(`${backendUrl}/api/predictions/user/${this.wallet?.publicKey?.toString()}`, {
+        headers: {
+          'x-wallet-address': this.wallet?.publicKey?.toString() || '',
+        }
+      });
+      
+      if (!userPositionsResponse.ok) {
+        throw new Error('Failed to fetch user positions');
+      }
+      
+      const userPositions = await userPositionsResponse.json();
+      const prediction = userPositions.find(p => p.id == predictionId);
+      
+      if (!prediction) {
+        throw new Error('Prediction not found');
+      }
+      
+      const marketAddress = prediction.market_address;
+      console.log(`🎯 Found market address for prediction: ${marketAddress}`);
+      
+      // STEP 1: Execute REAL onchain transaction first
+      console.log('⛓️ Executing onchain claimReward transaction...');
+      const onchainResult = await this.claimReward(marketAddress, prediction.option_index);
+      
+      if (!onchainResult.success || !onchainResult.transaction) {
+        throw new Error('Onchain transaction failed: ' + (onchainResult.error || 'Unknown error'));
+      }
+      
+      const realTransactionSignature = onchainResult.transaction;
+      console.log('✅ Onchain transaction successful:', realTransactionSignature);
+      
+      // STEP 2: Now update backend with REAL transaction signature
+      console.log('📝 Updating backend with real transaction signature...');
       const response = await fetch(`${backendUrl}/api/predictions/claim/${predictionId}`, {
         method: 'POST',
         headers: {
@@ -1129,27 +1165,41 @@ class MarketService {
           'x-wallet-address': this.wallet?.publicKey?.toString() || '',
         },
         body: JSON.stringify({
-          payout: expectedPayout,
-          transaction_signature: `claim_${predictionId}_${Date.now()}` // Generate a claim signature
+          transaction_signature: realTransactionSignature // Use REAL signature
         })
       });
       
       if (!response.ok) {
+        // The onchain transaction succeeded but backend update failed
+        // This is not critical - user got their tokens
+        console.warn('⚠️ Onchain transaction succeeded but backend update failed');
         const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        return {
+          success: true,
+          message: 'Tokens claimed successfully! (Backend tracking may have failed)',
+          transaction: realTransactionSignature,
+          warning: 'Backend database update failed but your tokens were transferred successfully.'
+        };
       }
       
       const result = await response.json();
-      console.log('✅ Reward claimed successfully:', result);
+      console.log('✅ Backend updated successfully:', result);
       
       return {
         success: true,
         message: result.message || 'Rewards claimed successfully!',
+        transaction: realTransactionSignature,
         prediction: result.prediction
       };
     } catch (error) {
-      console.error('❌ Error claiming reward from backend:', error);
-      throw new Error(`Failed to claim reward: ${error.message}`);
+      console.error('❌ Error claiming reward:', error);
+      
+      // Check if this is an onchain error vs backend error
+      if (error.message.includes('Onchain transaction failed')) {
+        throw new Error(`Failed to claim reward: ${error.message}`);
+      } else {
+        throw new Error(`Failed to claim reward: ${error.message}`);
+      }
     }
   }
 

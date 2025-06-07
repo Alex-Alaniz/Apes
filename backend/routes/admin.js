@@ -918,4 +918,103 @@ router.get('/deployed-markets', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Reset incorrectly claimed prediction (for emergency use when claims failed but were marked as claimed)
+router.post('/reset-claim/:predictionId', async (req, res) => {
+  try {
+    console.log('🔧 ADMIN: Resetting claim status for prediction:', req.params.predictionId);
+    
+    const { predictionId } = req.params;
+    const { reason } = req.body;
+
+    // Verify the prediction exists and get details
+    const checkQuery = `
+      SELECT p.*, m.question, m.status, m.resolved_option, m.market_address
+      FROM predictions p
+      JOIN markets m ON p.market_address = m.market_address
+      WHERE p.id = $1
+    `;
+
+    const checkResult = await db.query(checkQuery, [predictionId]);
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Prediction not found' });
+    }
+
+    const prediction = checkResult.rows[0];
+
+    // Log the reset action
+    console.log('🔧 Resetting claim for prediction:', {
+      id: predictionId,
+      user: prediction.user_address,
+      market: prediction.question,
+      amount: prediction.amount,
+      claimed: prediction.claimed,
+      payout: prediction.payout,
+      reason: reason || 'Admin reset - claim failed but marked as claimed'
+    });
+
+    // Reset the claim status
+    const resetQuery = `
+      UPDATE predictions
+      SET 
+        claimed = false,
+        claim_timestamp = NULL,
+        payout = 0
+      WHERE id = $1
+      RETURNING *
+    `;
+
+    const resetResult = await db.query(resetQuery, [predictionId]);
+
+    // Log the reset action in database (create admin_actions table if it doesn't exist)
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS admin_actions (
+          id SERIAL PRIMARY KEY,
+          action_type VARCHAR(50) NOT NULL,
+          target_type VARCHAR(50) NOT NULL,
+          target_id VARCHAR(100) NOT NULL,
+          admin_note TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          metadata JSONB
+        )
+      `);
+
+      await db.query(`
+        INSERT INTO admin_actions (action_type, target_type, target_id, admin_note, metadata)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [
+        'RESET_CLAIM',
+        'prediction', 
+        predictionId,
+        reason || 'Admin reset - claim failed but marked as claimed',
+        JSON.stringify({
+          user_address: prediction.user_address,
+          market_address: prediction.market_address,
+          original_payout: prediction.payout,
+          reset_timestamp: new Date().toISOString()
+        })
+      ]);
+    } catch (logError) {
+      console.error('Failed to log admin action:', logError);
+    }
+
+    console.log('✅ Successfully reset claim status for prediction:', predictionId);
+
+    res.json({
+      success: true,
+      message: 'Claim status reset successfully',
+      prediction: resetResult.rows[0],
+      action: {
+        type: 'RESET_CLAIM',
+        reason: reason || 'Admin reset - claim failed but marked as claimed',
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error resetting claim status:', error);
+    res.status(500).json({ error: 'Failed to reset claim status' });
+  }
+});
+
 module.exports = router; 
