@@ -25,6 +25,30 @@ class BelieveApiService {
   }
 
   /**
+   * Test connectivity to Believe API
+   */
+  async testConnectivity() {
+    console.log('🔍 Testing Believe API connectivity...');
+    try {
+      // Try a simple GET request to the base API
+      const response = await axios.get('https://public.believe.app/v1', {
+        timeout: 10000,
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      console.log('✅ Believe API is reachable:', response.status);
+      return true;
+    } catch (error) {
+      console.error('❌ Believe API connectivity test failed:');
+      console.error('- Error:', error.message);
+      console.error('- Status:', error.response?.status);
+      console.error('- CORS issue?:', error.message === 'Network Error');
+      return false;
+    }
+  }
+
+  /**
    * Burn tokens via Believe API
    * @param {string} type - Type of burn
    * @param {Object} proof - Proof of burn
@@ -40,6 +64,19 @@ class BelieveApiService {
     const idempotencyKey = this.generateIdempotencyKey();
     
     try {
+      console.log('🌐 Making Believe API request to:', this.apiUrl);
+      console.log('📤 Request payload:', {
+        type,
+        proof,
+        burnAmount,
+        persistOnchain: true
+      });
+      console.log('📋 Request headers:', {
+        'Content-Type': 'application/json',
+        'x-believe-api-key': this.apiKey ? '***PRESENT***' : 'MISSING',
+        'x-idempotency-key': idempotencyKey
+      });
+
       const response = await axios.post(
         this.apiUrl,
         {
@@ -53,7 +90,8 @@ class BelieveApiService {
             'Content-Type': 'application/json',
             'x-believe-api-key': this.apiKey,
             'x-idempotency-key': idempotencyKey
-          }
+          },
+          timeout: 30000 // 30 second timeout
         }
       );
 
@@ -78,9 +116,40 @@ class BelieveApiService {
       
       return result;
     } catch (error) {
-      console.error('Believe API burn error:', error.response?.data || error.message);
+      console.error('❌ Believe API burn error details:');
+      console.error('- Error type:', error.constructor.name);
+      console.error('- Error message:', error.message);
+      console.error('- Error code:', error.code);
+      console.error('- Response status:', error.response?.status);
+      console.error('- Response data:', error.response?.data);
+      console.error('- Request URL:', error.config?.url);
+      console.error('- Is timeout?:', error.code === 'ECONNABORTED');
+      console.error('- Is network error?:', error.message === 'Network Error');
+      console.error('- Full error object:', error);
       
-      // Handle specific error codes
+      // Handle specific error types
+      if (error.message === 'Network Error') {
+        console.error('🚨 NETWORK ERROR DETECTED - Possible causes:');
+        console.error('1. CORS: Believe API blocking requests from your domain');
+        console.error('2. DNS: Cannot resolve public.believe.app');
+        console.error('3. Firewall: Request being blocked');
+        console.error('4. API Down: Believe API service unavailable');
+        return { 
+          success: false, 
+          message: 'Network error - Cannot reach Believe API (possible CORS issue)',
+          error: 'NETWORK_ERROR'
+        };
+      }
+      
+      if (error.code === 'ECONNABORTED') {
+        return { 
+          success: false, 
+          message: 'Request timeout - Believe API not responding',
+          error: 'TIMEOUT'
+        };
+      }
+      
+      // Handle specific API error codes
       if (error.response?.data?.error) {
         const errorCode = error.response.data.error;
         const errorMessage = error.response.data.message;

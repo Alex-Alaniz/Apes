@@ -154,6 +154,12 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
             betAmount: parseFloat(betAmount),
             txHash: result.transaction
           });
+          
+          // Test basic connectivity if it's a network error
+          if (burnError.message === 'Network Error') {
+            console.log('🔍 Testing basic API connectivity...');
+            believeApiService.testConnectivity();
+          }
         }
       }
       
