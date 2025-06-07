@@ -212,10 +212,10 @@ class BlockchainMarketsService {
       if (blockchainMarkets.length > 0) {
         console.log(`✅ Using ${blockchainMarkets.length} markets from blockchain`);
         
-        // Enhance with database metadata if available (use working endpoint)
+        // Enhance with database metadata if available (use correct backend URL)
         try {
-          const apiUrl = window.location.origin;
-          const response = await fetch(`${apiUrl}/api/markets/debug`);
+          const backendUrl = 'https://apes-production.up.railway.app';
+          const response = await fetch(`${backendUrl}/api/markets/debug`);
           if (response.ok) {
             const debugData = await response.json();
             const dbMarkets = debugData.markets || [];
@@ -249,38 +249,18 @@ class BlockchainMarketsService {
       } else {
         console.log('🔄 No blockchain markets found, fetching from database...');
         
-        // Fallback: Use database with working endpoint
+        // Fallback: Use database directly from Railway backend
         try {
-          const apiUrl = window.location.origin;
-          const response = await fetch(`${apiUrl}/api/markets/debug`);
+          const backendUrl = 'https://apes-production.up.railway.app';
+          const response = await fetch(`${backendUrl}/api/markets`);
           if (response.ok) {
-            const debugData = await response.json();
-            const dbMarkets = debugData.markets || [];
+            const dbMarkets = await response.json();
             
-            // Transform debug format to standard format
-            const standardMarkets = dbMarkets.map(market => ({
-              ...market,
-              publicKey: market.market_address,
-              totalVolume: parseFloat(market.total_volume || 0),
-              optionPools: market.option_volumes || [],
-              optionPercentages: this.calculatePercentages(market.option_volumes, market.total_volume),
-              optionProbabilities: this.calculatePercentages(market.option_volumes, market.total_volume),
-              endTime: market.resolution_date,
-              winningOption: market.resolved_option,
-              minBetAmount: parseFloat(market.min_bet || 10),
-              creatorFeeRate: 2.5,
-              participantCount: parseInt(market.participant_count || 0),
-              optionCount: market.options?.length || 2,
-              description: market.description || market.question,
-              resolutionDate: market.resolution_date,
-              creator: market.creator || 'Unknown'
-            }));
-            
-            console.log(`📋 Using ${standardMarkets.length} markets from database`);
-            return standardMarkets;
+            console.log(`📋 Using ${dbMarkets.length} markets from Railway backend`);
+            return dbMarkets;
           }
         } catch (dbError) {
-          console.error('❌ Database fetch also failed:', dbError);
+          console.error('❌ Railway backend fetch failed:', dbError);
         }
       }
       
@@ -288,14 +268,13 @@ class BlockchainMarketsService {
     } catch (error) {
       console.error('❌ Error in fetchMarketsWithFallback:', error);
       
-      // Final fallback: try the standard endpoint one more time
+      // Final fallback: try Railway backend directly
       try {
-        const apiUrl = window.location.origin;
-        const response = await fetch(`${apiUrl}/api/markets/debug`);
+        const backendUrl = 'https://apes-production.up.railway.app';
+        const response = await fetch(`${backendUrl}/api/markets`);
         if (response.ok) {
-          const debugData = await response.json();
-          const dbMarkets = debugData.markets || [];
-          console.log(`🔄 Emergency fallback: loaded ${dbMarkets.length} markets`);
+          const dbMarkets = await response.json();
+          console.log(`🔄 Emergency fallback: loaded ${dbMarkets.length} markets from Railway`);
           return dbMarkets;
         }
       } catch (emergencyError) {
