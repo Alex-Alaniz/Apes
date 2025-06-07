@@ -1094,4 +1094,91 @@ router.get('/debug', async (req, res) => {
   }
 });
 
+// POST /api/markets/recover-blockchain - Recover missing markets from blockchain
+router.post('/recover-blockchain', async (req, res) => {
+  console.log('🚀 Blockchain market recovery endpoint called');
+  
+  try {
+    const BlockchainMarketRecovery = require('../scripts/recover-blockchain-markets');
+    const recovery = new BlockchainMarketRecovery();
+    
+    console.log('🔄 Starting blockchain market recovery...');
+    const result = await recovery.recoverAllMissingMarkets();
+    
+    if (result.success) {
+      console.log(`✅ Recovery completed: ${result.imported} imported, ${result.skipped} skipped`);
+      res.json({
+        success: true,
+        message: 'Blockchain market recovery completed',
+        statistics: {
+          imported: result.imported,
+          skipped: result.skipped,
+          total: result.total || result.imported + result.skipped
+        }
+      });
+    } else {
+      console.error('❌ Recovery failed:', result.error);
+      res.status(500).json({
+        success: false,
+        error: 'Recovery process failed',
+        details: result.error
+      });
+    }
+  } catch (error) {
+    console.error('❌ Recovery endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to start recovery process',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/markets/blockchain-status - Check sync status between blockchain and database
+router.get('/blockchain-status', async (req, res) => {
+  try {
+    const BlockchainMarketRecovery = require('../scripts/recover-blockchain-markets');
+    const recovery = new BlockchainMarketRecovery();
+    
+    await recovery.initialize();
+    
+    const blockchainMarkets = await recovery.fetchAllBlockchainMarkets();
+    const databaseMarkets = await recovery.fetchDatabaseMarkets();
+    
+    const missing = blockchainMarkets.filter(
+      blockchain => !databaseMarkets.includes(blockchain.market_address)
+    );
+    
+    const missingDetails = missing.map(market => ({
+      market_address: market.market_address,
+      question: market.question?.substring(0, 100),
+      creator: market.creator,
+      status: market.status,
+      total_volume: market.total_volume
+    }));
+    
+    res.json({
+      blockchain_markets: blockchainMarkets.length,
+      database_markets: databaseMarkets.length,
+      missing_markets: missing.length,
+      in_sync: missing.length === 0,
+      missing_details: missingDetails.slice(0, 10), // Limit to first 10 for API response
+      recommendations: missing.length > 0 ? [
+        `Found ${missing.length} markets on blockchain that are missing from database`,
+        'Run POST /api/markets/recover-blockchain to import missing markets',
+        'Check create-market frontend flow to prevent future sync issues'
+      ] : [
+        'Database is in sync with blockchain',
+        'All blockchain markets are properly stored in database'
+      ]
+    });
+  } catch (error) {
+    console.error('❌ Blockchain status check error:', error);
+    res.status(500).json({
+      error: 'Failed to check blockchain status',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router; 
