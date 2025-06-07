@@ -1,7 +1,7 @@
 import React from 'react';
 import MarketCard from './MarketCard';
 
-const MarketList = ({ markets, onPredict }) => {
+const MarketList = ({ markets, onPredict, onClaim, canClaimReward, userPositions }) => {
   if (!markets || markets.length === 0) {
     return (
       <div className="text-center py-12">
@@ -17,6 +17,9 @@ const MarketList = ({ markets, onPredict }) => {
           key={market.publicKey} 
           market={market} 
           onPredict={onPredict}
+          onClaim={onClaim}
+          canClaimReward={canClaimReward}
+          userPositions={userPositions}
         />
       ))}
     </div>

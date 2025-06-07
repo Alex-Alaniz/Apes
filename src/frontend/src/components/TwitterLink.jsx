@@ -58,10 +58,14 @@ const TwitterLink = ({ onLinked }) => {
         throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
-      const { auth_url, oauth_token } = await response.json();
+      const { auth_url, oauth_token, debug_mode, message } = await response.json();
 
       if (!auth_url) {
-        throw new Error('Invalid response from server - missing auth URL');
+        if (debug_mode) {
+          throw new Error(`Twitter integration not configured: ${message || 'OAuth credentials missing'}`);
+        } else {
+          throw new Error('Invalid response from server - missing auth URL');
+        }
       }
 
       // Store wallet address in sessionStorage for callback handling

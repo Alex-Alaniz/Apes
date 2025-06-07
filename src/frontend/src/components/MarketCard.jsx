@@ -45,7 +45,7 @@ const categoryColors = {
   default: 'from-purple-600 to-blue-600'
 };
 
-const MarketCard = ({ market, onPredict, variant = 'default' }) => {
+const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions: userPositionsFromProps, variant = 'default' }) => {
   const navigate = useNavigate();
   const { publicKey } = useWallet();
   const [userPositions, setUserPositions] = useState([]);
@@ -257,11 +257,23 @@ const MarketCard = ({ market, onPredict, variant = 'default' }) => {
                     </span>
                   </div>
                   {userPositions.some(p => p.optionIndex === market.winningOption) && (
-                    <div className="flex justify-between items-center mt-1 text-green-400">
-                      <span>Won!</span>
-                      <span className="font-semibold">
-                        {userPositions.find(p => p.optionIndex === market.winningOption).claimed ? '✓ Claimed' : 'Claim rewards →'}
-                      </span>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-green-400">Won!</span>
+                      {userPositions.find(p => p.optionIndex === market.winningOption).claimed ? (
+                        <span className="font-semibold text-green-400">✓ Claimed</span>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onClaim) {
+                              onClaim(market, market.winningOption);
+                            }
+                          }}
+                          className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors font-medium"
+                        >
+                          Claim Rewards
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

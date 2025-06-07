@@ -3,6 +3,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useNavigate } from 'react-router-dom';
 import MarketList from '../components/MarketList';
 import PredictionModal from '../components/PredictionModal';
+import ClaimRewardModal from '../components/ClaimRewardModal';
 import Toast from '../components/Toast';
 import marketService from '../services/marketService';
 import blockchainMarketsService from '../services/blockchainMarketsService';
@@ -15,6 +16,10 @@ const MarketsPage = () => {
   const [showPredictionModal, setShowPredictionModal] = useState(false);
   const [toast, setToast] = useState(null);
   const [resolvedMarkets, setResolvedMarkets] = useState([]);
+  // Claim functionality state
+  const [selectedClaimData, setSelectedClaimData] = useState(null);
+  const [claimModalOpen, setClaimModalOpen] = useState(false);
+  const [userPositions, setUserPositions] = useState({});
   const { wallet, publicKey, connected, signTransaction, signAllTransactions } = useWallet();
   const scrollPositionRef = useRef(0);
   const navigate = useNavigate();
@@ -26,6 +31,9 @@ const MarketsPage = () => {
       if (phantomWallet && typeof phantomWallet.signAndSendTransaction === 'function') {
         marketService.initialize(phantomWallet);
       }
+      
+      // Load user positions for claim functionality
+      loadUserPositions();
     }
     
     // Initialize blockchain service
@@ -149,6 +157,83 @@ const MarketsPage = () => {
     }
   };
 
+  // Load user positions for claim functionality
+  const loadUserPositions = async () => {
+    if (!publicKey) return;
+    
+    try {
+      const positions = await marketService.getUserPositions(publicKey.toString());
+      console.log('📊 Loaded user positions:', positions);
+      setUserPositions(positions);
+    } catch (error) {
+      console.error('Error loading user positions:', error);
+    }
+  };
+
+  // Calculate potential winnings for a resolved market
+  const calculatePotentialWinnings = (market, optionIndex) => {
+    if (!market || market.status !== 'Resolved' || market.winningOption !== optionIndex) return 0;
+    
+    const userPosition = userPositions[market.publicKey]?.find(p => p.optionIndex === optionIndex);
+    if (!userPosition) return 0;
+    
+    const winningPool = market.optionPools?.[market.winningOption] || 0;
+    const totalPool = market.totalVolume || 0;
+    
+    if (winningPool === 0) return 0;
+    
+    const userShare = userPosition.amount / winningPool;
+    const grossWinnings = userShare * totalPool;
+    const platformFee = grossWinnings * 0.025;
+    const creatorFee = grossWinnings * (market.creatorFeeRate || 25) / 10000;
+    
+    return grossWinnings - platformFee - creatorFee;
+  };
+
+  // Handle claim reward click
+  const handleClaimClick = (market, optionIndex) => {
+    const userPosition = userPositions[market.publicKey]?.find(p => p.optionIndex === optionIndex);
+    if (!userPosition) return;
+    
+    const potentialWinnings = calculatePotentialWinnings(market, optionIndex);
+    setSelectedClaimData({
+      position: userPosition,
+      market,
+      potentialWinnings
+    });
+    setClaimModalOpen(true);
+  };
+
+  // Handle successful claim
+  const handleClaimSuccess = async (message) => {
+    if (message && message.includes('confirmation timed out')) {
+      setToast({
+        message: `Claim submitted! ${message}`,
+        type: 'warning'
+      });
+    } else {
+      setToast({
+        message: message || 'Rewards claimed successfully!',
+        type: 'success'
+      });
+    }
+    
+    // Reload user positions and markets
+    await Promise.all([loadUserPositions(), loadMarkets()]);
+  };
+
+  // Check if user can claim reward for a market
+  const canClaimReward = (market) => {
+    if (!publicKey || !market || market.status !== 'Resolved' || market.winningOption === null) {
+      return false;
+    }
+    
+    const marketPositions = userPositions[market.publicKey] || [];
+    return marketPositions.some(position => 
+      position.optionIndex === market.winningOption && !position.claimed
+    );
+  };
+
   // Combine active and resolved markets for filtering
   const allMarkets = [...markets, ...resolvedMarkets];
   
@@ -260,7 +345,13 @@ const MarketsPage = () => {
             )}
           </div>
         ) : (
-          <MarketList markets={filteredMarkets} onPredict={handlePredictClick} />
+          <MarketList 
+            markets={filteredMarkets} 
+            onPredict={handlePredictClick}
+            onClaim={handleClaimClick}
+            canClaimReward={canClaimReward}
+            userPositions={userPositions}
+          />
         )}
 
         {/* Prediction Modal */}
@@ -270,6 +361,21 @@ const MarketsPage = () => {
           onClose={() => setShowPredictionModal(false)}
           onSuccess={handlePredictionSuccess}
         />
+
+        {/* Claim Reward Modal */}
+        {selectedClaimData && (
+          <ClaimRewardModal
+            isOpen={claimModalOpen}
+            onClose={() => {
+              setClaimModalOpen(false);
+              setSelectedClaimData(null);
+            }}
+            position={selectedClaimData.position}
+            market={selectedClaimData.market}
+            potentialWinnings={selectedClaimData.potentialWinnings}
+            onSuccess={handleClaimSuccess}
+          />
+        )}
 
         {/* Toast Notifications */}
         {toast && (

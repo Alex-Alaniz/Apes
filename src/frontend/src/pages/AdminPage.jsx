@@ -60,12 +60,41 @@ const AdminPage = () => {
   const loadMarkets = async () => {
     setLoading(true);
     try {
-      const allMarkets = await marketService.fetchMarketsWithStats();
-      setMarkets(allMarkets);
+      // Call admin-specific endpoint to get ALL markets (including resolved)
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${apiUrl}/api/admin/markets`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Wallet-Address': publicKey.toString()
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const adminMarkets = await response.json();
+      
+      // Transform admin markets to match the frontend format
+      const transformedMarkets = adminMarkets.map(market => ({
+        ...market,
+        publicKey: market.market_address,
+        options: market.options || [],
+        totalVolume: parseFloat(market.total_volume || 0),
+        optionPools: market.option_volumes || [],
+        optionProbabilities: market.option_volumes 
+          ? market.option_volumes.map(vol => (vol / market.option_volumes.reduce((a, b) => a + b, 1)) * 100)
+          : [],
+        winningOption: market.resolved_option,
+        resolutionDate: market.resolution_date
+      }));
+      
+      console.log(`🔧 Admin: Loaded ${transformedMarkets.length} markets (including resolved)`);
+      setMarkets(transformedMarkets);
     } catch (error) {
-      console.error('Error loading markets:', error);
+      console.error('Error loading admin markets:', error);
       setToast({
-        message: 'Failed to load markets',
+        message: 'Failed to load markets. Please try again.',
         type: 'error'
       });
     } finally {
