@@ -34,7 +34,9 @@ router.get('/', async (req, res) => {
   try {
     const { sortBy = 'profit', timeframe = 'all' } = req.query;
     
-    // Updated query to use predictions table for accurate APES tracking
+    console.log(`🔍 Leaderboard query: sortBy=${sortBy}, timeframe=${timeframe}`);
+    
+    // Updated query to use predictions table for accurate APES tracking with more robust JOIN
     const query = `
       WITH user_stats AS (
         SELECT 
@@ -67,9 +69,9 @@ router.get('/', async (req, res) => {
             ELSE 'tourist'
           END as activity_status
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN markets m ON p.market_address = m.market_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
+        LEFT JOIN predictions p ON TRIM(u.wallet_address) = TRIM(p.user_address)
+        LEFT JOIN markets m ON TRIM(p.market_address) = TRIM(m.market_address)
+        LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
         GROUP BY u.wallet_address, u.username, u.twitter_username, u.created_at
         -- Show ALL connected users (no HAVING clause restriction)
       )
@@ -104,7 +106,17 @@ router.get('/', async (req, res) => {
       LIMIT 100
     `;
     
+    console.log('🔄 Executing leaderboard query...');
     const result = await db.query(query);
+    console.log(`📊 Found ${result.rows.length} users for leaderboard`);
+    
+    // Log first few users with their investment data for debugging
+    if (result.rows.length > 0) {
+      console.log('📋 Sample leaderboard data:');
+      result.rows.slice(0, 3).forEach((user, index) => {
+        console.log(`  ${index + 1}. ${user.wallet_address.substring(0, 8)}... - Invested: ${user.total_invested} APES, Predictions: ${user.total_predictions}`);
+      });
+    }
     
     // Always return database results (empty array if no data)
     const leaderboard = result.rows.map(user => convertToNumbers({
@@ -145,9 +157,9 @@ router.get('/top-performers', async (req, res) => {
           COALESCE(MAX(pb.available_points), 0) as available_points,
           CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN markets m ON p.market_address = m.market_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
+        LEFT JOIN predictions p ON TRIM(u.wallet_address) = TRIM(p.user_address)
+        LEFT JOIN markets m ON TRIM(p.market_address) = TRIM(m.market_address)
+        LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
         GROUP BY u.wallet_address, u.username, u.twitter_username
         HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
       )
@@ -180,9 +192,9 @@ router.get('/top-performers', async (req, res) => {
           COALESCE(MAX(pb.available_points), 0) as available_points,
           CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN markets m ON p.market_address = m.market_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
+        LEFT JOIN predictions p ON TRIM(u.wallet_address) = TRIM(p.user_address)
+        LEFT JOIN markets m ON TRIM(p.market_address) = TRIM(m.market_address)
+        LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
         GROUP BY u.wallet_address, u.username, u.twitter_username
         HAVING COUNT(DISTINCT p.id) >= 5  -- Keep minimum 5 predictions for accuracy ranking
       )
@@ -215,9 +227,9 @@ router.get('/top-performers', async (req, res) => {
           COALESCE(MAX(pb.available_points), 0) as available_points,
           CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN markets m ON p.market_address = m.market_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
+        LEFT JOIN predictions p ON TRIM(u.wallet_address) = TRIM(p.user_address)
+        LEFT JOIN markets m ON TRIM(p.market_address) = TRIM(m.market_address)
+        LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
         GROUP BY u.wallet_address, u.username, u.twitter_username
         HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
       )
@@ -251,9 +263,9 @@ router.get('/top-performers', async (req, res) => {
           COALESCE(MAX(pb.available_points), 0) as available_points,
           CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN markets m ON p.market_address = m.market_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
+        LEFT JOIN predictions p ON TRIM(u.wallet_address) = TRIM(p.user_address)
+        LEFT JOIN markets m ON TRIM(p.market_address) = TRIM(m.market_address)
+        LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
         GROUP BY u.wallet_address, u.username, u.twitter_username
         HAVING COALESCE(MAX(pb.total_points), 0) > 0  -- Must have engagement points
       )
@@ -263,12 +275,15 @@ router.get('/top-performers', async (req, res) => {
       LIMIT 3
     `;
 
+    console.log('🔄 Loading top performers...');
     const [topProfitResult, topAccuracyResult, topVolumeResult, topEngagementResult] = await Promise.all([
       db.query(topProfitQuery),
       db.query(topAccuracyQuery),
       db.query(topVolumeQuery),
       db.query(topEngagementQuery)
     ]);
+
+    console.log(`📊 Top performers: Profit(${topProfitResult.rows.length}), Accuracy(${topAccuracyResult.rows.length}), Volume(${topVolumeResult.rows.length}), Engagement(${topEngagementResult.rows.length})`);
 
     const topPerformers = {
       topProfit: topProfitResult.rows.map(user => convertToNumbers({
@@ -323,10 +338,10 @@ router.get('/rank/:walletAddress', async (req, res) => {
           COALESCE(MAX(pb.available_points), 0) as available_points,
           CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible
         FROM users u
-        LEFT JOIN predictions p ON u.wallet_address = p.user_address
-        LEFT JOIN markets m ON p.market_address = m.market_address
-        LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
-        WHERE u.wallet_address = $1
+        LEFT JOIN predictions p ON TRIM(u.wallet_address) = TRIM(p.user_address)
+        LEFT JOIN markets m ON TRIM(p.market_address) = TRIM(m.market_address)
+        LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
+        WHERE TRIM(u.wallet_address) = TRIM($1)
         GROUP BY u.wallet_address
       ),
       profit_ranks AS (
@@ -342,9 +357,9 @@ router.get('/rank/:walletAddress', async (req, res) => {
               ELSE 0 
             END), 0) as total_profit
           FROM users u
-          LEFT JOIN predictions p ON u.wallet_address = p.user_address
-          LEFT JOIN markets m ON p.market_address = m.market_address
-          LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
+          LEFT JOIN predictions p ON TRIM(u.wallet_address) = TRIM(p.user_address)
+          LEFT JOIN markets m ON TRIM(p.market_address) = TRIM(m.market_address)
+          LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
           GROUP BY u.wallet_address
           HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
         ) ranked_users
@@ -362,9 +377,9 @@ router.get('/rank/:walletAddress', async (req, res) => {
               ELSE 0 
             END as win_rate
           FROM users u
-          LEFT JOIN predictions p ON u.wallet_address = p.user_address
-          LEFT JOIN markets m ON p.market_address = m.market_address
-          LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
+          LEFT JOIN predictions p ON TRIM(u.wallet_address) = TRIM(p.user_address)
+          LEFT JOIN markets m ON TRIM(p.market_address) = TRIM(m.market_address)
+          LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
           GROUP BY u.wallet_address
           HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
         ) ranked_users
@@ -378,9 +393,9 @@ router.get('/rank/:walletAddress', async (req, res) => {
             u.wallet_address,
             COALESCE(SUM(p.amount), 0) as total_invested
           FROM users u
-          LEFT JOIN predictions p ON u.wallet_address = p.user_address
-          LEFT JOIN markets m ON p.market_address = m.market_address
-          LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
+          LEFT JOIN predictions p ON TRIM(u.wallet_address) = TRIM(p.user_address)
+          LEFT JOIN markets m ON TRIM(p.market_address) = TRIM(m.market_address)
+          LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
           GROUP BY u.wallet_address
           HAVING COUNT(DISTINCT p.id) >= 1 OR COALESCE(MAX(pb.total_points), 0) > 0
         ) ranked_users
@@ -394,7 +409,7 @@ router.get('/rank/:walletAddress', async (req, res) => {
             u.wallet_address,
             COALESCE(MAX(pb.total_points), 0) as engagement_points
           FROM users u
-          LEFT JOIN point_balances pb ON u.wallet_address = pb.user_address
+          LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
           GROUP BY u.wallet_address
           HAVING COALESCE(MAX(pb.total_points), 0) > 0
         ) ranked_users
@@ -406,10 +421,10 @@ router.get('/rank/:walletAddress', async (req, res) => {
         vr.volume_rank,
         er.engagement_rank
       FROM user_stats us
-      LEFT JOIN profit_ranks pr ON us.wallet_address = pr.wallet_address
-      LEFT JOIN accuracy_ranks ar ON us.wallet_address = ar.wallet_address
-      LEFT JOIN volume_ranks vr ON us.wallet_address = vr.wallet_address
-      LEFT JOIN engagement_ranks er ON us.wallet_address = er.wallet_address
+      LEFT JOIN profit_ranks pr ON TRIM(us.wallet_address) = TRIM(pr.wallet_address)
+      LEFT JOIN accuracy_ranks ar ON TRIM(us.wallet_address) = TRIM(ar.wallet_address)
+      LEFT JOIN volume_ranks vr ON TRIM(us.wallet_address) = TRIM(vr.wallet_address)
+      LEFT JOIN engagement_ranks er ON TRIM(us.wallet_address) = TRIM(er.wallet_address)
     `;
     
     const result = await db.query(query, [walletAddress]);
