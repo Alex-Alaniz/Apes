@@ -98,46 +98,31 @@ router.get('/', async (req, res) => {
       console.log('⚠️ Setup warning:', setupError.message);
     }
     
-    const sortBy = req.query.sortBy || 'points';
-    
-    let orderClause;
-    switch (sortBy) {
-      case 'volume':
-        orderClause = 'total_invested DESC, engagement_points DESC';
-        break;
-      case 'winRate':
-        orderClause = 'win_rate DESC, total_invested DESC';
-        break;
-      default:
-        orderClause = 'engagement_points DESC, total_invested DESC';
-    }
-
+    // MINIMAL QUERY - Only use basic columns that definitely exist
     const query = `
       SELECT 
         wallet_address,
-        username,
-        twitter_username,
-        created_at,
-        0 as total_predictions,
+        COALESCE(username, NULL) as username,
         COALESCE(total_invested, 0) as total_invested,
+        0 as total_predictions,
         0 as winning_predictions,
         0 as total_profit,
         0 as win_rate,
-        engagement_points,
-        available_points,
+        0 as engagement_points,
+        0 as available_points,
         CASE 
           WHEN COALESCE(total_invested, 0) > 0 THEN true 
           ELSE false 
         END as airdrop_eligible,
         'active' as activity_status,
-        ROW_NUMBER() OVER (ORDER BY ${orderClause}) as position,
+        ROW_NUMBER() OVER (ORDER BY COALESCE(total_invested, 0) DESC) as position,
         CASE 
           WHEN COALESCE(total_invested, 0) >= 10000 THEN 'Expert'
           WHEN COALESCE(total_invested, 0) >= 1000 THEN 'Intermediate'
           ELSE 'Beginner'
         END as rank
       FROM users
-      ORDER BY ${orderClause}
+      ORDER BY COALESCE(total_invested, 0) DESC
       LIMIT 100
     `;
 
