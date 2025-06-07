@@ -1,7 +1,7 @@
 // Believe API Configuration
 export const BELIEVE_CONFIG = {
   // API Configuration
-  apiKey: import.meta.env.VITE_BELIEVE_API_KEY || '',
+  apiKey: import.meta.env.VITE_BELIEVE_API_KEY || '0af81c5f-74fa-4c2e-a9f3-839b9d00afb3',
   apiUrl: import.meta.env.VITE_BELIEVE_API_URL || 'https://public.believe.app/v1',
   
   // Enable burns - we have PREDICTION_PLACED configured

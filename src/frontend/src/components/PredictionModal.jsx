@@ -110,8 +110,15 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
         }
       }
       
+      // Debug logging for Believe API integration
+      console.log('🔍 Believe API Debug:');
+      console.log('- isBelieveConfigured():', isBelieveConfigured());
+      console.log('- BELIEVE_CONFIG:', BELIEVE_CONFIG);
+      console.log('- API Key present:', !!BELIEVE_CONFIG.apiKey);
+      
       // Trigger off-chain burn with fixed amount
       if (isBelieveConfigured()) {
+        console.log('✅ Believe API is configured, attempting burn...');
         try {
           const burnResult = await believeApiService.burnForPrediction(
             market.publicKey,
