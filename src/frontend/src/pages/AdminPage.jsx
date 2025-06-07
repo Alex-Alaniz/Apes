@@ -17,6 +17,7 @@ const AdminPage = () => {
   const [filter, setFilter] = useState('all'); // all, active, resolved
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [serviceInitialized, setServiceInitialized] = useState(false);
+  const [syncingVolumes, setSyncingVolumes] = useState(false);
 
   // Initialize market service and check authorization
   useEffect(() => {
@@ -141,6 +142,47 @@ const AdminPage = () => {
     }
   };
 
+  const handleForceSync = async () => {
+    setSyncingVolumes(true);
+    
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${apiUrl}/api/markets/force-sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Wallet-Address': publicKey.toString()
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setToast({
+          message: `Force sync completed! Updated ${result.synced}/${result.total} markets with volume data.`,
+          type: 'success'
+        });
+        
+        // Reload markets to show updated data
+        setTimeout(loadMarkets, 1000);
+      } else {
+        throw new Error(result.error || 'Force sync failed');
+      }
+    } catch (error) {
+      console.error('Error force syncing markets:', error);
+      setToast({
+        message: error.message || 'Failed to force sync markets',
+        type: 'error'
+      });
+    } finally {
+      setSyncingVolumes(false);
+    }
+  };
+
   const filteredMarkets = markets.filter(market => {
     if (filter === 'active') return market.status === 'Active';
     if (filter === 'resolved') return market.status === 'Resolved';
@@ -213,6 +255,13 @@ const AdminPage = () => {
             className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-lg hover:opacity-90"
           >
             Manage Assets
+          </button>
+          <button
+            onClick={handleForceSync}
+            disabled={syncingVolumes}
+            className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-lg hover:opacity-90 disabled:opacity-50"
+          >
+            {syncingVolumes ? 'Syncing...' : 'Force Sync Volumes'}
           </button>
           <button
             onClick={loadMarkets}

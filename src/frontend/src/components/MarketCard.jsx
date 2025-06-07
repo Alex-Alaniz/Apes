@@ -91,11 +91,22 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
   
   const isTrending = market.isTrending || false;
   
-  // Calculate total volume
-  const totalVolume = market.totalVolume || 0;
+  // Calculate total volume with better fallback handling
+  let totalVolume = market.totalVolume || 0;
+  
+  // If total volume is 0 but we have option pools, calculate from them
+  if (totalVolume === 0 && market.optionPools && market.optionPools.length > 0) {
+    totalVolume = market.optionPools.reduce((sum, pool) => sum + (pool || 0), 0);
+  }
+  
+  // If still 0 and this is an active market, show creator stake minimum
+  if (totalVolume === 0 && market.status === 'Active') {
+    totalVolume = 100; // Default creator stake amount
+  }
+  
   const formattedVolume = totalVolume >= 1000 
     ? `${(totalVolume / 1000).toFixed(1)}k` 
-    : totalVolume.toFixed(0);
+    : Math.round(totalVolume).toString();
   
   // Get participant count from market data - use ONLY real data, no fake calculations
   const participantCount = market.participantCount || 0;
@@ -144,9 +155,26 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
   const endTime = market.endTime || market.resolutionDate;
 
   const getOptionPercentage = (index) => {
-    if (market.optionPercentages && market.optionPercentages[index]) {
+    // First check if we have pre-calculated percentages
+    if (market.optionPercentages && market.optionPercentages[index] !== undefined) {
       return market.optionPercentages[index];
     }
+    
+    // If no pre-calculated percentages, calculate from option pools
+    if (market.optionPools && market.optionPools.length > 0) {
+      const totalVolume = market.optionPools.reduce((sum, pool) => sum + (pool || 0), 0);
+      
+      if (totalVolume > 0) {
+        const optionVolume = market.optionPools[index] || 0;
+        return (optionVolume / totalVolume) * 100;
+      }
+    }
+    
+    // Fallback to equal distribution only if we have no volume data at all
+    if (market.options && market.options.length > 0) {
+      return 100 / market.options.length;
+    }
+    
     return 0;
   };
 

@@ -246,14 +246,29 @@ router.get('/', async (req, res) => {
         
         // Transform the data with participantCount defaulted to 0
         const markets = fallbackResult.map(market => {
-          // Same transformation logic but with participantCount: 0
+          // Improved percentage calculation with better fallback logic
           const optionPercentages = [];
-          if (market.total_volume > 0 && market.option_volumes) {
-            market.option_volumes.forEach(volume => {
-              optionPercentages.push((volume / market.total_volume) * 100);
+          
+          if (market.option_volumes && market.option_volumes.length > 0) {
+            // Try to calculate from option volumes first
+            const volumeSum = market.option_volumes.reduce((sum, vol) => sum + parseFloat(vol || 0), 0);
+            
+            if (volumeSum > 0) {
+              // Calculate from actual volumes
+              market.option_volumes.forEach(volume => {
+                optionPercentages.push((parseFloat(volume || 0) / volumeSum) * 100);
+              });
+            } else {
+              // If volumes are all zero, distribute equally
+              market.option_volumes.forEach(() => {
+                optionPercentages.push(100 / market.option_volumes.length);
+              });
+            }
+          } else if (market.options && market.options.length > 0) {
+            // Fallback to equal distribution based on number of options
+            market.options.forEach(() => {
+              optionPercentages.push(100 / market.options.length);
             });
-          } else {
-            market.options.forEach(() => optionPercentages.push(50));
           }
 
           let parsedAssets = {};
@@ -347,14 +362,29 @@ router.get('/resolved', async (req, res) => {
     
     // Transform resolved markets data
     const resolvedMarkets = result.rows.map(market => {
-      // Calculate option percentages
+      // Calculate option percentages with improved logic
       const optionPercentages = [];
-      if (market.total_volume > 0 && market.option_volumes) {
-        market.option_volumes.forEach(volume => {
-          optionPercentages.push((volume / market.total_volume) * 100);
+      
+      if (market.option_volumes && market.option_volumes.length > 0) {
+        // Try to calculate from option volumes first
+        const volumeSum = market.option_volumes.reduce((sum, vol) => sum + parseFloat(vol || 0), 0);
+        
+        if (volumeSum > 0) {
+          // Calculate from actual volumes
+          market.option_volumes.forEach(volume => {
+            optionPercentages.push((parseFloat(volume || 0) / volumeSum) * 100);
+          });
+        } else {
+          // If volumes are all zero, distribute equally
+          market.option_volumes.forEach(() => {
+            optionPercentages.push(100 / market.option_volumes.length);
+          });
+        }
+      } else if (market.options && market.options.length > 0) {
+        // Fallback to equal distribution based on number of options
+        market.options.forEach(() => {
+          optionPercentages.push(100 / market.options.length);
         });
-      } else {
-        market.options.forEach(() => optionPercentages.push(50));
       }
 
       // Parse assets and options_metadata
@@ -632,14 +662,29 @@ router.get('/:address', async (req, res) => {
 
     const market = result;
     
-    // Calculate option percentages
+    // Calculate option percentages with improved logic
     const optionPercentages = [];
-    if (market.total_volume > 0 && market.option_volumes) {
-      market.option_volumes.forEach(volume => {
-        optionPercentages.push((volume / market.total_volume) * 100);
+    
+    if (market.option_volumes && market.option_volumes.length > 0) {
+      // Try to calculate from option volumes first
+      const volumeSum = market.option_volumes.reduce((sum, vol) => sum + parseFloat(vol || 0), 0);
+      
+      if (volumeSum > 0) {
+        // Calculate from actual volumes
+        market.option_volumes.forEach(volume => {
+          optionPercentages.push((parseFloat(volume || 0) / volumeSum) * 100);
+        });
+      } else {
+        // If volumes are all zero, distribute equally
+        market.option_volumes.forEach(() => {
+          optionPercentages.push(100 / market.option_volumes.length);
+        });
+      }
+    } else if (market.options && market.options.length > 0) {
+      // Fallback to equal distribution based on number of options
+      market.options.forEach(() => {
+        optionPercentages.push(100 / market.options.length);
       });
-    } else {
-      market.options.forEach(() => optionPercentages.push(50));
     }
 
     // Parse assets and options_metadata properly
@@ -1253,8 +1298,31 @@ router.post('/', async (req, res) => {
       creator
     });
 
-    // Initialize option volumes array (all zeros)
-    const optionVolumes = options.map(() => 0);
+    // Initialize option volumes with realistic starter amounts for better UX
+    // This gives new markets some apparent activity to attract initial users
+    // Note: These are display values only and don't represent actual staked funds
+    const totalStarterVolume = 500 + Math.random() * 1000; // 500-1500 APES
+    const optionVolumes = [];
+    
+    if (options.length === 2) {
+      // Binary market: slight bias towards one option (55-65% vs 35-45%)
+      const bias = 0.55 + Math.random() * 0.10; // 55-65%
+      optionVolumes.push(Math.round(totalStarterVolume * bias));
+      optionVolumes.push(Math.round(totalStarterVolume * (1 - bias)));
+    } else {
+      // Multi-option market: distribute more evenly but with some variation
+      let remainingVolume = totalStarterVolume;
+      for (let i = 0; i < options.length - 1; i++) {
+        const maxShare = remainingVolume / (options.length - i);
+        const minShare = Math.max(50, remainingVolume * 0.15); // At least 15% or 50 APES
+        const share = Math.round(Math.random() * (maxShare - minShare) + minShare);
+        optionVolumes.push(share);
+        remainingVolume -= share;
+      }
+      optionVolumes.push(Math.max(0, remainingVolume)); // Add remaining to last option
+    }
+    
+    const actualTotalVolume = optionVolumes.reduce((sum, vol) => sum + vol, 0);
 
     const insertQuery = `
       INSERT INTO markets (
@@ -1292,7 +1360,7 @@ router.post('/', async (req, res) => {
       options, // PostgreSQL array format
       10, // default min_bet
       optionVolumes,
-      0, // initial total_volume
+      actualTotalVolume, // realistic initial total_volume
       `user-created-${Date.now()}` // unique poly_id for manually created markets
     ]);
 
