@@ -80,7 +80,7 @@ const ClaimRewardModal = ({ isOpen, onClose, position, market, potentialWinnings
           <p className="text-gray-300 mb-2">{market.question}</p>
           <div className="bg-green-900/20 border border-green-800/50 rounded-lg p-3">
             <p className="text-green-400 font-medium">
-              ✓ Your winning prediction: {market.options[position.optionIndex]}
+              ✓ Your winning prediction: {market.options?.[position.optionIndex]}
             </p>
             <p className="text-sm text-gray-400 mt-1">
               Amount bet: {position.amount.toFixed(2)} APES

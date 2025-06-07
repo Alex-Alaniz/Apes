@@ -31,7 +31,7 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
   // Filter out empty options and use actual option count
   const actualOptions = [];
   for (let i = 0; i < market.optionCount && i < market.options.length; i++) {
-    const option = market.options[i];
+          const option = market.options?.[i];
     const label = getOptionLabel(option, i);
     // Only include non-empty options that users can bet on
     if (label && label.trim() !== '') {

@@ -8,8 +8,8 @@ const BettingSlider = ({ market, selectedOption, onBet, onCancel }) => {
   
   // Calculate potential payout based on current odds
   useEffect(() => {
-    if (selectedOption !== null && market.options[selectedOption]) {
-      const option = market.options[selectedOption];
+      if (selectedOption !== null && market.options?.[selectedOption]) {
+    const option = market.options?.[selectedOption];
       const odds = 100 / option.probability;
       const payout = amount * odds * 0.95; // 5% platform fee
       setPotentialPayout(Math.floor(payout));

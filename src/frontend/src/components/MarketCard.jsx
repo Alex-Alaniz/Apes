@@ -82,7 +82,7 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
   
   // Check if market is resolved
   const isResolved = market.status === 'Resolved';
-  const winningOption = isResolved && market.winningOption !== null ? market.options[market.winningOption] : null;
+  const winningOption = isResolved && market.winningOption !== null ? market.options?.[market.winningOption] : null;
 
   // Get category icon and color
   const categoryKey = market.category?.toLowerCase() || 'default';
@@ -123,7 +123,7 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
   // Filter out empty options and use actual option count
   const actualOptions = [];
   for (let i = 0; i < market.optionCount && i < market.options.length; i++) {
-    const option = market.options[i];
+              const option = market.options?.[i];
     const label = getOptionLabel(option, i);
     // Only include non-empty options
     if (label && label.trim() !== '') {
@@ -133,7 +133,7 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
 
   // Determine which options to show
   const displayOptions = isResolved && market.winningOption !== null && market.winningOption !== undefined
-    ? [{ option: getOptionLabel(market.options[market.winningOption], market.winningOption), index: market.winningOption }]
+            ? [{ option: getOptionLabel(market.options?.[market.winningOption], market.winningOption), index: market.winningOption }]
     : actualOptions;
 
   const maxOptionsToShow = isResolved ? 1 : 3;
@@ -287,7 +287,7 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
                   {userPositions.slice(0, 2).map((position, idx) => (
                     <div key={idx} className="flex justify-between items-center text-sm mb-1">
                       <span className="text-gray-300 truncate mr-2">
-                        {market.options[position.optionIndex]}:
+                        {market.options?.[position.optionIndex]}:
                       </span>
                       <span className="font-semibold text-white flex-shrink-0">
                         {position.amount.toFixed(2)} APES

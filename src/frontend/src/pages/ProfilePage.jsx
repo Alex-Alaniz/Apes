@@ -391,7 +391,7 @@ const ProfilePage = () => {
     }
     
     const totalPool = market.actualTotalPool || market.totalVolume || 0;
-    const winningPool = market.optionPools[market.winningOption] || 0;
+    const winningPool = market.optionPools?.[market.winningOption] || 0;
     
     if (winningPool === 0) return 0;
     
@@ -779,7 +779,7 @@ const ProfilePage = () => {
                                 <div className="text-sm">
                                   <span className="text-gray-300">Option: </span>
                                   <span className="text-white font-medium">
-                                    {market?.options[position.optionIndex] || `Option ${position.optionIndex + 1}`}
+                                    {market?.options?.[position.optionIndex] || `Option ${position.optionIndex + 1}`}
                                   </span>
                                 </div>
                                 <div className="text-sm mt-1">

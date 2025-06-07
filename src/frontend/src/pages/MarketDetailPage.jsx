@@ -180,7 +180,7 @@ const MarketDetailPage = ({ marketId }) => {
       const prediction = await marketService.placeBet(marketPubkey, selectedOption, parseFloat(betAmount));
       
       setToast({
-        message: prediction.warning || `Successfully placed ${parseFloat(betAmount)} APES on "${getOptionLabel(market.options[selectedOption], selectedOption)}"!`,
+        message: prediction.warning || `Successfully placed ${parseFloat(betAmount)} APES on "${getOptionLabel(market.options?.[selectedOption], selectedOption)}"!`,
         type: prediction.warning ? 'warning' : 'success'
       });
       
@@ -319,7 +319,7 @@ const MarketDetailPage = ({ marketId }) => {
   // Filter out empty options and use actual option count
   const actualOptions = [];
   for (let i = 0; i < market.optionCount && i < market.options.length; i++) {
-    const option = market.options[i];
+            const option = market.options?.[i];
     const label = getOptionLabel(option, i);
     // Only include non-empty options
     if (label && label.trim() !== '') {
@@ -522,7 +522,7 @@ const MarketDetailPage = ({ marketId }) => {
                   {market.winningOption !== null && (
                     <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
                       <p className="text-green-400 font-semibold">
-                        ✓ Winner: {getOptionLabel(market.options[market.winningOption], market.winningOption)}
+                        ✓ Winner: {getOptionLabel(market.options?.[market.winningOption], market.winningOption)}
                       </p>
                     </div>
                   )}

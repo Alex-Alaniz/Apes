@@ -339,7 +339,7 @@ const AdminPage = () => {
                   <div className="border-t border-gray-700 pt-4">
                     <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
                       <p className="text-green-400 font-medium">
-                        ✓ Resolved - Winner: {market.options[market.winningOption]}
+                        ✓ Resolved - Winner: {market.options?.[market.winningOption]}
                       </p>
                     </div>
                   </div>
