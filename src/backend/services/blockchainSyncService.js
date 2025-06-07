@@ -305,7 +305,7 @@ class BlockchainSyncService {
             null // We don't have transaction signature from account data
           ]
         );
-      }
+  }
 
       // Ensure user exists in users table
       await this.ensureUserExists(userPubkey.toString());

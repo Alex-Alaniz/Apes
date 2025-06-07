@@ -203,11 +203,13 @@ class BlockchainMarketsService {
       if (blockchainMarkets.length > 0) {
         console.log(`✅ Using ${blockchainMarkets.length} markets from blockchain`);
         
-        // Enhance with database metadata if available
+        // Enhance with database metadata if available (use working endpoint)
         try {
-          const response = await fetch('/api/markets');
+          const apiUrl = window.location.origin;
+          const response = await fetch(`${apiUrl}/api/markets/debug/all`);
           if (response.ok) {
-            const dbMarkets = await response.json();
+            const debugData = await response.json();
+            const dbMarkets = debugData.markets || [];
             
             // Merge blockchain data with database metadata
             const mergedMarkets = blockchainMarkets.map(blockchainMarket => {
@@ -227,29 +229,80 @@ class BlockchainMarketsService {
             
             console.log(`✨ Enhanced ${mergedMarkets.length} markets with database metadata`);
             return mergedMarkets;
+          } else {
+            console.log('📊 Using blockchain data without database enhancement');
+            return blockchainMarkets;
           }
         } catch (dbError) {
-          console.warn('Could not fetch database metadata, using blockchain data only:', dbError);
+          console.log('📊 Using blockchain data only (database metadata unavailable)');
+          return blockchainMarkets;
         }
-        
-        return blockchainMarkets;
       } else {
-        console.warn('⚠️ No markets found on blockchain, falling back to database');
+        console.log('🔄 No blockchain markets found, fetching from database...');
         
-        // Fallback: Use database if blockchain fails
-        const response = await fetch('/api/markets');
-        if (response.ok) {
-          const dbMarkets = await response.json();
-          console.log(`📋 Using ${dbMarkets.length} markets from database fallback`);
-          return dbMarkets;
+        // Fallback: Use database with working endpoint
+        try {
+          const apiUrl = window.location.origin;
+          const response = await fetch(`${apiUrl}/api/markets/debug/all`);
+          if (response.ok) {
+            const debugData = await response.json();
+            const dbMarkets = debugData.markets || [];
+            
+            // Transform debug format to standard format
+            const standardMarkets = dbMarkets.map(market => ({
+              ...market,
+              publicKey: market.market_address,
+              totalVolume: parseFloat(market.total_volume || 0),
+              optionPools: market.option_volumes || [],
+              optionPercentages: this.calculatePercentages(market.option_volumes, market.total_volume),
+              optionProbabilities: this.calculatePercentages(market.option_volumes, market.total_volume),
+              endTime: market.resolution_date,
+              winningOption: market.resolved_option,
+              minBetAmount: parseFloat(market.min_bet || 10),
+              creatorFeeRate: 2.5,
+              participantCount: parseInt(market.participant_count || 0),
+              optionCount: market.options?.length || 2,
+              description: market.description || market.question,
+              resolutionDate: market.resolution_date,
+              creator: market.creator || 'Unknown'
+            }));
+            
+            console.log(`📋 Using ${standardMarkets.length} markets from database`);
+            return standardMarkets;
+          }
+        } catch (dbError) {
+          console.error('❌ Database fetch also failed:', dbError);
         }
       }
       
       return [];
     } catch (error) {
       console.error('❌ Error in fetchMarketsWithFallback:', error);
+      
+      // Final fallback: try the standard endpoint one more time
+      try {
+        const apiUrl = window.location.origin;
+        const response = await fetch(`${apiUrl}/api/markets/debug/all`);
+        if (response.ok) {
+          const debugData = await response.json();
+          const dbMarkets = debugData.markets || [];
+          console.log(`🔄 Emergency fallback: loaded ${dbMarkets.length} markets`);
+          return dbMarkets;
+        }
+      } catch (emergencyError) {
+        console.error('❌ Emergency fallback failed:', emergencyError);
+      }
+      
       return [];
     }
+  }
+
+  calculatePercentages(optionVolumes, totalVolume) {
+    if (!optionVolumes || !totalVolume || totalVolume === 0) {
+      return [50, 50]; // Default even split
+    }
+    
+    return optionVolumes.map(volume => (volume / totalVolume) * 100);
   }
 
   clearCache() {
