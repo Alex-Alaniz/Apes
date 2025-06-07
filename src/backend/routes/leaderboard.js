@@ -29,104 +29,153 @@ const convertToNumbers = (user) => ({
   connected_at: user.connected_at
 });
 
-// Get main leaderboard
+// Get main leaderboard - FIXED VERSION (bypasses broken JOINs)
 router.get('/', async (req, res) => {
   try {
     const { sortBy = 'profit', timeframe = 'all' } = req.query;
     
-    console.log(`🔍 Leaderboard query: sortBy=${sortBy}, timeframe=${timeframe}`);
+    console.log(`🚨 FIXED: Direct leaderboard query bypassing JOINs...`);
     
-    // Updated query to use predictions table for accurate APES tracking with more robust JOIN
-    const query = `
-      WITH user_stats AS (
-        SELECT 
-          u.wallet_address,
-          u.username,
-          u.twitter_username,
-          u.created_at as connected_at,
-          COUNT(DISTINCT p.id) as total_predictions,
-          COALESCE(SUM(p.amount), 0) as total_invested,
-          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
-          COALESCE(SUM(CASE 
-            WHEN p.claimed = true THEN (p.payout - p.amount)
-            WHEN p.claimed = false AND m.status = 'Resolved' AND m.resolved_option != p.option_index THEN -p.amount
-            ELSE 0 
-          END), 0) as total_profit,
-          CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 
-            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
-            ELSE 0 
-          END as win_rate,
-          -- Add engagement points using MAX() for proper aggregation
-          COALESCE(MAX(pb.total_points), 0) as engagement_points,
-          COALESCE(MAX(pb.available_points), 0) as available_points,
-          -- Flag for airdrop eligibility (requires betting activity)
-          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible,
-          -- Activity status for cleanup
-          CASE 
-            WHEN COUNT(DISTINCT p.id) > 0 OR COALESCE(MAX(pb.total_points), 0) > 0 THEN 'active'
-            WHEN u.created_at > NOW() - INTERVAL '7 days' THEN 'new'
-            ELSE 'tourist'
-          END as activity_status
-        FROM users u
-        LEFT JOIN predictions p ON TRIM(u.wallet_address) = TRIM(p.user_address)
-        LEFT JOIN markets m ON TRIM(p.market_address) = TRIM(m.market_address)
-        LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
-        GROUP BY u.wallet_address, u.username, u.twitter_username, u.created_at
-        -- Show ALL connected users (no HAVING clause restriction)
-      )
+    // Step 1: Get ALL predictions data directly
+    const predictionsQuery = `
+      SELECT 
+        user_address,
+        COUNT(*) as total_predictions,
+        SUM(amount) as total_invested,
+        COUNT(CASE WHEN claimed = true THEN 1 END) as winning_predictions,
+        SUM(CASE 
+          WHEN claimed = true AND payout > 0 THEN (payout - amount)
+          ELSE 0 
+        END) as total_profit,
+        MAX(created_at) as last_prediction
+      FROM predictions 
+      GROUP BY user_address
+    `;
+    
+    console.log(`🚨 Executing predictions query...`);
+    const predictionsResult = await db.query(predictionsQuery);
+    console.log(`🚨 Found ${predictionsResult.rows.length} users with predictions`);
+    
+    // Step 2: Get engagement points
+    const engagementQuery = `
+      SELECT 
+        user_address,
+        total_points as engagement_points,
+        available_points
+      FROM point_balances
+    `;
+    
+    const engagementResult = await db.query(engagementQuery);
+    console.log(`🚨 Found ${engagementResult.rows.length} users with engagement`);
+    
+    // Step 3: Get user profile data
+    const usersQuery = `
       SELECT 
         wallet_address,
         username,
         twitter_username,
-        connected_at,
-        total_predictions::INTEGER,
-        total_invested::DECIMAL,
-        winning_predictions::INTEGER,
-        total_profit::DECIMAL,
-        win_rate::DECIMAL,
-        engagement_points::INTEGER,
-        available_points::INTEGER,
-        airdrop_eligible::BOOLEAN,
-        activity_status,
-        ROW_NUMBER() OVER (
-          ORDER BY 
-            CASE 
-              WHEN '${sortBy}' = 'profit' THEN total_profit
-              WHEN '${sortBy}' = 'engagement' THEN engagement_points
-              WHEN '${sortBy}' = 'volume' THEN total_invested
-              WHEN '${sortBy}' = 'accuracy' THEN win_rate
-              WHEN '${sortBy}' = 'recent' THEN EXTRACT(EPOCH FROM connected_at)
-              ELSE total_profit
-            END DESC
-        ) as position
-      FROM user_stats
-      WHERE activity_status != 'tourist' OR '${sortBy}' = 'recent'  -- Hide tourists unless viewing recent users
-      ORDER BY position
-      LIMIT 100
+        created_at
+      FROM users
     `;
     
-    console.log('🔄 Executing leaderboard query...');
-    const result = await db.query(query);
-    console.log(`📊 Found ${result.rows.length} users for leaderboard`);
+    const usersResult = await db.query(usersQuery);
+    console.log(`🚨 Found ${usersResult.rows.length} total users`);
     
-    // Log first few users with their investment data for debugging
-    if (result.rows.length > 0) {
-      console.log('📋 Sample leaderboard data:');
-      result.rows.slice(0, 3).forEach((user, index) => {
-        console.log(`  ${index + 1}. ${user.wallet_address.substring(0, 8)}... - Invested: ${user.total_invested} APES, Predictions: ${user.total_predictions}`);
+    // Step 4: Build leaderboard manually
+    const userMap = new Map();
+    
+    // Add all predictions data first (this is the critical data)
+    predictionsResult.rows.forEach(pred => {
+      const totalPredictions = parseInt(pred.total_predictions) || 0;
+      const totalInvested = parseFloat(pred.total_invested) || 0;
+      const winningPredictions = parseInt(pred.winning_predictions) || 0;
+      const totalProfit = parseFloat(pred.total_profit) || 0;
+      const winRate = totalPredictions > 0 ? (winningPredictions / totalPredictions) * 100 : 0;
+      
+      userMap.set(pred.user_address, {
+        wallet_address: pred.user_address,
+        username: null,
+        twitter_username: null,
+        connected_at: pred.last_prediction,
+        total_predictions: totalPredictions,
+        total_invested: totalInvested,
+        winning_predictions: winningPredictions,
+        total_profit: totalProfit,
+        win_rate: winRate,
+        engagement_points: 0,
+        available_points: 0,
+        airdrop_eligible: true, // Has predictions
+        activity_status: 'active'
       });
-    }
+    });
     
-    // Always return database results (empty array if no data)
-    const leaderboard = result.rows.map(user => convertToNumbers({
-      ...user,
-      rank: calculateRank(user.total_predictions, user.win_rate)
-    }));
+    // Add users data
+    usersResult.rows.forEach(user => {
+      if (userMap.has(user.wallet_address)) {
+        // User has predictions - update profile info
+        const userData = userMap.get(user.wallet_address);
+        userData.username = user.username;
+        userData.twitter_username = user.twitter_username;
+        userData.connected_at = user.created_at;
+      } else {
+        // User has no predictions - create entry
+        userMap.set(user.wallet_address, {
+          wallet_address: user.wallet_address,
+          username: user.username,
+          twitter_username: user.twitter_username,
+          connected_at: user.created_at,
+          total_predictions: 0,
+          total_invested: 0,
+          winning_predictions: 0,
+          total_profit: 0,
+          win_rate: 0,
+          engagement_points: 0,
+          available_points: 0,
+          airdrop_eligible: false,
+          activity_status: 'new'
+        });
+      }
+    });
+    
+    // Add engagement data
+    engagementResult.rows.forEach(eng => {
+      if (userMap.has(eng.user_address)) {
+        const userData = userMap.get(eng.user_address);
+        userData.engagement_points = parseInt(eng.engagement_points) || 0;
+        userData.available_points = parseInt(eng.available_points) || 0;
+        if (userData.activity_status === 'new' && userData.engagement_points > 0) {
+          userData.activity_status = 'active';
+        }
+      }
+    });
+    
+    // Convert to array and sort
+    const leaderboard = Array.from(userMap.values())
+      .filter(user => user.total_invested > 0 || user.engagement_points > 0 || user.total_predictions > 0)
+      .sort((a, b) => {
+        switch (sortBy) {
+          case 'volume': return b.total_invested - a.total_invested;
+          case 'profit': return b.total_profit - a.total_profit;
+          case 'accuracy': return b.win_rate - a.win_rate;
+          case 'engagement': return b.engagement_points - a.engagement_points;
+          default: return b.total_profit - a.total_profit;
+        }
+      })
+      .map((user, index) => ({
+        ...user,
+        position: index + 1,
+        rank: calculateRank(user.total_predictions, user.win_rate)
+      }));
+    
+    console.log(`🚨 Built leaderboard with ${leaderboard.length} users`);
+    if (leaderboard.length > 0) {
+      const topUser = leaderboard[0];
+      console.log(`🚨 Top user: ${topUser.wallet_address.substring(0, 8)}... - ${topUser.total_invested} APES invested, ${topUser.total_predictions} predictions`);
+    }
     
     res.json({ leaderboard });
   } catch (error) {
-    console.error('Error in leaderboard endpoint:', error);
+    console.error('🚨 FIXED leaderboard error:', error);
     res.status(500).json({ error: 'Failed to fetch leaderboard' });
   }
 });
