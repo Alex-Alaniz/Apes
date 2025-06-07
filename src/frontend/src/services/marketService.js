@@ -1135,7 +1135,11 @@ class MarketService {
         throw new Error('Failed to fetch user positions');
       }
       
-      const userPositions = await userPositionsResponse.json();
+      const userPositionsData = await userPositionsResponse.json();
+      console.log('📊 User positions response:', userPositionsData);
+      
+      // FIXED: Handle the correct response format - it's an object with predictions array
+      const userPositions = userPositionsData.predictions || userPositionsData;
       const prediction = userPositions.find(p => p.id == predictionId);
       
       if (!prediction) {

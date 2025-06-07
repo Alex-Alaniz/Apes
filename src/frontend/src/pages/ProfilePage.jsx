@@ -749,8 +749,18 @@ const ProfilePage = () => {
           ) : (
             <div className="space-y-6">
               {Object.entries(userPositionsByMarket).map(([marketAddress, positions]) => {
-                // Get market data from the first position's market object (backend data)
-                const market = positions[0]?.market || markets.get(marketAddress);
+                // Get market data - for backend data, it's flattened into the position object
+                const firstPosition = positions[0];
+                const market = firstPosition?.market || {
+                  // Create market object from flattened backend data
+                  question: firstPosition?.market_question,
+                  status: firstPosition?.market_status,
+                  winningOption: firstPosition?.winning_option,
+                  options: firstPosition?.market_options,
+                  address: firstPosition?.market_address,
+                  market_address: firstPosition?.market_address
+                } || markets.get(marketAddress);
+                
                 const totalMarketPosition = positions.reduce((sum, pos) => sum + safeNumber(pos.amount), 0);
                 
                 return (
@@ -791,14 +801,13 @@ const ProfilePage = () => {
                         console.log('Rendering position:', {
                           marketQuestion: market?.question,
                           optionIndex: position.optionIndex,
-                          optionText: market?.options[position.optionIndex],
+                          optionText: market?.options?.[position.optionIndex],
                           marketWinningOption: market?.winningOption,
                           marketWinningOptionType: typeof market?.winningOption,
                           positionOptionIndexType: typeof position.optionIndex,
                           isWinner: market?.winningOption === position.optionIndex,
-                          strictEquality: market?.winningOption === position.optionIndex,
-                          looseEquality: market?.winningOption == position.optionIndex,
-                          canClaim
+                          canClaim,
+                          potentialWinnings
                         });
                         
                         return (
