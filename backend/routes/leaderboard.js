@@ -988,4 +988,39 @@ router.get('/test-simple', async (req, res) => {
   }
 });
 
+// Simple test endpoint to verify user data
+router.get('/test-users', async (req, res) => {
+  try {
+    console.log('🧪 Testing users table...');
+    
+    // Simple user count
+    const countResult = await db.query('SELECT COUNT(*) as total FROM users');
+    
+    // Sample users with any available columns  
+    const sampleResult = await db.query('SELECT * FROM users LIMIT 3');
+    
+    // Check what columns exist
+    const columnsResult = await db.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users'
+    `);
+    
+    res.json({
+      success: true,
+      user_count: countResult.rows[0].total,
+      available_columns: columnsResult.rows.map(r => r.column_name),
+      sample_users: sampleResult.rows,
+      message: 'Users table test successful'
+    });
+  } catch (error) {
+    console.error('🧪 Users test error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Users test failed', 
+      details: error.message 
+    });
+  }
+});
+
 module.exports = router; 
