@@ -49,19 +49,21 @@ class BelieveApiService {
   }
 
   /**
-   * Burn tokens via Believe API
+   * Burn tokens via Believe API with retry logic for timeouts
    * @param {string} type - Type of burn
    * @param {Object} proof - Proof of burn
    * @param {number} burnAmount - Amount of tokens to burn
+   * @param {number} retryCount - Current retry attempt (internal)
    * @returns {Promise<Object>} API response
    */
-  async burnTokens(type, proof, burnAmount) {
+  async burnTokens(type, proof, burnAmount, retryCount = 0) {
     if (!this.apiKey) {
       console.warn('Believe API key not configured');
       return { success: false, message: 'API key not configured' };
     }
 
     const idempotencyKey = this.generateIdempotencyKey();
+    const maxRetries = 1; // Only retry once for timeouts
     
     try {
       console.log('🌐 Making Believe API request to:', this.apiUrl);
@@ -91,7 +93,7 @@ class BelieveApiService {
             'x-believe-api-key': this.apiKey,
             'x-idempotency-key': idempotencyKey
           },
-          timeout: 30000 // 30 second timeout
+          timeout: 60000 // 60 second timeout (Believe API can be slow)
         }
       );
 
@@ -141,13 +143,26 @@ class BelieveApiService {
         };
       }
       
-      if (error.code === 'ECONNABORTED') {
-        return { 
-          success: false, 
-          message: 'Request timeout - Believe API not responding',
-          error: 'TIMEOUT'
-        };
-      }
+             if (error.code === 'ECONNABORTED') {
+         console.error('⏰ TIMEOUT DETECTED - Believe API is slow but reachable');
+         console.error('- This usually means the API is processing but taking time');
+         console.error('- The burn may still succeed on their end');
+         
+         // Retry once for timeouts (with same idempotency key)
+         if (retryCount < maxRetries) {
+           console.error(`🔄 Retrying burn request (attempt ${retryCount + 1}/${maxRetries + 1})`);
+           await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+           return this.burnTokens(type, proof, burnAmount, retryCount + 1);
+         }
+         
+         console.error('- Consider this a "pending" state rather than failed');
+         return { 
+           success: false, 
+           message: 'Believe API timeout (60s) - Request may still be processing',
+           error: 'TIMEOUT',
+           isPending: true
+         };
+       }
       
       // Handle specific API error codes
       if (error.response?.data?.error) {
