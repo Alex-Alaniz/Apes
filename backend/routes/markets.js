@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const supabase = require('../config/supabase');
+const liveMarketSync = require('../services/liveMarketSyncService');
 
 // GET /api/markets - Fetch all markets with enhanced data including assets
 router.get('/', async (req, res) => {
@@ -33,7 +34,6 @@ router.get('/', async (req, res) => {
         created_at,
         updated_at
       `)
-      .eq('status', 'Active')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -50,8 +50,8 @@ router.get('/', async (req, res) => {
       return res.json([]);
     }
     
-    // Transform the data to include calculated fields
-    const markets = result.map(market => {
+    // Transform the data to include calculated fields and real-time blockchain resolution status
+    const markets = await Promise.all(result.map(async (market) => {
       // Calculate option percentages
       const optionPercentages = [];
       if (market.total_volume > 0 && market.option_volumes) {
@@ -62,6 +62,30 @@ router.get('/', async (req, res) => {
         // Default to even split if no volume
         market.options.forEach(() => optionPercentages.push(50));
       }
+
+      // 🔴 NEW: Check blockchain resolution status in real-time
+      let blockchainResolution = null;
+      try {
+        blockchainResolution = await liveMarketSync.syncMarketResolutionStatus(market.market_address);
+        
+        if (blockchainResolution && blockchainResolution.success && blockchainResolution.wasResolved) {
+          console.log(`🏆 Market ${market.market_address} is RESOLVED on blockchain:`, {
+            winner: blockchainResolution.winningOption,
+            question: market.question?.substring(0, 50)
+          });
+        }
+      } catch (blockchainError) {
+        console.warn(`⚠️ Could not check blockchain status for ${market.market_address}:`, blockchainError.message);
+      }
+
+      // Use blockchain data if available, otherwise use database data
+      const actualStatus = (blockchainResolution?.wasResolved && blockchainResolution?.newStatus) 
+        ? blockchainResolution.newStatus 
+        : market.status;
+      
+      const actualResolvedOption = (blockchainResolution?.wasResolved && blockchainResolution?.winningOption !== undefined)
+        ? blockchainResolution.winningOption
+        : market.resolved_option;
 
       // Parse assets and options_metadata properly
       let parsedAssets = {};
@@ -114,14 +138,19 @@ router.get('/', async (req, res) => {
 
       const transformedMarket = {
         ...market,
+        // Override with live blockchain resolution data if available
+        status: actualStatus,
+        resolved_option: actualResolvedOption,
+        
         publicKey: market.market_address,
         endTime: market.resolution_date,
-        winningOption: market.resolved_option,
+        winningOption: actualResolvedOption,
         optionPools: market.option_volumes || [],
         optionPercentages,
         optionProbabilities: optionPercentages, // For backwards compatibility
         assets: finalAssets, // Use updated assets with dynamic icon
         options_metadata: parsedOptionsMetadata,
+        
         // Add missing volume field that frontend expects
         totalVolume: parseFloat(market.total_volume || 0),
         // Add other missing fields
@@ -133,13 +162,23 @@ router.get('/', async (req, res) => {
         creator: market.creator || 'Unknown',
         // Add Polymarket specific fields
         polyId: market.poly_id,
-        apechainMarketId: market.apechain_market_id
+        apechainMarketId: market.apechain_market_id,
+        
+        // 🔴 NEW: Add blockchain resolution indicators
+        isBlockchainResolved: blockchainResolution?.wasResolved || false,
+        blockchainStatus: blockchainResolution?.newStatus || actualStatus,
+        dataSource: blockchainResolution?.wasResolved ? 'live_blockchain_resolution' : 'database',
+        lastResolutionCheck: new Date().toISOString()
       };
 
       // Log first market for debugging
       if (result.indexOf(market) === 0) {
-        console.log('📋 First market data:', {
+        console.log('📋 First market data (with blockchain resolution check):', {
           question: market.question?.substring(0, 50),
+          database_status: market.status,
+          blockchain_status: actualStatus,
+          resolved_option: actualResolvedOption,
+          is_blockchain_resolved: blockchainResolution?.wasResolved || false,
           poly_id: market.poly_id,
           market_address: market.market_address,
           total_volume: market.total_volume,
@@ -150,9 +189,20 @@ router.get('/', async (req, res) => {
       }
 
       return transformedMarket;
-    });
+    }));
 
-    res.json(markets);
+    // Filter out resolved markets from the main active list if they're actually resolved
+    const activeMarkets = markets.filter(market => market.status === 'Active' || market.status === 'active');
+    const resolvedMarkets = markets.filter(market => market.status === 'Resolved' || market.status === 'resolved');
+    
+    console.log(`📊 Market breakdown: ${activeMarkets.length} active, ${resolvedMarkets.length} resolved (after blockchain check)`);
+    console.log(`✅ Processed ${markets.length} markets with real-time blockchain resolution checking`);
+
+    // Return only active markets for the main endpoint (or include resolved based on query param)
+    const includeResolved = req.query.include_resolved === 'true';
+    const finalMarkets = includeResolved ? markets : activeMarkets;
+
+    res.json(finalMarkets);
   } catch (error) {
     console.error('Error fetching markets:', error);
     
@@ -252,6 +302,288 @@ router.get('/', async (req, res) => {
     } else {
     res.status(500).json({ error: 'Failed to fetch markets' });
     }
+  }
+});
+
+// GET /api/markets/resolved - Fetch all resolved markets with winners
+router.get('/resolved', async (req, res) => {
+  try {
+    console.log('🏆 Fetching resolved markets with blockchain verification...');
+    
+    const query = `
+      SELECT 
+        market_address,
+        creator,
+        question,
+        description,
+        category,
+        resolution_date,
+        status,
+        min_bet,
+        resolved_option,
+        options,
+        option_volumes,
+        total_volume,
+        poly_id,
+        apechain_market_id,
+        market_type,
+        options_metadata,
+        assets,
+        is_trending,
+        participant_count,
+        created_at,
+        updated_at
+      FROM markets 
+      WHERE status = 'Resolved'
+      ORDER BY updated_at DESC
+    `;
+
+    const result = await db.query(query);
+    
+    console.log(`📊 Found ${result.rows.length} resolved markets in database`);
+    
+    // Transform resolved markets data
+    const resolvedMarkets = result.rows.map(market => {
+      // Calculate option percentages
+      const optionPercentages = [];
+      if (market.total_volume > 0 && market.option_volumes) {
+        market.option_volumes.forEach(volume => {
+          optionPercentages.push((volume / market.total_volume) * 100);
+        });
+      } else {
+        market.options.forEach(() => optionPercentages.push(50));
+      }
+
+      // Parse assets and options_metadata
+      let parsedAssets = {};
+      let parsedOptionsMetadata = [];
+      
+      try {
+        if (market.assets) {
+          parsedAssets = typeof market.assets === 'string' ? JSON.parse(market.assets) : market.assets;
+        }
+      } catch (e) {
+        parsedAssets = {};
+      }
+      
+      try {
+        if (market.options_metadata) {
+          parsedOptionsMetadata = typeof market.options_metadata === 'string' ? JSON.parse(market.options_metadata) : market.options_metadata;
+        }
+      } catch (e) {
+        parsedOptionsMetadata = [];
+      }
+
+      // Get winning option details
+      const winnerName = market.resolved_option !== null && market.resolved_option !== undefined
+        ? market.options[market.resolved_option] || `Option ${market.resolved_option}`
+        : 'Unknown';
+
+      // Use winning option's icon for resolved markets
+      let winnerIcon = parsedAssets.icon;
+      if (market.resolved_option !== null && parsedOptionsMetadata[market.resolved_option]) {
+        winnerIcon = parsedOptionsMetadata[market.resolved_option].icon || winnerIcon;
+      }
+
+      const resolvedMarket = {
+        ...market,
+        status: 'Resolved',
+        publicKey: market.market_address,
+        endTime: market.resolution_date,
+        winningOption: market.resolved_option,
+        winnerName,
+        winnerIcon,
+        optionPools: market.option_volumes || [],
+        optionPercentages,
+        totalVolume: parseFloat(market.total_volume || 0),
+        optionCount: market.options?.length || 0,
+        participantCount: parseInt(market.participant_count || 0),
+        assets: {
+          ...parsedAssets,
+          icon: winnerIcon, // Show winner's icon
+          banner: parsedAssets.banner
+        },
+        options_metadata: parsedOptionsMetadata,
+        
+        // Resolution metadata
+        resolutionSource: 'database',
+        lastResolutionCheck: new Date().toISOString(),
+        resolvedAt: market.updated_at,
+        
+        // Additional fields
+        minBetAmount: parseFloat(market.min_bet || 10),
+        creatorFeeRate: 2.5,
+        resolutionDate: market.resolution_date,
+        creator: market.creator || 'Unknown',
+        polyId: market.poly_id,
+        apechainMarketId: market.apechain_market_id
+      };
+
+      console.log(`🏆 Resolved market: ${market.question?.substring(0, 50)} - Winner: ${winnerName} (Option ${market.resolved_option})`);
+      return resolvedMarket;
+    });
+    
+    console.log(`✅ Returning ${resolvedMarkets.length} resolved markets`);
+    
+    res.json({
+      success: true,
+      total: resolvedMarkets.length,
+      markets: resolvedMarkets,
+      summary: {
+        totalResolved: resolvedMarkets.length,
+        blockchainVerified: 0, // We'll enhance this later
+        databaseOnly: resolvedMarkets.length
+      },
+      lastChecked: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error fetching resolved markets:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch resolved markets',
+      details: error.message 
+    });
+  }
+});
+
+// POST /api/markets/sync-resolution/:address - Sync resolution status for specific market
+router.post('/sync-resolution/:address', async (req, res) => {
+  try {
+    const { address } = req.params;
+    
+    console.log(`🔍 Resolution sync requested for market: ${address}`);
+    
+    // Check and sync resolution status from blockchain
+    const result = await liveMarketSync.syncMarketResolutionStatus(address);
+    
+    if (result.success) {
+      if (result.wasResolved && result.updatedInDatabase) {
+        console.log(`✅ Market ${address} was resolved and database updated`);
+        res.json({
+          success: true,
+          message: 'Market resolution status updated successfully',
+          marketAddress: address,
+          wasResolved: true,
+          winningOption: result.winningOption,
+          previousStatus: result.previousStatus,
+          newStatus: result.newStatus
+        });
+      } else if (result.wasResolved && !result.updatedInDatabase) {
+        console.log(`⚠️ Market ${address} is resolved but database update failed`);
+        res.json({
+          success: false,
+          message: 'Market is resolved on blockchain but database update failed',
+          marketAddress: address,
+          wasResolved: true,
+          winningOption: result.winningOption,
+          error: result.error
+        });
+      } else {
+        console.log(`📊 Market ${address} is still active on blockchain`);
+        res.json({
+          success: true,
+          message: 'Market is still active on blockchain',
+          marketAddress: address,
+          wasResolved: false,
+          currentStatus: result.currentStatus
+        });
+      }
+    } else {
+      console.error(`❌ Error syncing resolution for ${address}:`, result.error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to sync resolution status',
+        details: result.error,
+        marketAddress: address
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error in sync-resolution endpoint:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error during resolution sync',
+      details: error.message 
+    });
+  }
+});
+
+// GET /api/markets/resolution-status/:address - Check resolution status without updating
+router.get('/resolution-status/:address', async (req, res) => {
+  try {
+    const { address } = req.params;
+    
+    console.log(`👀 Checking resolution status for market: ${address}`);
+    
+    // Get current database status
+    const dbQuery = `
+      SELECT market_address, status, resolved_option, question 
+      FROM markets 
+      WHERE market_address = $1
+    `;
+    
+    const dbResult = await db.query(dbQuery, [address]);
+    
+    if (dbResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Market not found in database' });
+    }
+    
+    const dbMarket = dbResult.rows[0];
+    
+    // Get live blockchain status (read-only check)
+    try {
+      const liveData = await liveMarketSync.getLiveMarketData(address);
+      
+      const statusMismatch = dbMarket.status !== liveData.status;
+      
+      res.json({
+        success: true,
+        marketAddress: address,
+        database: {
+          status: dbMarket.status,
+          resolvedOption: dbMarket.resolved_option,
+          question: dbMarket.question
+        },
+        blockchain: {
+          status: liveData.status || 'Unknown',
+          winningOption: liveData.winningOption || null
+        },
+        statusMismatch,
+        needsSync: statusMismatch,
+        recommendations: statusMismatch ? [
+          'Status mismatch detected between database and blockchain',
+          `Use POST /api/markets/sync-resolution/${address} to sync the status`
+        ] : [
+          'Database and blockchain status are in sync'
+        ]
+      });
+    } catch (blockchainError) {
+      console.warn('Could not fetch blockchain status:', blockchainError.message);
+      res.json({
+        success: true,
+        marketAddress: address,
+        database: {
+          status: dbMarket.status,
+          resolvedOption: dbMarket.resolved_option,
+          question: dbMarket.question
+        },
+        blockchain: {
+          status: 'Error fetching from blockchain',
+          error: blockchainError.message
+        },
+        statusMismatch: 'Unknown',
+        needsSync: 'Recommended'
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error checking resolution status:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to check resolution status',
+      details: error.message 
+    });
   }
 });
 
@@ -970,5 +1302,7 @@ router.post('/update-participant', async (req, res) => {
     res.status(500).json({ error: 'Failed to update participant count' });
   }
 });
+
+
 
 module.exports = router; 

@@ -197,7 +197,7 @@ async function debugBug3_BurnFunctionality() {
   // Check if backend is properly starting burn event processor
   console.log('🔍 Checking backend server configuration...');
   
-  const serverPath = path.join(__dirname, 'src/backend/server.js');
+      const serverPath = path.join(__dirname, 'backend/server.js');
   if (fs.existsSync(serverPath)) {
     const serverContent = fs.readFileSync(serverPath, 'utf8');
     
@@ -221,7 +221,7 @@ async function debugBug3_BurnFunctionality() {
   }
   
   // Check if burn service files exist
-  const burnServicePath = path.join(__dirname, 'src/backend/services/burnEventProcessor.js');
+      const burnServicePath = path.join(__dirname, 'backend/services/burnEventProcessor.js');
   if (fs.existsSync(burnServicePath)) {
     console.log('✅ burnEventProcessor.js service file exists');
   } else {
@@ -229,7 +229,7 @@ async function debugBug3_BurnFunctionality() {
     return false;
   }
   
-  const believeServicePath = path.join(__dirname, 'src/backend/services/believeAppService.js');
+      const believeServicePath = path.join(__dirname, 'backend/services/believeAppService.js');
   if (fs.existsSync(believeServicePath)) {
     console.log('✅ believeAppService.js service file exists');
   } else {

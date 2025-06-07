@@ -5,7 +5,7 @@
  * Usage: node test-sync.js
  */
 
-const blockchainSyncService = require('./src/backend/services/blockchainSyncService');
+const blockchainSyncService = require('./backend/services/blockchainSyncService');
 
 async function testSync() {
   console.log('🧪 Testing Blockchain Sync Service');
@@ -23,7 +23,7 @@ async function testSync() {
     }
 
     // Check if we can connect to database
-    const db = require('./src/backend/config/database');
+    const db = require('./backend/config/database');
     const result = await db.query(`
       SELECT 
         COUNT(*) as total_predictions,

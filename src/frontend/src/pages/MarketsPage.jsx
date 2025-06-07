@@ -110,8 +110,43 @@ const MarketsPage = () => {
       });
     }
 
-    // Reload markets to update the data
+    // Reload markets to update the data and check for any newly resolved markets
     await loadMarkets();
+  };
+
+  // Add a function to manually sync market resolution
+  const syncMarketResolution = async (marketAddress) => {
+    try {
+      console.log(`🔄 Manually syncing resolution for market: ${marketAddress}`);
+      
+      const result = await marketService.syncMarketResolutionStatus(marketAddress);
+      
+      if (result.success && result.wasResolved) {
+        setToast({
+          message: `Market resolved! Winner: Option ${result.winningOption}`,
+          type: 'success'
+        });
+        
+        // Reload markets to show updated status
+        await loadMarkets();
+      } else if (result.success && !result.wasResolved) {
+        setToast({
+          message: 'Market is still active on blockchain',
+          type: 'info'
+        });
+      } else {
+        setToast({
+          message: 'Failed to sync market resolution',
+          type: 'error'
+        });
+      }
+    } catch (error) {
+      console.error('Error syncing market resolution:', error);
+      setToast({
+        message: 'Error syncing market resolution',
+        type: 'error'
+      });
+    }
   };
 
   // Combine active and resolved markets for filtering
