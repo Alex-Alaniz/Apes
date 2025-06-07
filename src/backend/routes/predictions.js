@@ -269,4 +269,39 @@ router.get('/stats/:walletAddress', async (req, res) => {
   }
 });
 
+// Simple debug endpoint to test database connection
+router.get('/debug', async (req, res) => {
+  try {
+    console.log('🔍 PREDICTIONS DEBUG: Testing database connection...');
+    
+    // Test basic database connection
+    const dbTest = await db.query('SELECT NOW() as current_time');
+    console.log('🔍 Database connection works:', dbTest.rows[0]);
+    
+    // Count predictions
+    const countResult = await db.query('SELECT COUNT(*) as total FROM predictions');
+    console.log('🔍 Predictions count:', countResult.rows[0].total);
+    
+    // Get sample predictions
+    const sampleResult = await db.query('SELECT * FROM predictions LIMIT 3');
+    console.log('🔍 Sample predictions:', sampleResult.rows);
+    
+    res.json({
+      success: true,
+      database_connected: true,
+      current_time: dbTest.rows[0].current_time,
+      predictions_count: countResult.rows[0].total,
+      sample_predictions: sampleResult.rows,
+      message: 'Predictions route debug successful'
+    });
+  } catch (error) {
+    console.error('🔍 PREDICTIONS DEBUG ERROR:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Predictions debug failed', 
+      details: error.message 
+    });
+  }
+});
+
 module.exports = router; 
