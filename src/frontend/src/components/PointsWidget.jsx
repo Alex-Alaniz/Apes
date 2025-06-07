@@ -68,11 +68,13 @@ const PointsWidget = () => {
     : 100;
 
   return (
-    <div className="relative">
+    <div 
+      className="relative"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
       <button
         onClick={() => navigate('/engage-to-earn')}
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
         className="flex items-center gap-2 px-4 py-2 bg-gray-700 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-700 rounded-lg transition-all duration-200 border border-gray-600 dark:border-gray-700 hover:border-purple-500"
       >
         <Coins className="w-5 h-5 text-purple-400" />
