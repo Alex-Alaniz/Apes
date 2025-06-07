@@ -829,6 +829,70 @@ router.post('/sync-volumes', async (req, res) => {
 // GET /api/markets/debug/all - Debug endpoint to check all markets in database
 router.get('/debug/all', async (req, res) => {
   try {
+    // Check if recovery is requested
+    const performRecovery = req.query.recovery === 'true';
+    
+    if (performRecovery) {
+      console.log('🔧 Recovery requested via debug endpoint...');
+      
+      // Add the missing market
+      const missingMarketAddress = '9pgV5wUSemmuBU54qfneYc3pBbyJs2UK1N7cMf89mWR2';
+      
+      try {
+        // Check if market already exists
+        const checkQuery = 'SELECT market_address FROM markets WHERE market_address = $1';
+        const existing = await db.query(checkQuery, [missingMarketAddress]);
+        
+        if (existing.rows.length === 0) {
+          console.log('🔧 Adding missing market to database...');
+          
+          // Insert the missing market
+          const insertQuery = `
+            INSERT INTO markets (
+              market_address,
+              creator,
+              question,
+              description,
+              category,
+              resolution_date,
+              status,
+              min_bet,
+              resolved_option,
+              options,
+              option_volumes,
+              total_volume,
+              market_type,
+              created_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+            RETURNING *
+          `;
+          
+          const insertResult = await db.query(insertQuery, [
+            missingMarketAddress,
+            'APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z', // Deployer wallet as creator
+            'User Created Market (Recovered from Blockchain)', // Question
+            'This market was created via /create-market but failed to save to database initially', // Description
+            'General', // Category
+            null, // No resolution date
+            'Active', // Status
+            10, // Min bet
+            null, // No resolved option
+            ['Yes', 'No'], // Options
+            [0, 0], // Option volumes (start at 0)
+            0, // Total volume
+            'binary' // Market type
+          ]);
+          
+          console.log('✅ Successfully recovered missing market:', insertResult.rows[0]);
+        } else {
+          console.log('✅ Market already exists in database');
+        }
+      } catch (recoveryError) {
+        console.error('❌ Error during recovery:', recoveryError);
+      }
+    }
+    
     const query = `
       SELECT 
         market_address,
@@ -893,7 +957,9 @@ router.get('/debug/all', async (req, res) => {
         with_assets: markets.filter(m => m.has_assets).length,
         with_poly_id: markets.filter(m => m.has_poly_id).length,
         active: markets.filter(m => m.status === 'Active').length
-      }
+      },
+      recovery_performed: performRecovery,
+      missing_market_check: markets.find(m => m.market_address === '9pgV5wUSemmuBU54qfneYc3pBbyJs2UK1N7cMf89mWR2') ? 'FOUND' : 'NOT_FOUND'
     });
   } catch (error) {
     console.error('Error fetching debug markets:', error);
