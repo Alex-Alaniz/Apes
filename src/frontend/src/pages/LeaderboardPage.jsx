@@ -28,11 +28,24 @@ const LeaderboardPage = () => {
 
   const loadLeaderboardData = async () => {
     try {
-      const response = await fetch(
-        `https://apes-production.up.railway.app/api/leaderboard?sortBy=${sortBy}&timeframe=${timeframe}`
+      // Try the new direct endpoint first (bypasses JOIN issues)
+      let response = await fetch(
+        `https://apes-production.up.railway.app/api/leaderboard/predictions-data`
       );
-      const data = await response.json();
-      setLeaderboardData(data.leaderboard);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Using direct predictions data:', data.leaderboard?.length || 0, 'users');
+        setLeaderboardData(data.leaderboard || []);
+      } else {
+        // Fallback to original endpoint
+        console.log('⚠️ Direct endpoint failed, trying original...');
+        response = await fetch(
+          `https://apes-production.up.railway.app/api/leaderboard?sortBy=${sortBy}&timeframe=${timeframe}`
+        );
+        const data = await response.json();
+        setLeaderboardData(data.leaderboard);
+      }
     } catch (error) {
       console.error('Error loading leaderboard:', error);
     } finally {

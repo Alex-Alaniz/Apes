@@ -266,7 +266,7 @@ const ProfilePage = () => {
 
     setSavingUsername(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const apiUrl = 'https://apes-production.up.railway.app';
       const endpoint = `${apiUrl}/api/users/${publicKey.toString()}/username`;
       
       console.log('Making username update request to:', endpoint);

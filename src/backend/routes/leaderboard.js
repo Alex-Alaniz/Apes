@@ -650,4 +650,142 @@ router.get('/test-predictions', async (req, res) => {
   }
 });
 
+// Direct predictions data endpoint (bypassing JOIN issues)
+router.get('/predictions-data', async (req, res) => {
+  try {
+    console.log('🧪 DIRECT: Fetching predictions data without complex JOINs...');
+    
+    // Get predictions data grouped by user_address
+    const predictionsQuery = `
+      SELECT 
+        user_address as wallet_address,
+        COUNT(*) as total_predictions,
+        SUM(amount) as total_invested,
+        COUNT(CASE WHEN claimed = true THEN 1 END) as winning_predictions,
+        SUM(CASE 
+          WHEN claimed = true AND payout > 0 THEN (payout - amount)
+          ELSE 0 
+        END) as total_profit
+      FROM predictions 
+      GROUP BY user_address
+      ORDER BY total_invested DESC
+    `;
+    
+    const predictionsResult = await db.query(predictionsQuery);
+    console.log(`🧪 Found ${predictionsResult.rows.length} users with predictions`);
+    
+    // Get engagement points data
+    const engagementQuery = `
+      SELECT 
+        user_address as wallet_address,
+        total_points as engagement_points,
+        available_points
+      FROM point_balances
+    `;
+    
+    const engagementResult = await db.query(engagementQuery);
+    console.log(`🧪 Found ${engagementResult.rows.length} users with engagement points`);
+    
+    // Get user info (usernames, etc.)
+    const usersQuery = `
+      SELECT 
+        wallet_address,
+        username,
+        twitter_username,
+        created_at
+      FROM users
+    `;
+    
+    const usersResult = await db.query(usersQuery);
+    console.log(`🧪 Found ${usersResult.rows.length} total users`);
+    
+    // Merge all data manually
+    const userMap = new Map();
+    
+    // Add users first
+    usersResult.rows.forEach(user => {
+      userMap.set(user.wallet_address, {
+        wallet_address: user.wallet_address,
+        username: user.username,
+        twitter_username: user.twitter_username,
+        connected_at: user.created_at,
+        total_predictions: 0,
+        total_invested: 0,
+        winning_predictions: 0,
+        total_profit: 0,
+        win_rate: 0,
+        engagement_points: 0,
+        available_points: 0,
+        airdrop_eligible: false,
+        activity_status: 'new'
+      });
+    });
+    
+    // Add predictions data
+    predictionsResult.rows.forEach(pred => {
+      if (userMap.has(pred.wallet_address)) {
+        const user = userMap.get(pred.wallet_address);
+        user.total_predictions = parseInt(pred.total_predictions) || 0;
+        user.total_invested = parseFloat(pred.total_invested) || 0;
+        user.winning_predictions = parseInt(pred.winning_predictions) || 0;
+        user.total_profit = parseFloat(pred.total_profit) || 0;
+        user.win_rate = user.total_predictions > 0 ? (user.winning_predictions / user.total_predictions) * 100 : 0;
+        user.airdrop_eligible = user.total_predictions > 0;
+        user.activity_status = 'active';
+      } else {
+        // User exists in predictions but not in users table - create entry
+        const newUser = {
+          wallet_address: pred.wallet_address,
+          username: null,
+          twitter_username: null,
+          connected_at: new Date().toISOString(),
+          total_predictions: parseInt(pred.total_predictions) || 0,
+          total_invested: parseFloat(pred.total_invested) || 0,
+          winning_predictions: parseInt(pred.winning_predictions) || 0,
+          total_profit: parseFloat(pred.total_profit) || 0,
+          win_rate: 0,
+          engagement_points: 0,
+          available_points: 0,
+          airdrop_eligible: true,
+          activity_status: 'active'
+        };
+        newUser.win_rate = newUser.total_predictions > 0 ? (newUser.winning_predictions / newUser.total_predictions) * 100 : 0;
+        userMap.set(pred.wallet_address, newUser);
+      }
+    });
+    
+    // Add engagement data
+    engagementResult.rows.forEach(eng => {
+      if (userMap.has(eng.wallet_address)) {
+        const user = userMap.get(eng.wallet_address);
+        user.engagement_points = parseInt(eng.engagement_points) || 0;
+        user.available_points = parseInt(eng.available_points) || 0;
+        if (user.activity_status === 'new' && user.engagement_points > 0) {
+          user.activity_status = 'active';
+        }
+      }
+    });
+    
+    // Convert to array and sort by total invested
+    const leaderboard = Array.from(userMap.values())
+      .filter(user => user.total_invested > 0 || user.engagement_points > 0)
+      .sort((a, b) => b.total_invested - a.total_invested)
+      .map((user, index) => ({
+        ...user,
+        position: index + 1,
+        rank: calculateRank(user.total_predictions, user.win_rate)
+      }));
+    
+    console.log(`🧪 Generated leaderboard with ${leaderboard.length} active users`);
+    if (leaderboard.length > 0) {
+      console.log(`🧪 Top user: ${leaderboard[0].wallet_address.substring(0, 8)}... - ${leaderboard[0].total_invested} APES`);
+    }
+    
+    res.json({ leaderboard });
+  } catch (error) {
+    console.error('🧪 DIRECT ERROR:', error);
+    res.status(500).json({ error: 'Failed to fetch predictions data' });
+  }
+});
+
 module.exports = router; 
