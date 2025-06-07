@@ -120,20 +120,16 @@ class BelieveApiService {
    * @returns {Promise<Object>} API response
    */
   async burnForPrediction(marketId, userWallet, optionIndex, betAmount, txHash) {
-    // Match Believe's expected proof schema
+    // Match Believe's EXACT proof schema from successful call
     const proof = {
-      transactionId: txHash,
       value: betAmount.toString(),
-      marketId: marketId,
-      userWallet: userWallet,
-      optionIndex: optionIndex,
-      timestamp: new Date().toISOString()
+      transactionId: txHash
     };
 
-    console.log('🔥 Preparing Believe API burn request:', {
+    console.log('🔥 Preparing Believe API burn request (simplified):', {
       type: BELIEVE_CONFIG.proofTypes.PREDICTION_BET,
       burnAmount: BELIEVE_CONFIG.burnAmounts.PREDICTION_BET,
-      proofFields: Object.keys(proof)
+      proof: proof // Show the actual proof being sent
     });
 
     return this.burnTokens(
