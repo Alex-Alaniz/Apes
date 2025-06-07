@@ -585,4 +585,69 @@ router.get('/debug-predictions', async (req, res) => {
   }
 });
 
+// Simple test endpoint to verify predictions table access
+router.get('/test-predictions', async (req, res) => {
+  try {
+    console.log('🧪 TEST: Direct predictions table query...');
+    
+    // Simple direct query to predictions table
+    const directQuery = `
+      SELECT 
+        user_address,
+        SUM(amount) as total_amount,
+        COUNT(*) as prediction_count
+      FROM predictions 
+      GROUP BY user_address
+      ORDER BY total_amount DESC
+      LIMIT 5
+    `;
+    
+    const directResult = await db.query(directQuery);
+    console.log(`🧪 Direct predictions query returned ${directResult.rows.length} results`);
+    
+    if (directResult.rows.length > 0) {
+      console.log('🧪 Top prediction amounts:');
+      directResult.rows.forEach((row, index) => {
+        console.log(`  ${index + 1}. ${row.user_address} - ${row.total_amount} APES (${row.prediction_count} predictions)`);
+      });
+    }
+    
+    // Test users table
+    const usersQuery = `SELECT COUNT(*) as count FROM users`;
+    const usersResult = await db.query(usersQuery);
+    console.log(`🧪 Users table has ${usersResult.rows[0].count} users`);
+    
+    // Test simple JOIN
+    const joinTestQuery = `
+      SELECT 
+        u.wallet_address,
+        p.user_address,
+        COUNT(p.id) as predictions,
+        SUM(p.amount) as total_invested
+      FROM users u
+      LEFT JOIN predictions p ON u.wallet_address = p.user_address
+      GROUP BY u.wallet_address, p.user_address
+      HAVING COUNT(p.id) > 0
+      LIMIT 5
+    `;
+    
+    const joinResult = await db.query(joinTestQuery);
+    console.log(`🧪 JOIN test returned ${joinResult.rows.length} results`);
+    
+    res.json({
+      predictions_direct: directResult.rows,
+      users_count: usersResult.rows[0].count,
+      join_test: joinResult.rows,
+      debug_info: {
+        message: "Direct test of predictions table and JOIN",
+        predictions_found: directResult.rows.length > 0,
+        join_working: joinResult.rows.length > 0
+      }
+    });
+  } catch (error) {
+    console.error('🧪 TEST ERROR:', error);
+    res.status(500).json({ error: 'Test failed', details: error.message });
+  }
+});
+
 module.exports = router; 
