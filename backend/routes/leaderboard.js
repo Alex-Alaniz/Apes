@@ -117,7 +117,7 @@ router.get('/', async (req, res) => {
         wallet_address,
         username,
         twitter_username,
-        connected_at,
+        created_at,
         0 as total_predictions,
         COALESCE(total_invested, 0) as total_invested,
         0 as winning_predictions,
