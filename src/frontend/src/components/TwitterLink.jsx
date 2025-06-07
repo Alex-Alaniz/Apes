@@ -62,7 +62,9 @@ const TwitterLink = ({ onLinked }) => {
 
       if (!auth_url) {
         if (debug_mode) {
-          throw new Error(`Twitter integration not configured: ${message || 'OAuth credentials missing'}`);
+          // Handle Twitter OAuth not configured gracefully
+          setError(`Twitter integration is not configured on this deployment. ${message || 'OAuth credentials missing'}`);
+          return;
         } else {
           throw new Error('Invalid response from server - missing auth URL');
         }

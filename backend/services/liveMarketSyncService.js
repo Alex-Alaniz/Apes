@@ -286,7 +286,13 @@ class LiveMarketSyncService {
       console.log(`🔍 Checking resolution status for market: ${marketAddress}`);
       
       if (!PROGRAM_ID) {
-        throw new Error('Program ID not configured');
+        console.warn(`⚠️ Program ID not configured, skipping blockchain check for ${marketAddress}`);
+        return {
+          success: false,
+          error: 'Program ID not configured',
+          marketAddress,
+          skipReason: 'missing_program_id'
+        };
       }
 
       const marketPubkey = new PublicKey(marketAddress);
@@ -295,7 +301,15 @@ class LiveMarketSyncService {
       const accountInfo = await this.connection.getAccountInfo(marketPubkey);
       
       if (!accountInfo) {
-        throw new Error(`Market account not found: ${marketAddress}`);
+        // This is likely a test/database-only market, not an error
+        console.log(`📝 Market ${marketAddress} not found on blockchain (database-only market)`);
+        return {
+          success: true,
+          wasResolved: false,
+          marketAddress,
+          skipReason: 'not_on_blockchain',
+          message: 'Market exists only in database, not on blockchain'
+        };
       }
 
       // Deserialize market data to check status

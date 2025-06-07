@@ -73,6 +73,9 @@ router.get('/', async (req, res) => {
             winner: blockchainResolution.winningOption,
             question: market.question?.substring(0, 50)
           });
+        } else if (blockchainResolution && blockchainResolution.skipReason) {
+          // Handle graceful skips (not on blockchain, missing config, etc.)
+          // Don't log these as warnings since they're expected for database-only markets
         }
       } catch (blockchainError) {
         console.warn(`⚠️ Could not check blockchain status for ${market.market_address}:`, blockchainError.message);
