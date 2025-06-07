@@ -92,7 +92,7 @@ const PointsWidget = () => {
 
       {/* Tooltip */}
       {showTooltip && (
-        <div className="absolute top-full mt-2 right-0 w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-4 z-50">
+        <div className="absolute top-full right-0 w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-4 z-50">
           <h4 className="text-gray-900 dark:text-white font-semibold mb-2 flex items-center gap-2">
             <Trophy className="w-4 h-4 text-yellow-400" />
             Engagement Points
