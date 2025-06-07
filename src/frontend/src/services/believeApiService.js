@@ -14,14 +14,21 @@ class BelieveApiService {
   }
 
   /**
-   * Generate idempotency key for a transaction
+   * Generate unique idempotency key for a transaction
+   * Format: UUID + timestamp hash for true uniqueness
    */
-  generateIdempotencyKey() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  generateIdempotencyKey(txHash = '') {
+    const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       const r = Math.random() * 16 | 0;
       const v = c === 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
     });
+    
+    // Make it truly unique by including timestamp and tx hash
+    const timestamp = Date.now().toString(36);
+    const hashSuffix = txHash ? txHash.slice(-8) : Math.random().toString(36).slice(-8);
+    
+    return `${uuid}-${timestamp}-${hashSuffix}`;
   }
 
   /**
@@ -54,15 +61,16 @@ class BelieveApiService {
    * @param {Object} proof - Proof of burn
    * @param {number} burnAmount - Amount of tokens to burn
    * @param {number} retryCount - Current retry attempt (internal)
+   * @param {string} txHash - Transaction hash for better idempotency key
    * @returns {Promise<Object>} API response
    */
-  async burnTokens(type, proof, burnAmount, retryCount = 0) {
+  async burnTokens(type, proof, burnAmount, retryCount = 0, txHash = '') {
     if (!this.apiKey) {
       console.warn('Believe API key not configured');
       return { success: false, message: 'API key not configured' };
     }
 
-    const idempotencyKey = this.generateIdempotencyKey();
+    const idempotencyKey = this.generateIdempotencyKey(txHash);
     const maxRetries = 1; // Only retry once for timeouts
     
     try {
@@ -78,7 +86,8 @@ class BelieveApiService {
         'x-believe-api-key': this.apiKey ? '***PRESENT***' : 'MISSING',
         'x-idempotency-key': idempotencyKey
       });
-
+      
+      console.log('⏳ Sending request to Believe API...');
       const response = await axios.post(
         this.apiUrl,
         {
@@ -152,7 +161,7 @@ class BelieveApiService {
          if (retryCount < maxRetries) {
            console.error(`🔄 Retrying burn request (attempt ${retryCount + 1}/${maxRetries + 1})`);
            await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
-           return this.burnTokens(type, proof, burnAmount, retryCount + 1);
+           return this.burnTokens(type, proof, burnAmount, retryCount + 1, txHash);
          }
          
          console.error('- Consider this a "pending" state rather than failed');
@@ -219,7 +228,9 @@ class BelieveApiService {
     return this.burnTokens(
       BELIEVE_CONFIG.proofTypes.PREDICTION_BET,
       proof,
-      BELIEVE_CONFIG.burnAmounts.PREDICTION_BET
+      BELIEVE_CONFIG.burnAmounts.PREDICTION_BET,
+      0, // retry count
+      txHash // pass txHash for better idempotency key
     );
   }
 
