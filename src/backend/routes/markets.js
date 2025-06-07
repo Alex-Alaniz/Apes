@@ -2119,4 +2119,92 @@ router.get('/resolution-status/:address', async (req, res) => {
   }
 });
 
+// POST /api/markets/quick-fix-resolved - Quick fix for resolved market status
+router.post('/quick-fix-resolved', async (req, res) => {
+  try {
+    const { marketAddress, winningOption } = req.body;
+    
+    console.log(`🎯 Quick fix requested for resolved market: ${marketAddress}`);
+    console.log(`🏆 Winning option: ${winningOption}`);
+    
+    if (!marketAddress) {
+      return res.status(400).json({ 
+        error: 'Market address is required',
+        example: { marketAddress: 'MARKET_ADDRESS', winningOption: 1 }
+      });
+    }
+    
+    // Verify market exists
+    const checkQuery = `
+      SELECT market_address, status, resolved_option, question
+      FROM markets 
+      WHERE market_address = $1
+    `;
+    
+    const checkResult = await db.query(checkQuery, [marketAddress]);
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Market not found' });
+    }
+    
+    const currentMarket = checkResult.rows[0];
+    
+    if (currentMarket.status === 'Resolved') {
+      return res.json({
+        success: true,
+        message: 'Market is already resolved',
+        marketAddress,
+        currentStatus: currentMarket.status,
+        resolvedOption: currentMarket.resolved_option
+      });
+    }
+    
+    // Update market to resolved status
+    const updateQuery = `
+      UPDATE markets 
+      SET 
+        status = 'Resolved',
+        resolved_option = $1,
+        updated_at = NOW()
+      WHERE market_address = $2
+      RETURNING market_address, status, resolved_option, question
+    `;
+    
+    const updateResult = await db.query(updateQuery, [winningOption, marketAddress]);
+    
+    if (updateResult.rows.length > 0) {
+      const updatedMarket = updateResult.rows[0];
+      
+      console.log(`✅ Successfully updated market ${marketAddress}:`, {
+        status: updatedMarket.status,
+        resolvedOption: updatedMarket.resolved_option,
+        question: updatedMarket.question?.substring(0, 50)
+      });
+      
+      res.json({
+        success: true,
+        message: 'Market status updated to resolved successfully',
+        marketAddress,
+        previousStatus: currentMarket.status,
+        newStatus: updatedMarket.status,
+        winningOption: updatedMarket.resolved_option,
+        marketQuestion: updatedMarket.question
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update market status'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in quick fix resolved:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fix resolved market status',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router; 
