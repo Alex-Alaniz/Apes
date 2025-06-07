@@ -15,16 +15,24 @@ const ClaimRewardModal = ({ isOpen, onClose, position, market, potentialWinnings
     
     setIsClaiming(true);
     try {
-      const result = await marketService.claimReward(market.publicKey, position.optionIndex);
+      // Use backend claim method if we have a prediction ID
+      let result;
+      if (position.id) {
+        // Backend-stored prediction - use backend claim API
+        result = await marketService.claimRewardFromBackend(position.id, potentialWinnings);
+      } else {
+        // Fallback to blockchain claim for legacy predictions
+        result = await marketService.claimReward(market.publicKey || market.address, position.optionIndex);
+      }
       
       // Trigger off-chain burn for claim
       if (isBelieveConfigured()) {
         try {
           const burnResult = await believeApiService.burnForClaim(
-            market.publicKey,
+            market.publicKey || market.address,
             publicKey.toString(),
             potentialWinnings,
-            result.transaction
+            result.transaction || `backend_claim_${position.id}`
           );
           
           if (burnResult.success) {
@@ -40,7 +48,7 @@ const ClaimRewardModal = ({ isOpen, onClose, position, market, potentialWinnings
       if (result.warning) {
         onSuccess(result.warning);
       } else {
-        onSuccess('Reward claimed successfully!');
+        onSuccess(result.message || 'Reward claimed successfully!');
       }
       onClose();
     } catch (error) {

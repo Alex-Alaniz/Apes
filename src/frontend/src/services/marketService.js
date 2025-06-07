@@ -1116,6 +1116,43 @@ class MarketService {
     }
   }
 
+  // NEW METHOD: Claim reward using backend API (for backend-stored predictions)
+  async claimRewardFromBackend(predictionId, expectedPayout) {
+    try {
+      console.log(`💰 Claiming reward for prediction ID: ${predictionId}`);
+      
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${backendUrl}/api/predictions/claim/${predictionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-address': this.wallet?.publicKey?.toString() || '',
+        },
+        body: JSON.stringify({
+          payout: expectedPayout,
+          transaction_signature: `claim_${predictionId}_${Date.now()}` // Generate a claim signature
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Reward claimed successfully:', result);
+      
+      return {
+        success: true,
+        message: result.message || 'Rewards claimed successfully!',
+        prediction: result.prediction
+      };
+    } catch (error) {
+      console.error('❌ Error claiming reward from backend:', error);
+      throw new Error(`Failed to claim reward: ${error.message}`);
+    }
+  }
+
   async claimReward(marketPubkey, optionIndex) {
     // Check if program and provider are initialized
     if (!this.program || !this.provider) {
@@ -1244,6 +1281,57 @@ class MarketService {
     }
   }
   
+  // NEW METHOD: Get all user positions across all markets from backend
+  async getUserPositions(userAddress) {
+    try {
+      console.log(`📊 Fetching all positions for user: ${userAddress}`);
+      
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${backendUrl}/api/predictions/user/${userAddress}`, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log(`✅ Loaded ${data.total} positions for user`);
+      
+      // Group positions by market address
+      const positionsByMarket = {};
+      data.predictions.forEach(prediction => {
+        const marketAddress = prediction.market_address;
+        if (!positionsByMarket[marketAddress]) {
+          positionsByMarket[marketAddress] = [];
+        }
+        
+        positionsByMarket[marketAddress].push({
+          id: prediction.id,
+          optionIndex: prediction.option_index,
+          amount: parseFloat(prediction.amount),
+          timestamp: new Date(prediction.timestamp || prediction.created_at),
+          claimed: prediction.claimed || false,
+          transactionSignature: prediction.transaction_signature,
+          market: {
+            address: prediction.market_address,
+            question: prediction.market_question,
+            options: prediction.market_options,
+            status: prediction.market_status,
+            winningOption: prediction.winning_option
+          }
+        });
+      });
+      
+      return positionsByMarket;
+    } catch (error) {
+      console.error('❌ Error fetching user positions:', error);
+      return {};
+    }
+  }
+
   async getUserPositionsForMarket(userPubkey, marketPubkey) {
     if (!this.program || !userPubkey) return [];
 

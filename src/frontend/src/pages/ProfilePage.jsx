@@ -174,29 +174,13 @@ const ProfilePage = () => {
       setMarkets(new Map(marketsData.map(m => [m.publicKey, m])));
       console.log(`✅ Profile: Found ${marketsData.length} markets`);
 
-      // Fetch user positions for all markets
+      // Fetch user positions from backend API
       console.log('🔄 Profile: Fetching user positions...');
-      const allPositions = [];
-      const positionsByMarket = {};
-      
-      if (marketsData.length > 0) {
-        // Use the marketService to get user positions for all markets
-        for (const market of marketsData) {
-          try {
-            const positions = await marketService.getUserPositionsForMarket(publicKey, market.publicKey);
-            if (positions && positions.length > 0) {
-              allPositions.push(...positions);
-              positionsByMarket[market.publicKey] = positions;
-              console.log(`✅ Profile: Found ${positions.length} positions for market ${market.publicKey.slice(0, 8)}`);
-            }
-          } catch (error) {
-            console.warn(`Failed to fetch positions for market ${market.publicKey}:`, error);
-          }
-        }
-      }
+      const positionsByMarket = await marketService.getUserPositions(publicKey.toString());
+      const totalPositions = Object.values(positionsByMarket).reduce((sum, positions) => sum + positions.length, 0);
       
       setUserPositionsByMarket(positionsByMarket);
-      console.log(`✅ Profile: Total positions loaded: ${allPositions.length}`);
+      console.log(`✅ Profile: Total positions loaded: ${totalPositions}`);
       
       // Calculate performance metrics
       calculatePerformanceMetrics();
@@ -729,12 +713,13 @@ const ProfilePage = () => {
             </p>
           ) : (
             <div className="space-y-6">
-              {Object.entries(userPositionsByMarket).map(([marketPubkey, positions]) => {
-                const market = markets.get(marketPubkey);
+              {Object.entries(userPositionsByMarket).map(([marketAddress, positions]) => {
+                // Get market data from the first position's market object (backend data)
+                const market = positions[0]?.market || markets.get(marketAddress);
                 const totalMarketPosition = positions.reduce((sum, pos) => sum + safeNumber(pos.amount), 0);
                 
                 return (
-                  <div key={marketPubkey} className="border border-gray-700 rounded-lg p-4">
+                  <div key={marketAddress} className="border border-gray-700 rounded-lg p-4">
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
                         <h4 className="font-medium text-white text-lg mb-2">
@@ -765,7 +750,7 @@ const ProfilePage = () => {
                       {positions.map((position, idx) => {
                         const canClaim = canClaimReward(position, market);
                         const potentialWinnings = calculatePotentialWinnings(position, market);
-                        const claimKey = `${marketPubkey}-${position.optionIndex}`;
+                        const claimKey = `${marketAddress}-${position.optionIndex}`;
                         
                         // Debug log for each position
                         console.log('Rendering position:', {
@@ -830,7 +815,7 @@ const ProfilePage = () => {
                                 
                                 {canClaim && (
                                   <button
-                                    onClick={() => handleClaimClick(marketPubkey, position, market)}
+                                    onClick={() => handleClaimClick(marketAddress, position, market)}
                                     disabled={claimingReward[claimKey]}
                                     className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                   >
@@ -847,7 +832,7 @@ const ProfilePage = () => {
                     {/* Market action button */}
                     <div className="mt-4">
                       <button
-                        onClick={() => navigate(`/markets/${marketPubkey}`)}
+                        onClick={() => navigate(`/markets/${marketAddress}`)}
                         className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
                       >
                         View Market Details

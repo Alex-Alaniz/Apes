@@ -228,10 +228,21 @@ const MarketsPage = () => {
       return false;
     }
     
-    const marketPositions = userPositions[market.publicKey] || [];
-    return marketPositions.some(position => 
-      position.optionIndex === market.winningOption && !position.claimed
-    );
+    // Try both market.publicKey and market.address to handle different data sources
+    const marketKey = market.publicKey || market.address;
+    const marketPositions = userPositions[marketKey] || [];
+    
+    return marketPositions.some(position => {
+      // For backend positions, check market.status from the position data
+      const marketData = position.market || market;
+      const isResolved = marketData.status === 'Resolved';
+      const winningOption = marketData.winningOption !== null ? marketData.winningOption : market.winningOption;
+      
+      return isResolved && 
+             winningOption !== null && 
+             position.optionIndex === winningOption && 
+             !position.claimed;
+    });
   };
 
   // Combine active and resolved markets for filtering
