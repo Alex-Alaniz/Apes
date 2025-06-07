@@ -31,8 +31,8 @@ const WS_ENDPOINTS = {
     'wss://devnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d',
   ],
   mainnet: [
-    'wss://mainnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d',  // Helius (primary)
-    'wss://api.mainnet-beta.solana.com',  // Public WebSocket (backup)
+    'wss://api.mainnet-beta.solana.com',  // Public WebSocket (primary) - No rate limits
+    'wss://mainnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d',  // Helius (backup)
   ]
 };
 

@@ -19,10 +19,23 @@ class ConnectionService {
       const rpcUrl = this._rpcUrls[this._currentRpcIndex];
       console.log(`Creating connection to: ${rpcUrl}`);
       
+      // Use appropriate WebSocket endpoint based on RPC provider
+      let wsEndpoint;
+      if (rpcUrl.includes('alchemy.com')) {
+        // Alchemy doesn't provide WebSocket - use public Solana WebSocket
+        wsEndpoint = 'wss://api.mainnet-beta.solana.com';
+      } else if (rpcUrl.includes('helius-rpc.com')) {
+        // Helius supports WebSocket
+        wsEndpoint = rpcUrl.replace('https', 'wss');
+      } else {
+        // Public Solana RPC supports WebSocket
+        wsEndpoint = rpcUrl.replace('https', 'wss');
+      }
+
       this._connection = new Connection(rpcUrl, {
         commitment: 'confirmed',
         confirmTransactionInitialTimeout: 60000, // 60 seconds
-        wsEndpoint: rpcUrl.replace('https', 'wss'),
+        wsEndpoint: wsEndpoint,
         httpHeaders: {
           'solana-client': 'solana-prediction-market'
         }
