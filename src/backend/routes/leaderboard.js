@@ -982,4 +982,30 @@ router.get('/debug-amounts', async (req, res) => {
   }
 });
 
+// Simple predictions count test
+router.get('/test-simple', async (req, res) => {
+  try {
+    console.log('🧪 SIMPLE TEST: Basic predictions check...');
+    
+    // Just count predictions
+    const countQuery = 'SELECT COUNT(*) as total FROM predictions';
+    const countResult = await db.query(countQuery);
+    
+    // Get a few raw predictions
+    const rawQuery = 'SELECT * FROM predictions LIMIT 3';
+    const rawResult = await db.query(rawQuery);
+    
+    console.log(`🧪 Predictions count: ${countResult.rows[0].total}`);
+    
+    res.json({
+      predictions_count: countResult.rows[0].total,
+      sample_predictions: rawResult.rows,
+      test_passed: parseInt(countResult.rows[0].total) > 0
+    });
+  } catch (error) {
+    console.error('🧪 SIMPLE TEST ERROR:', error);
+    res.status(500).json({ error: 'Simple test failed', details: error.message });
+  }
+});
+
 module.exports = router; 
