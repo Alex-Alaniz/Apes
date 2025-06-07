@@ -173,49 +173,71 @@ class MarketService {
     };
   }
 
-  async confirmTransaction(signature, maxRetries = 3) {
+  async confirmTransaction(signature, maxRetries = 2) {
     console.log(`Confirming transaction: ${signature}`);
     
     for (let i = 0; i < maxRetries; i++) {
       try {
-        // Use a shorter timeout per attempt
-        const confirmation = await this.connection.confirmTransaction(
-          signature, 
-          'confirmed'
+        console.log(`🔍 Confirmation attempt ${i + 1}/${maxRetries}...`);
+        
+        // Use Promise.race with shorter timeout for HTTP-only connections
+        const confirmationPromise = this.connection.confirmTransaction(signature, 'confirmed');
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Confirmation timeout after 15 seconds')), 15000)
         );
+        
+        const confirmation = await Promise.race([confirmationPromise, timeoutPromise]);
         
         if (confirmation.value.err) {
           throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
         }
         
-        console.log('Transaction confirmed successfully');
+        console.log('✅ Transaction confirmed successfully');
         return confirmation;
       } catch (error) {
-        console.log(`Confirmation attempt ${i + 1} failed:`, error.message);
+        console.log(`❌ Confirmation attempt ${i + 1} failed:`, error.message);
         
-        // Check if transaction exists and succeeded despite timeout
-        if (error.message.includes('was not confirmed')) {
-          try {
-            const status = await this.connection.getSignatureStatus(signature);
-            console.log('Transaction status:', status);
-            
-            if (status.value?.confirmationStatus === 'confirmed' || 
-                status.value?.confirmationStatus === 'finalized') {
-              console.log('Transaction actually succeeded despite timeout');
-              return { value: { err: null } };
-            }
-          } catch (statusError) {
-            console.error('Error checking transaction status:', statusError);
+        // Check if transaction actually succeeded despite timeout
+        try {
+          console.log('🔍 Checking transaction status via getSignatureStatus...');
+          const status = await this.connection.getSignatureStatus(signature);
+          console.log('📊 Transaction status:', status);
+          
+          if (status.value?.confirmationStatus === 'confirmed' || 
+              status.value?.confirmationStatus === 'finalized') {
+            console.log('✅ Transaction actually succeeded despite timeout');
+            return { value: { err: null } };
           }
+          
+          if (status.value?.confirmationStatus === 'processed') {
+            console.log('⏳ Transaction processed but waiting for confirmation...');
+            // Continue to retry
+          }
+        } catch (statusError) {
+          console.error('❌ Error checking transaction status:', statusError);
         }
         
         // If not the last attempt, wait before retrying
         if (i < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          console.log('⏳ Waiting 3 seconds before retry...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
         } else {
-          // On last attempt, throw a more informative error
+          // On last attempt, check one more time and throw if still not confirmed
+          try {
+            const finalStatus = await this.connection.getSignatureStatus(signature);
+            if (finalStatus.value?.confirmationStatus === 'confirmed' || 
+                finalStatus.value?.confirmationStatus === 'finalized') {
+              console.log('✅ Transaction confirmed on final check');
+              return { value: { err: null } };
+            }
+          } catch (finalError) {
+            console.error('❌ Final status check failed:', finalError);
+          }
+          
+          // Throw timeout error
           throw new Error(
-            `Transaction confirmation timeout. The transaction may have succeeded. ` +
+            `Transaction confirmation timeout after ${maxRetries} attempts. ` +
+            `The transaction may have succeeded. ` +
             `Check signature ${signature} on Solana Explorer to verify.`
           );
         }

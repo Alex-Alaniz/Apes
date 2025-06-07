@@ -88,7 +88,57 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
     try {
       const result = await marketService.placeBet(market.publicKey, selectedOption, parseFloat(betAmount));
       
-      // Check if there's a warning about confirmation timeout
+      console.log('🎯 Bet placement result:', result);
+      
+      // TRIGGER BELIEVE API BURN IMMEDIATELY - Don't wait for perfect confirmation
+      if (result.transaction && isBelieveConfigured()) {
+        console.log('🔍 Believe API Debug:');
+        console.log('- isBelieveConfigured():', isBelieveConfigured());
+        console.log('- API URL:', BELIEVE_CONFIG.apiUrl);
+        console.log('- API Key present:', !!BELIEVE_CONFIG.apiKey);
+        console.log('- Transaction ID:', result.transaction);
+        
+        console.log('✅ Believe API is configured, attempting burn...');
+        
+        // Run burn in background (non-blocking)
+        believeApiService.burnForPrediction(
+          market.publicKey,
+          publicKey.toString(),
+          selectedOption,
+          parseFloat(betAmount),
+          result.transaction
+        ).then(burnResult => {
+          if (burnResult.success) {
+            console.log('🔥 Believe burn successful:', burnResult.message);
+            if (burnResult.data?.txHash) {
+              console.log(`🔗 Believe Burn Transaction: ${burnResult.data.txHash}`);
+              console.log(`🌐 View on Explorer: https://solscan.io/tx/${burnResult.data.txHash}`);
+            }
+          } else {
+            console.error('❌ Believe burn failed:', burnResult.message);
+          }
+        }).catch(burnError => {
+          console.error('❌ Believe API burn error:', burnError);
+          console.error('- Error details:', {
+            message: burnError.message,
+            status: burnError.response?.status,
+            statusText: burnError.response?.statusText,
+            data: burnError.response?.data
+          });
+          
+          // Test basic connectivity if it's a network error
+          if (burnError.message === 'Network Error') {
+            console.log('🔍 Testing basic API connectivity...');
+            believeApiService.testConnectivity();
+          }
+        });
+      } else if (!result.transaction) {
+        console.warn('⚠️ No transaction ID received, cannot trigger Believe API burn');
+      } else if (!isBelieveConfigured()) {
+        console.log('ℹ️ Believe API not configured, skipping burn');
+      }
+      
+      // Show success message to user
       if (result.warning) {
         // Show a warning toast but still treat as success
         if (onSuccess) {
@@ -107,59 +157,6 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
             option: selectedOptionData.label,
             amount: betAmount
           });
-        }
-      }
-      
-      // Debug logging for Believe API integration (SECURE - no API key exposed)
-      console.log('🔍 Believe API Debug:');
-      console.log('- isBelieveConfigured():', isBelieveConfigured());
-      console.log('- API URL:', BELIEVE_CONFIG.apiUrl);
-      console.log('- API Key present:', !!BELIEVE_CONFIG.apiKey);
-      console.log('- Proof Types:', BELIEVE_CONFIG.proofTypes);
-      console.log('- Burn Amounts:', BELIEVE_CONFIG.burnAmounts);
-      
-      // Trigger off-chain burn with fixed amount
-      if (isBelieveConfigured()) {
-        console.log('✅ Believe API is configured, attempting burn...');
-        try {
-          const burnResult = await believeApiService.burnForPrediction(
-            market.publicKey,
-            publicKey.toString(),
-            selectedOption,
-            parseFloat(betAmount),
-            result.transaction
-          );
-          
-          if (burnResult.success) {
-            console.log(burnResult.message);
-            // Show burn transaction hash prominently
-            if (burnResult.data?.txHash) {
-              console.log(`🔗 Believe Burn Transaction: ${burnResult.data.txHash}`);
-              console.log(`View on Explorer: https://solscan.io/tx/${burnResult.data.txHash}`);
-            }
-          }
-        } catch (burnError) {
-          // Log burn errors but don't fail the prediction
-          console.error('❌ Believe API burn failed:', burnError);
-          console.error('- Error details:', {
-            message: burnError.message,
-            status: burnError.response?.status,
-            statusText: burnError.response?.statusText,
-            data: burnError.response?.data
-          });
-          console.log('🔧 Burn was attempted with:', {
-            marketId: market.publicKey,
-            userWallet: publicKey.toString(),
-            optionIndex: selectedOption,
-            betAmount: parseFloat(betAmount),
-            txHash: result.transaction
-          });
-          
-          // Test basic connectivity if it's a network error
-          if (burnError.message === 'Network Error') {
-            console.log('🔍 Testing basic API connectivity...');
-            believeApiService.testConnectivity();
-          }
         }
       }
       
