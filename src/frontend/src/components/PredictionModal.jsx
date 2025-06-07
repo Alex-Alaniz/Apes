@@ -110,11 +110,13 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
         }
       }
       
-      // Debug logging for Believe API integration
+      // Debug logging for Believe API integration (SECURE - no API key exposed)
       console.log('🔍 Believe API Debug:');
       console.log('- isBelieveConfigured():', isBelieveConfigured());
-      console.log('- BELIEVE_CONFIG:', BELIEVE_CONFIG);
+      console.log('- API URL:', BELIEVE_CONFIG.apiUrl);
       console.log('- API Key present:', !!BELIEVE_CONFIG.apiKey);
+      console.log('- Proof Types:', BELIEVE_CONFIG.proofTypes);
+      console.log('- Burn Amounts:', BELIEVE_CONFIG.burnAmounts);
       
       // Trigger off-chain burn with fixed amount
       if (isBelieveConfigured()) {
@@ -138,7 +140,20 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
           }
         } catch (burnError) {
           // Log burn errors but don't fail the prediction
-          console.error('Failed to burn tokens:', burnError);
+          console.error('❌ Believe API burn failed:', burnError);
+          console.error('- Error details:', {
+            message: burnError.message,
+            status: burnError.response?.status,
+            statusText: burnError.response?.statusText,
+            data: burnError.response?.data
+          });
+          console.log('🔧 Burn was attempted with:', {
+            marketId: market.publicKey,
+            userWallet: publicKey.toString(),
+            optionIndex: selectedOption,
+            betAmount: parseFloat(betAmount),
+            txHash: result.transaction
+          });
         }
       }
       

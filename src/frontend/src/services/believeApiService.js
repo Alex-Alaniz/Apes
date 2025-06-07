@@ -123,8 +123,18 @@ class BelieveApiService {
     // Match Believe's expected proof schema
     const proof = {
       transactionId: txHash,
-      value: betAmount.toString()
+      value: betAmount.toString(),
+      marketId: marketId,
+      userWallet: userWallet,
+      optionIndex: optionIndex,
+      timestamp: new Date().toISOString()
     };
+
+    console.log('🔥 Preparing Believe API burn request:', {
+      type: BELIEVE_CONFIG.proofTypes.PREDICTION_BET,
+      burnAmount: BELIEVE_CONFIG.burnAmounts.PREDICTION_BET,
+      proofFields: Object.keys(proof)
+    });
 
     return this.burnTokens(
       BELIEVE_CONFIG.proofTypes.PREDICTION_BET,
