@@ -383,6 +383,224 @@ class LiveMarketSyncService {
       cacheExpiryMs: this.cacheExpiry
     };
   }
+
+  /**
+   * Check if a market is resolved on blockchain and sync status to database
+   * @param {string} marketAddress - Market address to check
+   * @returns {Promise<Object>} Resolution status and details
+   */
+  async syncMarketResolutionStatus(marketAddress) {
+    try {
+      console.log(`🔍 Checking resolution status for market: ${marketAddress}`);
+      
+      if (!PROGRAM_ID) {
+        throw new Error('Program ID not configured');
+      }
+
+      const marketPubkey = new PublicKey(marketAddress);
+      
+      // Fetch market account data directly from blockchain
+      const accountInfo = await this.connection.getAccountInfo(marketPubkey);
+      
+      if (!accountInfo) {
+        throw new Error(`Market account not found: ${marketAddress}`);
+      }
+
+      // Deserialize market data to check status
+      const marketData = this.deserializeMarketAccount(accountInfo.data);
+      
+      console.log(`📊 Blockchain status for ${marketAddress}:`, {
+        status: marketData.status,
+        winningOption: marketData.winningOption,
+        question: marketData.question?.substring(0, 50)
+      });
+
+      // Check if market is resolved on blockchain
+      const isResolvedOnChain = marketData.status === 'Resolved';
+      const winningOption = marketData.winningOption;
+
+      if (isResolvedOnChain) {
+        console.log(`✅ Market ${marketAddress} is RESOLVED on blockchain with winning option: ${winningOption}`);
+        
+        // Update database with resolved status
+        const updateQuery = `
+          UPDATE markets 
+          SET 
+            status = 'Resolved',
+            resolved_option = $1,
+            updated_at = NOW()
+          WHERE market_address = $2
+          RETURNING market_address, status, resolved_option, question
+        `;
+        
+        const result = await db.query(updateQuery, [winningOption, marketAddress]);
+        
+        if (result.rows.length > 0) {
+          const updatedMarket = result.rows[0];
+          console.log(`🎯 Successfully updated database for resolved market:`, {
+            market_address: updatedMarket.market_address,
+            status: updatedMarket.status,
+            resolved_option: updatedMarket.resolved_option,
+            question: updatedMarket.question?.substring(0, 50)
+          });
+          
+          // Clear cache for this market to force fresh data
+          this.clearCache(marketAddress);
+          
+          return {
+            success: true,
+            wasResolved: true,
+            marketAddress,
+            winningOption,
+            previousStatus: 'Active',
+            newStatus: 'Resolved',
+            updatedInDatabase: true
+          };
+        } else {
+          console.warn(`⚠️ Market ${marketAddress} not found in database`);
+          return {
+            success: false,
+            error: 'Market not found in database',
+            wasResolved: true,
+            winningOption
+          };
+        }
+      } else {
+        console.log(`📊 Market ${marketAddress} is still ACTIVE on blockchain`);
+        return {
+          success: true,
+          wasResolved: false,
+          marketAddress,
+          currentStatus: marketData.status,
+          winningOption: null
+        };
+      }
+      
+    } catch (error) {
+      console.error(`❌ Error checking resolution status for ${marketAddress}:`, error);
+      return {
+        success: false,
+        error: error.message,
+        marketAddress
+      };
+    }
+  }
+
+  /**
+   * Sync resolution status for all markets in database
+   * @returns {Promise<Object>} Batch sync results
+   */
+  async syncAllMarketResolutionStatus() {
+    try {
+      console.log('🔄 Starting batch resolution status sync for all markets...');
+      
+      // Get all markets from database (both Active and Resolved to double-check)
+      const marketsQuery = `
+        SELECT market_address, status, resolved_option, question
+        FROM markets 
+        ORDER BY created_at DESC
+      `;
+      
+      const marketsResult = await db.query(marketsQuery);
+      const markets = marketsResult.rows;
+      
+      console.log(`📊 Found ${markets.length} markets to check for resolution status`);
+      
+      let resolvedCount = 0;
+      let alreadyResolvedCount = 0;
+      let activeCount = 0;
+      let errorCount = 0;
+      const resolvedMarkets = [];
+      const errors = [];
+      
+      // Process markets in batches to avoid overwhelming the RPC
+      const batchSize = 5;
+      for (let i = 0; i < markets.length; i += batchSize) {
+        const batch = markets.slice(i, i + batchSize);
+        
+        console.log(`📦 Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(markets.length/batchSize)}...`);
+        
+        const batchPromises = batch.map(market => 
+          this.syncMarketResolutionStatus(market.market_address)
+        );
+        
+        const batchResults = await Promise.allSettled(batchPromises);
+        
+        batchResults.forEach((result, batchIndex) => {
+          const market = batch[batchIndex];
+          
+          if (result.status === 'fulfilled') {
+            const syncResult = result.value;
+            
+            if (syncResult.success) {
+              if (syncResult.wasResolved && syncResult.updatedInDatabase) {
+                resolvedCount++;
+                resolvedMarkets.push({
+                  marketAddress: market.market_address,
+                  question: market.question?.substring(0, 50),
+                  winningOption: syncResult.winningOption
+                });
+              } else if (syncResult.wasResolved && !syncResult.updatedInDatabase) {
+                alreadyResolvedCount++;
+              } else {
+                activeCount++;
+              }
+            } else {
+              errorCount++;
+              errors.push({
+                marketAddress: market.market_address,
+                error: syncResult.error
+              });
+            }
+          } else {
+            errorCount++;
+            errors.push({
+              marketAddress: market.market_address,
+              error: result.reason.message
+            });
+          }
+        });
+        
+        // Small delay between batches to be respectful to RPC
+        if (i + batchSize < markets.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      console.log(`🎉 Batch resolution sync completed:`);
+      console.log(`✅ Newly resolved: ${resolvedCount} markets`);
+      console.log(`📊 Already resolved: ${alreadyResolvedCount} markets`);
+      console.log(`🔄 Still active: ${activeCount} markets`);
+      console.log(`❌ Errors: ${errorCount} markets`);
+      
+      if (resolvedMarkets.length > 0) {
+        console.log(`🏆 Newly resolved markets:`);
+        resolvedMarkets.forEach((market, index) => {
+          console.log(`  ${index + 1}. ${market.marketAddress} - ${market.question} (Winner: Option ${market.winningOption})`);
+        });
+      }
+      
+      return {
+        success: true,
+        statistics: {
+          totalMarkets: markets.length,
+          newlyResolved: resolvedCount,
+          alreadyResolved: alreadyResolvedCount,
+          stillActive: activeCount,
+          errors: errorCount
+        },
+        resolvedMarkets,
+        errors: errors.slice(0, 10) // Limit error details
+      };
+      
+    } catch (error) {
+      console.error('❌ Error in batch resolution sync:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 }
 
 module.exports = new LiveMarketSyncService(); 

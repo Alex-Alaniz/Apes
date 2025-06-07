@@ -1855,6 +1855,208 @@ class MarketService {
       return await this.fetchMarketsWithStats();
     }
   }
+
+  // NEW METHOD: Sync resolution status for a specific market
+  async syncMarketResolutionStatus(marketAddress) {
+    try {
+      console.log(`🔍 Syncing resolution status for market: ${marketAddress}`);
+      
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${backendUrl}/api/markets/sync-resolution/${marketAddress}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000 // 15 second timeout for blockchain calls
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.success && result.wasResolved) {
+          console.log(`✅ Market ${marketAddress} resolution synced:`, {
+            winningOption: result.winningOption,
+            status: `${result.previousStatus} → ${result.newStatus}`
+          });
+          
+          // Clear cache to force fresh data
+          cacheService.clear();
+          
+          return {
+            success: true,
+            wasResolved: true,
+            winningOption: result.winningOption,
+            previousStatus: result.previousStatus,
+            newStatus: result.newStatus,
+            message: result.message
+          };
+        } else if (result.success && !result.wasResolved) {
+          console.log(`📊 Market ${marketAddress} is still active on blockchain`);
+          return {
+            success: true,
+            wasResolved: false,
+            currentStatus: result.currentStatus,
+            message: result.message
+          };
+        } else {
+          console.error(`❌ Failed to sync resolution for ${marketAddress}:`, result.error);
+          return {
+            success: false,
+            error: result.error || result.message
+          };
+        }
+      } else {
+        console.error(`❌ HTTP error syncing resolution for ${marketAddress}:`, response.status);
+        return {
+          success: false,
+          error: `HTTP ${response.status}`
+        };
+      }
+    } catch (error) {
+      console.error(`❌ Error syncing resolution for ${marketAddress}:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  // NEW METHOD: Sync resolution status for all markets
+  async syncAllMarketResolutions() {
+    try {
+      console.log('🔄 Syncing resolution status for ALL markets...');
+      
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${backendUrl}/api/markets/sync-all-resolutions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 60000 // 60 second timeout for batch operation
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.success) {
+          console.log(`✅ Batch resolution sync completed:`, result.statistics);
+          
+          if (result.statistics.newlyResolved > 0) {
+            console.log(`🎯 ${result.statistics.newlyResolved} markets were updated to resolved status`);
+            console.log('🏆 Newly resolved markets:', result.resolvedMarkets);
+          }
+          
+          // Clear cache to force fresh data
+          cacheService.clear();
+          
+          return {
+            success: true,
+            statistics: result.statistics,
+            resolvedMarkets: result.resolvedMarkets,
+            summary: result.summary,
+            recommendations: result.recommendations
+          };
+        } else {
+          console.error('❌ Batch resolution sync failed:', result.error);
+          return {
+            success: false,
+            error: result.error
+          };
+        }
+      } else {
+        console.error('❌ HTTP error in batch resolution sync:', response.status);
+        return {
+          success: false,
+          error: `HTTP ${response.status}`
+        };
+      }
+    } catch (error) {
+      console.error('❌ Error in batch resolution sync:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  // NEW METHOD: Check resolution status without updating
+  async checkMarketResolutionStatus(marketAddress) {
+    try {
+      console.log(`👀 Checking resolution status for market: ${marketAddress}`);
+      
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${backendUrl}/api/markets/resolution-status/${marketAddress}`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000 // 10 second timeout
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.success) {
+          console.log(`📊 Resolution status for ${marketAddress}:`, {
+            database: result.database.status,
+            blockchain: result.blockchain.status,
+            needsSync: result.needsSync
+          });
+          
+          return {
+            success: true,
+            marketAddress,
+            database: result.database,
+            blockchain: result.blockchain,
+            statusMismatch: result.statusMismatch,
+            needsSync: result.needsSync,
+            recommendations: result.recommendations
+          };
+        } else {
+          return {
+            success: false,
+            error: 'Failed to check resolution status'
+          };
+        }
+      } else {
+        return {
+          success: false,
+          error: `HTTP ${response.status}`
+        };
+      }
+    } catch (error) {
+      console.error(`❌ Error checking resolution status for ${marketAddress}:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  // Enhanced fetch method that auto-syncs resolution status
+  async fetchMarketsWithResolutionSync() {
+    try {
+      console.log('📊 Fetching markets with auto-resolution sync...');
+      
+      // First get markets normally
+      const markets = await this.fetchMarketsWithLiveData();
+      
+      // Check for any markets that might need resolution syncing
+      const activeMarkets = markets.filter(market => market.status === 'Active');
+      
+      if (activeMarkets.length > 0) {
+        console.log(`🔍 Found ${activeMarkets.length} active markets, checking if any are resolved on blockchain...`);
+        
+        // For now, just log this - in the future, we could auto-sync
+        // Uncomment the line below to enable automatic resolution syncing
+        // await this.syncAllMarketResolutions();
+      }
+      
+      return markets;
+    } catch (error) {
+      console.error('❌ Error in fetchMarketsWithResolutionSync:', error);
+      return await this.fetchMarketsWithLiveData();
+    }
+  }
 }
 
 export default new MarketService(); 

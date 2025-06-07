@@ -1690,8 +1690,7 @@ router.get('/live/:address', async (req, res) => {
           totalVolume: parseFloat(market.total_volume || 0),
           participantCount: parseInt(market.participant_count || 0),
           isLiveData: false,
-          dataSource: 'database_fallback',
-          lastUpdated: market.updated_at
+          dataSource: 'database_fallback'
         };
         
         res.json(fallbackData);
@@ -1928,6 +1927,195 @@ router.get('/cache-stats', async (req, res) => {
   } catch (error) {
     console.error('Error getting cache stats:', error);
     res.status(500).json({ error: 'Failed to get cache statistics' });
+  }
+});
+
+// POST /api/markets/sync-resolution/:address - Sync resolution status for specific market
+router.post('/sync-resolution/:address', async (req, res) => {
+  try {
+    const { address } = req.params;
+    
+    console.log(`🔍 Resolution sync requested for market: ${address}`);
+    
+    // Check and sync resolution status from blockchain
+    const result = await liveMarketSync.syncMarketResolutionStatus(address);
+    
+    if (result.success) {
+      if (result.wasResolved && result.updatedInDatabase) {
+        console.log(`✅ Market ${address} was resolved and database updated`);
+        res.json({
+          success: true,
+          message: 'Market resolution status updated successfully',
+          marketAddress: address,
+          wasResolved: true,
+          winningOption: result.winningOption,
+          previousStatus: result.previousStatus,
+          newStatus: result.newStatus
+        });
+      } else if (result.wasResolved && !result.updatedInDatabase) {
+        console.log(`⚠️ Market ${address} is resolved but database update failed`);
+        res.json({
+          success: false,
+          message: 'Market is resolved on blockchain but database update failed',
+          marketAddress: address,
+          wasResolved: true,
+          winningOption: result.winningOption,
+          error: result.error
+        });
+      } else {
+        console.log(`📊 Market ${address} is still active on blockchain`);
+        res.json({
+          success: true,
+          message: 'Market is still active on blockchain',
+          marketAddress: address,
+          wasResolved: false,
+          currentStatus: result.currentStatus
+        });
+      }
+    } else {
+      console.error(`❌ Error syncing resolution for ${address}:`, result.error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to sync resolution status',
+        details: result.error,
+        marketAddress: address
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error syncing market resolution:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to sync market resolution',
+      details: error.message 
+    });
+  }
+});
+
+// POST /api/markets/sync-all-resolutions - Sync resolution status for ALL markets
+router.post('/sync-all-resolutions', async (req, res) => {
+  try {
+    console.log('🔄 Batch resolution sync requested for all markets');
+    
+    // Sync resolution status for all markets
+    const result = await liveMarketSync.syncAllMarketResolutionStatus();
+    
+    if (result.success) {
+      console.log(`✅ Batch resolution sync completed successfully`);
+      console.log(`📊 Statistics:`, result.statistics);
+      
+      res.json({
+        success: true,
+        message: 'All markets resolution status synchronized successfully',
+        statistics: result.statistics,
+        resolvedMarkets: result.resolvedMarkets,
+        errors: result.errors,
+        summary: {
+          totalProcessed: result.statistics.totalMarkets,
+          newlyResolved: result.statistics.newlyResolved,
+          stillActive: result.statistics.stillActive,
+          errorCount: result.statistics.errors
+        },
+        recommendations: [
+          result.statistics.newlyResolved > 0 ? `${result.statistics.newlyResolved} markets were updated to resolved status` : 'No new resolutions found',
+          result.statistics.stillActive > 0 ? `${result.statistics.stillActive} markets remain active` : 'All markets have been resolved',
+          result.statistics.errors > 0 ? `${result.statistics.errors} markets had sync errors - check logs for details` : 'All markets synced successfully'
+        ]
+      });
+    } else {
+      console.error('❌ Batch resolution sync failed:', result.error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to sync all market resolutions',
+        details: result.error
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error in batch resolution sync:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to sync all market resolutions',
+      details: error.message 
+    });
+  }
+});
+
+// GET /api/markets/resolution-status/:address - Check resolution status without updating
+router.get('/resolution-status/:address', async (req, res) => {
+  try {
+    const { address } = req.params;
+    
+    console.log(`👀 Checking resolution status for market: ${address}`);
+    
+    // Get current database status
+    const dbQuery = `
+      SELECT market_address, status, resolved_option, question 
+      FROM markets 
+      WHERE market_address = $1
+    `;
+    
+    const dbResult = await db.query(dbQuery, [address]);
+    
+    if (dbResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Market not found in database' });
+    }
+    
+    const dbMarket = dbResult.rows[0];
+    
+    // Get live blockchain status (read-only check)
+    try {
+      const liveData = await liveMarketSync.getLiveMarketData(address);
+      
+      const statusMismatch = dbMarket.status !== liveData.status;
+      
+      res.json({
+        success: true,
+        marketAddress: address,
+        database: {
+          status: dbMarket.status,
+          resolvedOption: dbMarket.resolved_option,
+          question: dbMarket.question
+        },
+        blockchain: {
+          status: liveData.status || 'Unknown',
+          winningOption: liveData.winningOption || null
+        },
+        statusMismatch,
+        needsSync: statusMismatch,
+        recommendations: statusMismatch ? [
+          'Status mismatch detected between database and blockchain',
+          `Use POST /api/markets/sync-resolution/${address} to sync the status`
+        ] : [
+          'Database and blockchain status are in sync'
+        ]
+      });
+    } catch (blockchainError) {
+      console.warn('Could not fetch blockchain status:', blockchainError.message);
+      res.json({
+        success: true,
+        marketAddress: address,
+        database: {
+          status: dbMarket.status,
+          resolvedOption: dbMarket.resolved_option,
+          question: dbMarket.question
+        },
+        blockchain: {
+          status: 'Error fetching from blockchain',
+          error: blockchainError.message
+        },
+        statusMismatch: 'Unknown',
+        needsSync: 'Recommended'
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error checking resolution status:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to check resolution status',
+      details: error.message 
+    });
   }
 });
 
