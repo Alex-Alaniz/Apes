@@ -36,21 +36,22 @@ router.get('/', async (req, res) => {
     
     console.log(`🚨 FIXED: Direct leaderboard query bypassing JOINs...`);
     
-    // Step 1: Get ALL predictions data directly
-    const predictionsQuery = `
-      SELECT 
-        user_address,
-        COUNT(*) as total_predictions,
-        SUM(amount) as total_invested,
-        COUNT(CASE WHEN claimed = true THEN 1 END) as winning_predictions,
-        SUM(CASE 
-          WHEN claimed = true AND payout > 0 THEN (payout - amount)
-          ELSE 0 
-        END) as total_profit,
-        MAX(created_at) as last_prediction
-      FROM predictions 
-      GROUP BY user_address
-    `;
+              // Step 1: Get ALL predictions data directly (handle amount data type issues)
+     const predictionsQuery = `
+       SELECT 
+         user_address,
+         COUNT(*) as total_predictions,
+                  COALESCE(SUM(CAST(amount AS NUMERIC)), 0) as total_invested,
+         COUNT(CASE WHEN claimed = true THEN 1 END) as winning_predictions,
+         COALESCE(SUM(CASE 
+           WHEN claimed = true AND payout > 0 THEN (CAST(payout AS NUMERIC) - CAST(amount AS NUMERIC))
+           ELSE 0 
+         END), 0) as total_profit,
+         MAX(created_at) as last_prediction
+       FROM predictions 
+       WHERE amount IS NOT NULL
+       GROUP BY user_address
+     `;
     
     console.log(`🚨 Executing predictions query...`);
     const predictionsResult = await db.query(predictionsQuery);
@@ -911,6 +912,73 @@ router.get('/debug-critical', async (req, res) => {
   } catch (error) {
     console.error('🚨 CRITICAL DEBUG ERROR:', error);
     res.status(500).json({ error: 'Critical debug failed', details: error.message });
+  }
+});
+
+// Debug predictions amount column specifically
+router.get('/debug-amounts', async (req, res) => {
+  try {
+    console.log('🔍 AMOUNT DEBUG: Checking predictions amount column...');
+    
+    // Check amount column data types and values
+    const amountCheckQuery = `
+      SELECT 
+        user_address,
+        amount,
+        pg_typeof(amount) as amount_type,
+        CASE WHEN amount IS NULL THEN 'NULL' ELSE 'NOT_NULL' END as null_check
+      FROM predictions 
+      ORDER BY created_at DESC 
+      LIMIT 10
+    `;
+    
+    const amountResult = await db.query(amountCheckQuery);
+    console.log(`🔍 Amount check: ${amountResult.rows.length} predictions`);
+    
+    // Try different aggregation approaches
+    const sumTestQuery = `
+      SELECT 
+        user_address,
+        COUNT(*) as prediction_count,
+        SUM(amount) as sum_amount,
+        SUM(CAST(amount AS DECIMAL)) as sum_decimal,
+        SUM(amount::NUMERIC) as sum_numeric,
+        array_agg(amount) as all_amounts
+      FROM predictions 
+      GROUP BY user_address 
+      LIMIT 5
+    `;
+    
+    const sumResult = await db.query(sumTestQuery);
+    console.log(`🔍 Sum test: ${sumResult.rows.length} users`);
+    
+    // Compare with working point_balances
+    const pointsTestQuery = `
+      SELECT 
+        user_address,
+        total_points,
+        pg_typeof(total_points) as points_type
+      FROM point_balances 
+      LIMIT 5
+    `;
+    
+    const pointsResult = await db.query(pointsTestQuery);
+    console.log(`🔍 Points test: ${pointsResult.rows.length} users`);
+    
+    res.json({
+      status: 'AMOUNT DEBUG',
+      predictions_amounts: amountResult.rows,
+      sum_tests: sumResult.rows,
+      points_comparison: pointsResult.rows,
+      diagnosis: {
+        predictions_exist: amountResult.rows.length > 0,
+        amounts_have_values: amountResult.rows.some(row => row.amount !== null),
+        sum_working: sumResult.rows.some(row => parseFloat(row.sum_amount) > 0)
+      }
+    });
+  } catch (error) {
+    console.error('🔍 AMOUNT DEBUG ERROR:', error);
+    res.status(500).json({ error: 'Amount debug failed', details: error.message });
   }
 });
 
