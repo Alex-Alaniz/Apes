@@ -133,32 +133,90 @@ const CreateMarketPage = () => {
       // Save market to database so it shows up on /markets page
       if (result.success && result.marketPubkey) {
         try {
-          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-          const saveResponse = await fetch(`${apiUrl}/api/markets`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Wallet-Address': publicKey.toString()
-            },
-            body: JSON.stringify({
-              market_address: result.marketPubkey,
-              question: formData.question,
-              category: formData.category,
-              options: [formData.optionA, formData.optionB],
-              end_time: formData.endDate,
-              creator_address: publicKey.toString(),
-              transaction_hash: result.transaction,
-              status: 'Active'
-            })
-          });
+          console.log('🔄 Attempting to save market to database...');
           
-          if (saveResponse.ok) {
-            console.log('Market saved to database successfully');
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+          
+          // Try multiple endpoints in case of routing issues
+          let saveResponse;
+          let saveMethod = 'unknown';
+          
+          // Method 1: Try direct markets endpoint
+          try {
+            saveResponse = await fetch(`${apiUrl}/api/markets`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Wallet-Address': publicKey.toString()
+              },
+              body: JSON.stringify({
+                market_address: result.marketPubkey,
+                question: formData.question,
+                category: formData.category,
+                options: [formData.optionA, formData.optionB],
+                end_time: formData.endDate,
+                creator_address: publicKey.toString(),
+                transaction_hash: result.transaction,
+                status: 'Active'
+              })
+            });
+            saveMethod = 'direct_endpoint';
+          } catch (directError) {
+            console.warn('Direct endpoint failed, trying alternative...', directError);
+            
+            // Method 2: Try cache endpoint as fallback
+            try {
+              saveResponse = await fetch(`${apiUrl}/api/markets/cache`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  market_address: result.marketPubkey,
+                  poly_id: `user-created-${Date.now()}`, // Required for cache endpoint
+                  question: formData.question,
+                  category: formData.category,
+                  options: [formData.optionA, formData.optionB],
+                  end_time: formData.endDate,
+                  creator: publicKey.toString(),
+                  status: 'Active'
+                })
+              });
+              saveMethod = 'cache_endpoint';
+            } catch (cacheError) {
+              console.error('Both save methods failed:', cacheError);
+              throw new Error('Failed to save market to database via any method');
+            }
+          }
+          
+          if (saveResponse && saveResponse.ok) {
+            const saveResult = await saveResponse.json();
+            console.log(`✅ Market saved to database successfully via ${saveMethod}:`, saveResult);
+            
+            setToast({
+              message: 'Market created and saved successfully! It will appear on the markets page.',
+              type: 'success'
+            });
           } else {
-            console.warn('Failed to save market to database, but blockchain creation succeeded');
+            const errorText = await saveResponse.text();
+            console.error(`❌ Failed to save market via ${saveMethod}:`, {
+              status: saveResponse.status,
+              statusText: saveResponse.statusText,
+              error: errorText
+            });
+            
+            setToast({
+              message: 'Market created on blockchain but failed to save to database. It may not appear on the markets page immediately.',
+              type: 'warning'
+            });
           }
         } catch (saveError) {
-          console.error('Error saving market to database:', saveError);
+          console.error('❌ Error saving market to database:', saveError);
+          
+          setToast({
+            message: 'Market created on blockchain successfully, but there was an issue saving it to the database. Your market exists on the blockchain.',
+            type: 'warning'
+          });
           // Don't fail the whole process since blockchain creation succeeded
         }
       }
