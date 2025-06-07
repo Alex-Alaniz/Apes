@@ -788,4 +788,81 @@ router.get('/predictions-data', async (req, res) => {
   }
 });
 
+// Critical debug endpoint - check predictions table directly
+router.get('/debug-critical', async (req, res) => {
+  try {
+    console.log('🚨 CRITICAL DEBUG: Checking predictions table...');
+    
+    // Count total predictions
+    const countQuery = 'SELECT COUNT(*) as total FROM predictions';
+    const countResult = await db.query(countQuery);
+    
+    // Get sample predictions
+    const sampleQuery = `
+      SELECT 
+        id,
+        user_address,
+        market_address,
+        amount,
+        option_index,
+        created_at
+      FROM predictions 
+      ORDER BY created_at DESC 
+      LIMIT 10
+    `;
+    const sampleResult = await db.query(sampleQuery);
+    
+    // Check users table 
+    const usersQuery = `
+      SELECT wallet_address, username, created_at 
+      FROM users 
+      ORDER BY created_at DESC 
+      LIMIT 10
+    `;
+    const usersResult = await db.query(usersQuery);
+    
+    // Test direct JOIN
+    const joinQuery = `
+      SELECT 
+        u.wallet_address,
+        p.user_address,
+        COUNT(p.id) as prediction_count,
+        SUM(p.amount) as total_amount
+      FROM users u
+      INNER JOIN predictions p ON u.wallet_address = p.user_address
+      GROUP BY u.wallet_address, p.user_address
+      LIMIT 5
+    `;
+    const joinResult = await db.query(joinQuery);
+    
+    console.log(`🚨 Predictions: ${countResult.rows[0].total}`);
+    console.log(`🚨 Users: ${usersResult.rows.length}`);
+    console.log(`🚨 JOIN results: ${joinResult.rows.length}`);
+    
+    res.json({
+      status: 'CRITICAL DEBUG',
+      predictions: {
+        total: countResult.rows[0].total,
+        sample: sampleResult.rows
+      },
+      users: {
+        sample: usersResult.rows
+      },
+      join_test: {
+        working: joinResult.rows.length > 0,
+        results: joinResult.rows
+      },
+      diagnosis: {
+        predictions_exist: parseInt(countResult.rows[0].total) > 0,
+        users_exist: usersResult.rows.length > 0,
+        join_working: joinResult.rows.length > 0,
+        likely_issue: joinResult.rows.length === 0 ? 'JOIN_MISMATCH' : 'OTHER'
+      }
+    });
+  } catch (error) {
+    console.error('🚨 CRITICAL DEBUG ERROR:', error);
+    res.status(500).json({ error: 'Critical debug failed', details: error.message });
+  }
+});
+
 module.exports = router; 
