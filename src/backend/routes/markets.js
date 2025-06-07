@@ -1181,4 +1181,49 @@ router.post('/update-participant', async (req, res) => {
   }
 });
 
+// Manual recovery demo endpoint
+router.post('/manual-recovery-demo', async (req, res) => {
+  console.log('🎯 Manual recovery demo endpoint called');
+  
+  try {
+    const { addMissingMarket, verifyRecovery } = require('../manual-recovery-demo');
+    
+    console.log('🔧 Starting manual recovery demonstration...');
+    
+    // Add the missing market
+    const addResult = await addMissingMarket();
+    console.log('✅ Add result:', addResult.message);
+    
+    // Verify the recovery
+    const verifyResult = await verifyRecovery();
+    
+    console.log(`🎉 Recovery demo completed: ${verifyResult.totalMarkets} markets, missing market found: ${verifyResult.missingMarketFound}`);
+    
+    res.json({
+      success: true,
+      message: 'Manual recovery demonstration completed',
+      statistics: {
+        total_markets_before: 4,
+        total_markets_after: verifyResult.totalMarkets,
+        missing_market_recovered: verifyResult.missingMarketFound,
+        recovered_market_address: '9pgV5wUSemmuBU54qfneYc3pBbyJs2UK1N7cMf89mWR2'
+      },
+      recovered_market: verifyResult.marketData,
+      next_steps: [
+        'Visit https://www.primape.app/markets to see the recovered market',
+        'The market should now appear in the markets list',
+        'This demonstrates how blockchain recovery would work'
+      ]
+    });
+    
+  } catch (error) {
+    console.error('❌ Manual recovery demo error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Manual recovery demonstration failed',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router; 
