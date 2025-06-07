@@ -60,7 +60,7 @@ const HomePage = () => {
               Predict. Stake. Win.
             </h1>
             <p className="text-xl text-gray-700 dark:text-gray-300 mb-8">
-              The ultimate Solana prediction market platform powered by APES tokens
+              PRIMAPE APP - The ultimate Solana prediction market platform powered by APES tokens
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link

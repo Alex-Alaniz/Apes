@@ -16,7 +16,7 @@ const Footer = () => {
               <span className="text-xl font-bold text-white">PRIMAPE Markets</span>
             </div>
             <p className="text-gray-400 text-sm">
-              The ultimate Solana prediction market platform powered by APES tokens.
+              PRIMAPE APP - The ultimate Solana prediction market platform powered by APES tokens.
             </p>
           </div>
 
