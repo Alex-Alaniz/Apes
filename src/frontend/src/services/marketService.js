@@ -1585,6 +1585,276 @@ class MarketService {
       throw error;
     }
   }
+
+  // Manual sync method for API endpoint
+  async syncUserPositions(walletAddress = null) {
+    try {
+      if (walletAddress) {
+        console.log(`🔄 Syncing positions for specific user: ${walletAddress}`);
+        // Implement user-specific sync if needed
+        await this.syncAllUserPositions(); // For now, sync all
+      } else {
+        await this.syncAllUserPositions();
+      }
+      return true;
+    } catch (error) {
+      console.error('Error in manual sync:', error);
+      return false;
+    }
+  }
+
+  // NEW METHOD: Force sync all market volumes
+  async forceVolumeSync() {
+    try {
+      console.log('🔄 Triggering force volume sync for all markets...');
+      
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${backendUrl}/api/markets/force-sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Volume sync completed:', result.message);
+        console.log(`📊 Synced ${result.synced}/${result.total} markets`);
+        
+        // Clear cache to force fresh data
+        cacheService.clear();
+        
+        return {
+          success: true,
+          synced: result.synced,
+          total: result.total,
+          message: result.message
+        };
+      } else {
+        console.error('❌ Volume sync failed:', response.status);
+        return {
+          success: false,
+          error: `HTTP ${response.status}`
+        };
+      }
+    } catch (error) {
+      console.error('❌ Error triggering volume sync:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  // Enhanced fetch method that auto-syncs volumes if needed
+  async fetchMarketsWithAutoSync() {
+    try {
+      console.log('📊 Fetching markets with auto-sync capability...');
+      
+      // First try to get markets normally
+      const markets = await this.fetchMarketsWithStats();
+      
+      // Check if any markets have zero volume (indicating sync issue)
+      const marketsWithZeroVolume = markets.filter(market => 
+        !market.totalVolume || market.totalVolume === 0
+      );
+      
+      if (marketsWithZeroVolume.length > 0) {
+        console.log(`⚠️ Found ${marketsWithZeroVolume.length} markets with zero volume, triggering sync...`);
+        
+        // Trigger volume sync
+        const syncResult = await this.forceVolumeSync();
+        
+        if (syncResult.success) {
+          console.log('✅ Auto-sync completed, refetching markets...');
+          // Wait a moment for database to update
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Fetch fresh data
+          return await this.fetchMarketsWithStats();
+        } else {
+          console.warn('⚠️ Auto-sync failed, returning original data');
+        }
+      }
+      
+      return markets;
+    } catch (error) {
+      console.error('❌ Error in fetchMarketsWithAutoSync:', error);
+      // Fallback to regular fetch
+      return await this.fetchMarketsWithStats();
+    }
+  }
+
+  // NEW METHOD: Fetch LIVE blockchain data with real-time volumes
+  async fetchLiveMarketsData() {
+    try {
+      console.log('🔴 Fetching LIVE market data directly from blockchain...');
+      
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${backendUrl}/api/markets/live`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000 // 15 second timeout for blockchain calls
+      });
+      
+      if (response.ok) {
+        const liveMarkets = await response.json();
+        console.log(`🔴 Successfully fetched LIVE data for ${liveMarkets.length} markets`);
+        
+        // Log first market to show it's live data
+        if (liveMarkets.length > 0) {
+          const firstMarket = liveMarkets[0];
+          console.log('🔴 First LIVE market data:', {
+            question: firstMarket.question?.substring(0, 50),
+            totalVolume: firstMarket.totalVolume,
+            participantCount: firstMarket.participantCount,
+            dataSource: firstMarket.dataSource,
+            isLiveData: firstMarket.isLiveData,
+            lastUpdated: firstMarket.lastUpdated
+          });
+        }
+        
+        return liveMarkets;
+      } else {
+        console.warn('⚠️ Live data fetch failed, falling back to cached data');
+        return await this.fetchMarketsWithStats();
+      }
+    } catch (error) {
+      console.error('❌ Error fetching live markets data:', error);
+      console.log('🔄 Falling back to cached market data...');
+      return await this.fetchMarketsWithStats();
+    }
+  }
+
+  // NEW METHOD: Fetch live data for a specific market
+  async fetchLiveMarketData(marketAddress) {
+    try {
+      console.log(`🔴 Fetching LIVE data for market: ${marketAddress}`);
+      
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${backendUrl}/api/markets/live/${marketAddress}`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000 // 10 second timeout
+      });
+      
+      if (response.ok) {
+        const liveMarket = await response.json();
+        console.log(`🔴 Successfully fetched LIVE data for ${marketAddress}:`, {
+          totalVolume: liveMarket.totalVolume,
+          participantCount: liveMarket.participantCount,
+          dataSource: liveMarket.dataSource,
+          isLiveData: liveMarket.isLiveData
+        });
+        
+        return liveMarket;
+      } else {
+        console.warn(`⚠️ Live data fetch failed for ${marketAddress}, falling back to cached data`);
+        
+        // Fallback to regular fetch
+        const backendMarkets = await this.fetchMarketsWithStats();
+        return backendMarkets.find(market => market.publicKey === marketAddress) || null;
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching live market data for ${marketAddress}:`, error);
+      
+      // Fallback to regular fetch
+      const backendMarkets = await this.fetchMarketsWithStats();
+      return backendMarkets.find(market => market.publicKey === marketAddress) || null;
+    }
+  }
+
+  // NEW METHOD: Force refresh live data for a specific market
+  async refreshLiveMarketData(marketAddress) {
+    try {
+      console.log(`🔄 Force refreshing LIVE data for market: ${marketAddress}`);
+      
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${backendUrl}/api/markets/refresh-live/${marketAddress}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000 // 15 second timeout for fresh blockchain fetch
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`✅ Successfully refreshed LIVE data for ${marketAddress}:`, result.liveData);
+        
+        // Clear any local cache
+        cacheService.clear();
+        
+        return {
+          success: true,
+          liveData: result.liveData,
+          message: result.message
+        };
+      } else {
+        console.error(`❌ Failed to refresh live data for ${marketAddress}`);
+        return {
+          success: false,
+          error: `HTTP ${response.status}`
+        };
+      }
+    } catch (error) {
+      console.error(`❌ Error refreshing live market data for ${marketAddress}:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  // NEW METHOD: Get live cache statistics
+  async getLiveCacheStats() {
+    try {
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${backendUrl}/api/markets/cache-stats`);
+      
+      if (response.ok) {
+        const stats = await response.json();
+        return stats;
+      } else {
+        return { success: false, error: `HTTP ${response.status}` };
+      }
+    } catch (error) {
+      console.error('Error getting live cache stats:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Enhanced fetch method with live data preference
+  async fetchMarketsWithLiveData() {
+    try {
+      console.log('📊 Fetching markets with live data preference...');
+      
+      // Try to fetch live data first for maximum transparency
+      const liveMarkets = await this.fetchLiveMarketsData();
+      
+      // If live data is available and has valid data, use it
+      if (liveMarkets && liveMarkets.length > 0) {
+        const liveMarketsWithData = liveMarkets.filter(market => 
+          market.isLiveData && market.dataSource === 'live_blockchain'
+        );
+        
+        if (liveMarketsWithData.length > 0) {
+          console.log(`✅ Using LIVE blockchain data for ${liveMarketsWithData.length} markets`);
+          return liveMarkets; // Return all markets (including fallback data)
+        }
+      }
+      
+      // Fallback to cached data if live data not available
+      console.log('🔄 Live data not available, using cached data with auto-sync...');
+      return await this.fetchMarketsWithAutoSync();
+      
+    } catch (error) {
+      console.error('❌ Error in fetchMarketsWithLiveData:', error);
+      // Final fallback
+      return await this.fetchMarketsWithStats();
+    }
+  }
 }
 
 export default new MarketService(); 
