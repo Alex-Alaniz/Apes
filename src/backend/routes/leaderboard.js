@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const blockchainSyncService = require('../services/blockchainSyncService');
 
 // Helper function to calculate user rank
 const calculateRank = (predictions, winRate) => {
@@ -432,6 +433,66 @@ router.get('/rank/:walletAddress', async (req, res) => {
   } catch (error) {
     console.error('Error fetching user rank:', error);
     res.status(500).json({ error: 'Failed to fetch user rank' });
+  }
+});
+
+// Add manual sync endpoint
+router.post('/sync', async (req, res) => {
+  try {
+    const { walletAddress } = req.body;
+    console.log('🔄 Manual sync triggered for:', walletAddress || 'all users');
+    
+    const success = await blockchainSyncService.syncUserPositions(walletAddress);
+    
+    if (success) {
+      res.json({ 
+        success: true, 
+        message: 'Blockchain sync completed successfully' 
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: 'Blockchain sync failed' 
+      });
+    }
+  } catch (error) {
+    console.error('Error in manual sync endpoint:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to trigger sync' 
+    });
+  }
+});
+
+// Check sync status endpoint
+router.get('/sync-status', async (req, res) => {
+  try {
+    // Get count of records in prediction_history to show sync status
+    const result = await db.query(`
+      SELECT 
+        COUNT(*) as total_predictions,
+        COUNT(DISTINCT wallet_address) as unique_users,
+        MAX(created_at) as last_sync_time
+      FROM prediction_history
+    `);
+    
+    const stats = result.rows[0];
+    
+    res.json({
+      success: true,
+      syncStatus: {
+        totalPredictions: Number(stats.total_predictions),
+        uniqueUsers: Number(stats.unique_users),
+        lastSyncTime: stats.last_sync_time,
+        isServiceRunning: blockchainSyncService.isRunning
+      }
+    });
+  } catch (error) {
+    console.error('Error checking sync status:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to check sync status' 
+    });
   }
 });
 
