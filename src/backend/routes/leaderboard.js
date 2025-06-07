@@ -502,4 +502,72 @@ router.get('/debug/:walletAddress', async (req, res) => {
   }
 });
 
+// Debug endpoint to check predictions data
+router.get('/debug-predictions', async (req, res) => {
+  try {
+    console.log('🔍 DEBUG: Checking predictions table...');
+    
+    // Check total predictions count
+    const totalPredictionsQuery = 'SELECT COUNT(*) as count FROM predictions';
+    const totalResult = await db.query(totalPredictionsQuery);
+    
+    // Check sample predictions with amounts
+    const samplePredictionsQuery = `
+      SELECT 
+        user_address,
+        market_address,
+        amount,
+        option_index,
+        created_at
+      FROM predictions 
+      ORDER BY created_at DESC 
+      LIMIT 10
+    `;
+    const sampleResult = await db.query(samplePredictionsQuery);
+    
+    // Check aggregated amounts by user
+    const userAggregateQuery = `
+      SELECT 
+        user_address,
+        COUNT(*) as prediction_count,
+        SUM(amount) as total_amount
+      FROM predictions 
+      GROUP BY user_address
+      ORDER BY total_amount DESC
+      LIMIT 10
+    `;
+    const aggregateResult = await db.query(userAggregateQuery);
+    
+    // Check if users exist for these addresses
+    const userCheckQuery = `
+      SELECT 
+        u.wallet_address,
+        u.username,
+        COUNT(p.id) as predictions_count,
+        SUM(p.amount) as total_invested
+      FROM users u
+      LEFT JOIN predictions p ON u.wallet_address = p.user_address
+      GROUP BY u.wallet_address, u.username
+      HAVING COUNT(p.id) > 0
+      ORDER BY total_invested DESC
+      LIMIT 10
+    `;
+    const userCheckResult = await db.query(userCheckQuery);
+    
+    res.json({
+      total_predictions: totalResult.rows[0].count,
+      sample_predictions: sampleResult.rows,
+      user_aggregates: aggregateResult.rows,
+      users_with_predictions: userCheckResult.rows,
+      debug_info: {
+        checked_at: new Date().toISOString(),
+        note: "If users_with_predictions is empty, predictions user_address doesn't match users wallet_address"
+      }
+    });
+  } catch (error) {
+    console.error('Error in predictions debug endpoint:', error);
+    res.status(500).json({ error: 'Failed to debug predictions data' });
+  }
+});
+
 module.exports = router; 

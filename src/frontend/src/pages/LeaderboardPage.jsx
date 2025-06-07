@@ -29,7 +29,7 @@ const LeaderboardPage = () => {
   const loadLeaderboardData = async () => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/leaderboard?sortBy=${sortBy}&timeframe=${timeframe}`
+        `https://apes-production.up.railway.app/api/leaderboard?sortBy=${sortBy}&timeframe=${timeframe}`
       );
       const data = await response.json();
       setLeaderboardData(data.leaderboard);
@@ -43,7 +43,7 @@ const LeaderboardPage = () => {
   const loadTopPerformers = async () => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/leaderboard/top-performers`
+        `https://apes-production.up.railway.app/api/leaderboard/top-performers`
       );
       const data = await response.json();
       setTopPerformers(data);
@@ -55,7 +55,7 @@ const LeaderboardPage = () => {
   const loadUserRank = async () => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/leaderboard/rank/${publicKey.toString()}`
+        `https://apes-production.up.railway.app/api/leaderboard/rank/${publicKey.toString()}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -69,7 +69,7 @@ const LeaderboardPage = () => {
   const loadEngagementLeaderboard = async () => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/engagement/leaderboard`
+        `https://apes-production.up.railway.app/api/engagement/leaderboard`
       );
       if (response.ok) {
         const data = await response.json();
@@ -83,7 +83,7 @@ const LeaderboardPage = () => {
   const loadTopEngagers = async () => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/engagement/leaderboard`
+        `https://apes-production.up.railway.app/api/engagement/leaderboard`
       );
       if (response.ok) {
         const data = await response.json();
