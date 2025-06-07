@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const db = require('./config/database');
-const blockchainSyncService = require('./services/blockchainSyncService');
 const polymarketSyncService = require('./services/polymarketSyncService');
 const BurnEventProcessor = require('./services/burnEventProcessor');
 
@@ -32,10 +31,6 @@ db.query('SELECT NOW()')
     console.error('Database connection error:', err);
   });
 
-// Start blockchain sync service
-console.log('Starting blockchain sync service...');
-blockchainSyncService.start();
-
 // Start burn event processor
 console.log('Starting burn event processor...');
 const burnEventProcessor = new BurnEventProcessor();
@@ -52,7 +47,6 @@ if (process.env.ENABLE_POLYMARKET_SYNC === 'true') {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
-  blockchainSyncService.stop();
   if (burnEventProcessor) {
     burnEventProcessor.stop();
   }

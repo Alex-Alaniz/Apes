@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Trophy, TrendingUp, Target, DollarSign, Medal, ChevronDown, RefreshCw, AlertCircle } from 'lucide-react';
+import { Trophy, TrendingUp, Target, DollarSign, Medal, ChevronDown } from 'lucide-react';
 import { FaXTwitter } from 'react-icons/fa6';
 
 const LeaderboardPage = () => {
@@ -16,17 +16,11 @@ const LeaderboardPage = () => {
   const [engagementLeaderboard, setEngagementLeaderboard] = useState([]);
   const [topEngagers, setTopEngagers] = useState([]);
   
-  // Sync status states
-  const [syncStatus, setSyncStatus] = useState(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
-
   useEffect(() => {
     loadLeaderboardData();
     loadTopPerformers();
     loadEngagementLeaderboard();
     loadTopEngagers();
-    loadSyncStatus();
     if (publicKey) {
       loadUserRank();
     }
@@ -100,55 +94,6 @@ const LeaderboardPage = () => {
     }
   };
 
-  const loadSyncStatus = async () => {
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/leaderboard/sync-status`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setSyncStatus(data.syncStatus);
-      }
-    } catch (error) {
-      console.error('Error loading sync status:', error);
-    }
-  };
-
-  const triggerSync = async () => {
-    setSyncing(true);
-    setSyncMessage('');
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/leaderboard/sync`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({}),
-        }
-      );
-      
-      const data = await response.json();
-      if (data.success) {
-        setSyncMessage('✅ Blockchain sync completed! Refreshing leaderboard...');
-        await loadSyncStatus();
-        await loadLeaderboardData();
-        await loadTopPerformers();
-        if (publicKey) {
-          await loadUserRank();
-        }
-      } else {
-        setSyncMessage(`❌ Sync failed: ${data.error}`);
-      }
-    } catch (error) {
-      console.error('Error triggering sync:', error);
-      setSyncMessage('❌ Error connecting to sync service');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   const navigateToProfile = (walletAddress) => {
     navigate(`/profile/${walletAddress}`);
   };
@@ -191,50 +136,6 @@ const LeaderboardPage = () => {
             Leaderboard
           </h1>
           <p className="text-gray-400">Compete with the best predictors on Solana</p>
-        </div>
-
-        {/* Sync Status and Controls */}
-        <div className="mb-6 bg-gray-900/50 backdrop-blur-xl rounded-xl p-4 border border-gray-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h3 className="text-white font-medium">Blockchain Sync Status</h3>
-              {syncStatus && (
-                <div className="text-sm text-gray-400">
-                  <span className="text-green-400">{syncStatus.totalPredictions}</span> positions tracked • 
-                  <span className="text-blue-400">{syncStatus.uniqueUsers}</span> users • 
-                  Last sync: <span className="text-purple-400">
-                    {syncStatus.lastSyncTime ? new Date(syncStatus.lastSyncTime).toLocaleString() : 'Never'}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-4">
-              {!syncStatus || syncStatus.totalPredictions === 0 ? (
-                <div className="flex items-center gap-2 text-yellow-400">
-                  <AlertCircle className="w-4 h-4" />
-                  <span className="text-sm">Data not synced</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-green-400">
-                  <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-                  <span className="text-sm">Synced</span>
-                </div>
-              )}
-              <button
-                onClick={triggerSync}
-                disabled={syncing}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-                {syncing ? 'Syncing...' : 'Sync Now'}
-              </button>
-            </div>
-          </div>
-          {syncMessage && (
-            <div className="mt-3 text-sm text-white bg-gray-800/50 rounded p-2">
-              {syncMessage}
-            </div>
-          )}
         </div>
 
         {/* User's Current Rank (if connected) */}
