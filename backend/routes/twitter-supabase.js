@@ -4,40 +4,21 @@ const supabase = require('../config/supabase');
 const engagementService = require('../services/engagementService');
 const crypto = require('crypto');
 
-// OAuth 1.0a helper functions
-function generateOAuthSignature(method, url, params, consumerSecret, tokenSecret = '') {
-  // Create parameter string
-  const sortedParams = Object.keys(params)
-    .sort()
-    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
-    .join('&');
-  
-  // Create signature base string
-  const signatureBaseString = `${method.toUpperCase()}&${encodeURIComponent(url)}&${encodeURIComponent(sortedParams)}`;
-  
-  // Create signing key
-  const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(tokenSecret)}`;
-  
-  // Generate signature
-  const signature = crypto.createHmac('sha1', signingKey).update(signatureBaseString).digest('base64');
-  
-  return signature;
-}
-
-function generateOAuthHeader(params) {
-  const oauthParams = Object.keys(params)
-    .filter(key => key.startsWith('oauth_'))
-    .sort()
-    .map(key => `${encodeURIComponent(key)}="${encodeURIComponent(params[key])}"`)
-    .join(', ');
-  
-  return `OAuth ${oauthParams}`;
-}
-
-// Store OAuth tokens temporarily (in production, use Redis or database)
+// Store OAuth states temporarily (in production, use Redis or database)
 const oauthStore = new Map();
 
-// Generate Twitter OAuth link (OAuth 1.0a Step 1: Request Token)
+// Helper function to generate code verifier and challenge for PKCE
+function generatePKCE() {
+  const codeVerifier = crypto.randomBytes(32).toString('base64url');
+  const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+  
+  return {
+    codeVerifier,
+    codeChallenge
+  };
+}
+
+// Generate Twitter OAuth 2.0 link (with PKCE)
 router.post('/auth/link', async (req, res) => {
   try {
     const userAddress = req.headers['x-wallet-address'];
@@ -63,67 +44,33 @@ router.post('/auth/link', async (req, res) => {
       }
     }
 
-    // Step 1: Obtain request token from X
-    const oauthParams = {
-      oauth_callback: process.env.TWITTER_CALLBACK_URL,
-      oauth_consumer_key: process.env.TWITTER_CLIENT_ID,
-      oauth_nonce: crypto.randomBytes(16).toString('hex'),
-      oauth_signature_method: 'HMAC-SHA1',
-      oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-      oauth_version: '1.0'
-    };
+    // Generate PKCE parameters
+    const { codeVerifier, codeChallenge } = generatePKCE();
+    const state = crypto.randomBytes(16).toString('hex');
 
-    // Generate signature for request token
-    const signature = generateOAuthSignature(
-      'POST',
-      'https://api.x.com/oauth/request_token',
-      oauthParams,
-      process.env.TWITTER_CLIENT_SECRET
-    );
-    
-    oauthParams.oauth_signature = signature;
-    
-    // Make request to X for request token
-    const requestTokenResponse = await fetch('https://api.x.com/oauth/request_token', {
-      method: 'POST',
-      headers: {
-        'Authorization': generateOAuthHeader(oauthParams),
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
-    });
-
-    if (!requestTokenResponse.ok) {
-      const errorText = await requestTokenResponse.text();
-      console.error('X request token error:', errorText);
-      throw new Error('Failed to get request token from X');
-    }
-
-    const requestTokenData = await requestTokenResponse.text();
-    const tokenParams = new URLSearchParams(requestTokenData);
-    
-    const oauthToken = tokenParams.get('oauth_token');
-    const oauthTokenSecret = tokenParams.get('oauth_token_secret');
-    const oauthCallbackConfirmed = tokenParams.get('oauth_callback_confirmed');
-
-    if (!oauthToken || !oauthTokenSecret || oauthCallbackConfirmed !== 'true') {
-      throw new Error('Invalid response from X request token');
-    }
-
-    // Store token data for callback
-    oauthStore.set(oauthToken, {
-      tokenSecret: oauthTokenSecret,
+    // Store state and code verifier for callback
+    oauthStore.set(state, {
+      codeVerifier,
       userAddress,
       timestamp: Date.now()
     });
 
-    // Step 2: Build authorization URL
-    const authUrl = `https://api.x.com/oauth/authenticate?oauth_token=${oauthToken}`;
+    // OAuth 2.0 authorization URL
+    const scopes = encodeURIComponent('users.read tweet.read offline.access');
+    const authUrl = `https://x.com/i/oauth2/authorize?` +
+      `response_type=code&` +
+      `client_id=${encodeURIComponent(process.env.TWITTER_CLIENT_ID)}&` +
+      `redirect_uri=${encodeURIComponent(process.env.TWITTER_CALLBACK_URL)}&` +
+      `scope=${scopes}&` +
+      `state=${encodeURIComponent(state)}&` +
+      `code_challenge=${encodeURIComponent(codeChallenge)}&` +
+      `code_challenge_method=S256`;
     
-    console.log('✅ Generated Twitter OAuth 1.0a URL for:', userAddress);
+    console.log('✅ Generated Twitter OAuth 2.0 URL for:', userAddress);
     
     res.json({
       auth_url: authUrl,
-      oauth_token: oauthToken,
+      state: state,
       debug_mode: false,
       message: 'Click the auth_url to connect your Twitter account'
     });
@@ -133,115 +80,90 @@ router.post('/auth/link', async (req, res) => {
   }
 });
 
-// Handle OAuth callback (OAuth 1.0a Step 3: Convert to Access Token)
+// Handle OAuth callback (OAuth 2.0 with PKCE)
 router.post('/auth/callback', async (req, res) => {
   try {
-    const { oauth_token, oauth_verifier } = req.body;
+    const { code, state } = req.body;
     
-    if (!oauth_token || !oauth_verifier) {
-      return res.status(400).json({ error: 'Missing oauth_token or oauth_verifier' });
+    if (!code || !state) {
+      return res.status(400).json({ error: 'Missing authorization code or state' });
     }
 
-    // Retrieve stored token data
-    const storedData = oauthStore.get(oauth_token);
+    // Retrieve stored state data
+    const storedData = oauthStore.get(state);
     if (!storedData) {
-      return res.status(400).json({ error: 'Invalid or expired oauth_token' });
+      return res.status(400).json({ error: 'Invalid or expired state parameter' });
     }
 
-    const { tokenSecret, userAddress } = storedData;
-    oauthStore.delete(oauth_token); // Clean up
+    const { codeVerifier, userAddress } = storedData;
+    oauthStore.delete(state); // Clean up
 
-    // Step 3: Exchange request token for access token
-    const accessTokenParams = {
-      oauth_consumer_key: process.env.TWITTER_CLIENT_ID,
-      oauth_nonce: crypto.randomBytes(16).toString('hex'),
-      oauth_signature_method: 'HMAC-SHA1',
-      oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-      oauth_token: oauth_token,
-      oauth_version: '1.0'
-    };
-
-    // Generate signature for access token request
-    const accessTokenSignature = generateOAuthSignature(
-      'POST',
-      'https://api.x.com/oauth/access_token',
-      accessTokenParams,
-      process.env.TWITTER_CLIENT_SECRET,
-      tokenSecret
-    );
-    
-    accessTokenParams.oauth_signature = accessTokenSignature;
-
-    // Request access token
-    const accessTokenResponse = await fetch('https://api.x.com/oauth/access_token', {
-      method: 'POST',
-      headers: {
-        'Authorization': generateOAuthHeader(accessTokenParams),
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: `oauth_verifier=${oauth_verifier}`
+    // Exchange authorization code for access token
+    const tokenParams = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: process.env.TWITTER_CALLBACK_URL,
+      code_verifier: codeVerifier,
+      client_id: process.env.TWITTER_CLIENT_ID
     });
 
-    if (!accessTokenResponse.ok) {
-      const errorData = await accessTokenResponse.text();
-      console.error('X access token exchange failed:', errorData);
-      return res.status(400).json({ error: 'Failed to exchange oauth_verifier' });
-    }
+    // For confidential clients, use Basic Auth header
+    const auth = Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64');
 
-    const accessTokenData = await accessTokenResponse.text();
-    const accessParams = new URLSearchParams(accessTokenData);
-    
-    const finalAccessToken = accessParams.get('oauth_token');
-    const finalAccessTokenSecret = accessParams.get('oauth_token_secret');
-    const userId = accessParams.get('user_id');
-    const screenName = accessParams.get('screen_name');
-
-    if (!finalAccessToken || !finalAccessTokenSecret || !userId || !screenName) {
-      throw new Error('Invalid access token response from X');
-    }
-
-    // For OAuth 1.0a, we can use the account/verify_credentials endpoint
-    // to get additional user info like follower count
-    const verifyParams = {
-      oauth_consumer_key: process.env.TWITTER_CLIENT_ID,
-      oauth_nonce: crypto.randomBytes(16).toString('hex'),
-      oauth_signature_method: 'HMAC-SHA1',
-      oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-      oauth_token: finalAccessToken,
-      oauth_version: '1.0'
-    };
-
-    const verifySignature = generateOAuthSignature(
-      'GET',
-      'https://api.x.com/1.1/account/verify_credentials.json',
-      verifyParams,
-      process.env.TWITTER_CLIENT_SECRET,
-      finalAccessTokenSecret
-    );
-    
-    verifyParams.oauth_signature = verifySignature;
-
-    // Get user details
-    const userResponse = await fetch('https://api.x.com/1.1/account/verify_credentials.json', {
+    const tokenResponse = await fetch('https://api.x.com/2/oauth2/token', {
+      method: 'POST',
       headers: {
-        'Authorization': generateOAuthHeader(verifyParams)
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${auth}`
+      },
+      body: tokenParams.toString()
+    });
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.text();
+      console.error('X token exchange failed:', errorData);
+      return res.status(400).json({ error: 'Failed to exchange authorization code' });
+    }
+
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
+
+    if (!accessToken) {
+      throw new Error('No access token received from X');
+    }
+
+    // Get user details using OAuth 2.0 API
+    const userResponse = await fetch('https://api.x.com/2/users/me?user.fields=public_metrics,username', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
       }
     });
 
-    let followers = 0;
-    if (userResponse.ok) {
-      const userData = await userResponse.json();
-      followers = userData.followers_count || 0;
+    if (!userResponse.ok) {
+      const errorData = await userResponse.text();
+      console.error('X user info request failed:', errorData);
+      return res.status(400).json({ error: 'Failed to get user information' });
     }
 
+    const userData = await userResponse.json();
+    const user = userData.data;
+
+    if (!user) {
+      throw new Error('No user data received from X');
+    }
+
+    const twitterId = user.id;
+    const username = user.username;
+    const followers = user.public_metrics?.followers_count || 0;
+
     // Link Twitter account
-    await linkTwitterAccount(userAddress, userId, screenName, followers);
+    await linkTwitterAccount(userAddress, twitterId, username, followers);
 
     res.json({
       success: true,
       message: 'Twitter account linked successfully',
-      twitter_id: userId,
-      twitter_username: screenName,
+      twitter_id: twitterId,
+      twitter_username: username,
       followers: followers
     });
 
