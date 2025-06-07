@@ -774,7 +774,7 @@ router.post('/create-from-poly/:polyId', async (req, res) => {
   }
 });
 
-// Get all cached markets
+// GET /api/markets/cache
 router.get('/cache', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -814,95 +814,6 @@ router.get('/by-poly-id/:polyId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching market by poly_id:', error);
     res.status(500).json({ error: 'Failed to fetch market' });
-  }
-});
-
-// Save market data (for caching)
-router.post('/cache', async (req, res) => {
-  try {
-    const marketData = req.body;
-    
-    // Validate required fields
-    if (!marketData.market_address || !marketData.poly_id) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: market_address and poly_id are required' 
-      });
-    }
-    
-    // Upsert into markets_cache table
-    const { data, error } = await supabase
-      .from('markets_cache')
-      .upsert({
-        market_address: marketData.market_address,
-        poly_id: marketData.poly_id,
-        apechain_market_id: marketData.apechain_market_id,
-        question: marketData.question,
-        category: marketData.category,
-        options: marketData.options,
-        assets: marketData.assets,
-        options_metadata: marketData.options_metadata,
-        status: marketData.status || 'Active',
-        end_time: marketData.end_time,
-        transaction_hash: marketData.transaction_hash,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'poly_id'
-      })
-      .select()
-      .single();
-    
-    if (error) throw error;
-    
-    // Also insert into main markets table if needed
-    try {
-      await db.query(`
-        INSERT INTO markets (
-          market_address,
-          creator,
-          question,
-          description,
-          category,
-          resolution_date,
-          status,
-          options,
-          poly_id,
-          apechain_market_id,
-          assets,
-          options_metadata,
-          created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
-        ON CONFLICT (market_address) DO UPDATE SET
-          poly_id = EXCLUDED.poly_id,
-          apechain_market_id = EXCLUDED.apechain_market_id,
-          assets = EXCLUDED.assets,
-          options_metadata = EXCLUDED.options_metadata
-      `, [
-        marketData.market_address,
-        marketData.creator || 'system',
-        marketData.question,
-        marketData.question, // Use question as description
-        marketData.category,
-        marketData.end_time,
-        marketData.status || 'Active',
-        marketData.options,
-        marketData.poly_id,
-        marketData.apechain_market_id,
-        JSON.stringify(marketData.assets),
-        JSON.stringify(marketData.options_metadata)
-      ]);
-    } catch (dbError) {
-      console.error('Error inserting into main markets table:', dbError);
-      // Don't fail the request if main table insert fails
-    }
-    
-    res.json({ 
-      success: true, 
-      data: data,
-      message: 'Market cached successfully' 
-    });
-  } catch (error) {
-    console.error('Error caching market:', error);
-    res.status(500).json({ error: 'Failed to cache market' });
   }
 });
 
@@ -1306,6 +1217,224 @@ router.post('/update-participant', async (req, res) => {
   }
 });
 
+// POST /api/markets - Create new manually created market (from CreateMarketPage)
+router.post('/', async (req, res) => {
+  try {
+    console.log('📝 Creating new manually created market...');
+    
+    const {
+      market_address,
+      question,
+      category,
+      options,
+      end_time,
+      creator_address,
+      transaction_hash,
+      status = 'Active'
+    } = req.body;
 
+    const walletAddress = req.headers['x-wallet-address'];
+    
+    // Validate required fields
+    if (!market_address || !question || !options || !Array.isArray(options)) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: market_address, question, options' 
+      });
+    }
+
+    // Ensure we have a creator
+    const creator = creator_address || walletAddress || 'unknown';
+    
+    console.log('Market creation data:', {
+      market_address,
+      question: question?.substring(0, 50),
+      category,
+      options: options.length,
+      creator
+    });
+
+    // Initialize option volumes array (all zeros)
+    const optionVolumes = options.map(() => 0);
+
+    const insertQuery = `
+      INSERT INTO markets (
+        market_address,
+        creator,
+        question,
+        description,
+        category,
+        resolution_date,
+        status,
+        options,
+        min_bet,
+        option_volumes,
+        total_volume,
+        poly_id,
+        created_at,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+      ON CONFLICT (market_address) DO UPDATE SET
+        question = EXCLUDED.question,
+        category = EXCLUDED.category,
+        options = EXCLUDED.options,
+        updated_at = NOW()
+      RETURNING *
+    `;
+
+    const result = await db.query(insertQuery, [
+      market_address,
+      creator,
+      question,
+      question, // use question as description
+      category || 'General',
+      end_time ? new Date(end_time) : null,
+      status,
+      options, // PostgreSQL array format
+      10, // default min_bet
+      optionVolumes,
+      0, // initial total_volume
+      `user-created-${Date.now()}` // unique poly_id for manually created markets
+    ]);
+
+    const market = result.rows[0];
+    console.log('✅ User-created market saved to database:', {
+      market_address: market.market_address,
+      question: market.question?.substring(0, 50),
+      creator: market.creator,
+      poly_id: market.poly_id
+    });
+
+    // Also try to save to markets_cache for immediate visibility
+    try {
+      await db.query(`
+        INSERT INTO markets_cache (
+          market_pubkey,
+          question,
+          category,
+          status,
+          options,
+          created_at,
+          updated_at
+        ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+        ON CONFLICT (market_pubkey) DO UPDATE SET
+          question = EXCLUDED.question,
+          category = EXCLUDED.category,
+          options = EXCLUDED.options,
+          updated_at = NOW()
+      `, [
+        market_address,
+        question,
+        category || 'General',
+        status,
+        options
+      ]);
+      console.log('✅ Market also saved to cache for immediate visibility');
+    } catch (cacheError) {
+      console.warn('⚠️ Failed to save to markets_cache (table may not exist):', cacheError.message);
+      // Continue execution even if cache save fails
+    }
+
+    res.json({
+      success: true,
+      market,
+      message: 'Market created successfully and will appear on markets page'
+    });
+  } catch (error) {
+    console.error('❌ Error creating manually created market:', error);
+    res.status(500).json({ 
+      error: 'Failed to create market', 
+      details: error.message 
+    });
+  }
+});
+
+// POST /api/markets/cache - Cache market data
+router.post('/cache', async (req, res) => {
+  try {
+    const marketData = req.body;
+    
+    // Validate required fields
+    if (!marketData.market_address || !marketData.poly_id) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: market_address and poly_id are required' 
+      });
+    }
+    
+    // Upsert into markets_cache table
+    const { data, error } = await supabase
+      .from('markets_cache')
+      .upsert({
+        market_address: marketData.market_address,
+        poly_id: marketData.poly_id,
+        apechain_market_id: marketData.apechain_market_id,
+        question: marketData.question,
+        category: marketData.category,
+        options: marketData.options,
+        assets: marketData.assets,
+        options_metadata: marketData.options_metadata,
+        status: marketData.status || 'Active',
+        end_time: marketData.end_time,
+        transaction_hash: marketData.transaction_hash,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'poly_id'
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    // Also insert into main markets table if needed
+    try {
+      await db.query(`
+        INSERT INTO markets (
+          market_address,
+          creator,
+          question,
+          description,
+          category,
+          resolution_date,
+          status,
+          options,
+          poly_id,
+          apechain_market_id,
+          assets,
+          options_metadata,
+          created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+        ON CONFLICT (market_address) DO UPDATE SET
+          poly_id = EXCLUDED.poly_id,
+          apechain_market_id = EXCLUDED.apechain_market_id,
+          assets = EXCLUDED.assets,
+          options_metadata = EXCLUDED.options_metadata
+      `, [
+        marketData.market_address,
+        marketData.creator || 'system',
+        marketData.question,
+        marketData.question, // Use question as description
+        marketData.category,
+        marketData.end_time,
+        marketData.status || 'Active',
+        marketData.options,
+        marketData.poly_id,
+        marketData.apechain_market_id,
+        JSON.stringify(marketData.assets),
+        JSON.stringify(marketData.options_metadata)
+      ]);
+    } catch (dbError) {
+      console.error('Error inserting into main markets table:', dbError);
+      // Don't fail the request if main table insert fails
+    }
+    
+    res.json({ 
+      success: true, 
+      data: data,
+      message: 'Market cached successfully' 
+    });
+  } catch (error) {
+    console.error('Error caching market:', error);
+    res.status(500).json({ error: 'Failed to cache market' });
+  }
+});
 
 module.exports = router; 
