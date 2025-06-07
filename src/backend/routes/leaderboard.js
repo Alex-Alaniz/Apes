@@ -69,6 +69,35 @@ router.get('/setup-columns', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     console.log('📊 Getting leaderboard...');
+    
+    // Auto-setup total_invested column if needed
+    try {
+      console.log('🔧 Ensuring total_invested column exists...');
+      await db.query(`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS total_invested NUMERIC(20, 6) DEFAULT 0
+      `);
+      
+      // Calculate and update total_invested for all users (only if they're currently 0)
+      const updateQuery = `
+        UPDATE users 
+        SET total_invested = COALESCE(
+          (SELECT SUM(CAST(amount AS NUMERIC)) 
+           FROM predictions 
+           WHERE user_address = users.wallet_address), 
+          0
+        )
+        WHERE COALESCE(total_invested, 0) = 0
+      `;
+      
+      const updateResult = await db.query(updateQuery);
+      if (updateResult.rowCount > 0) {
+        console.log(`🔧 Updated ${updateResult.rowCount} users with total_invested amounts`);
+      }
+    } catch (setupError) {
+      console.log('⚠️ Setup warning:', setupError.message);
+    }
+    
     const sortBy = req.query.sortBy || 'points';
     
     let orderClause;
@@ -115,6 +144,12 @@ router.get('/', async (req, res) => {
     const result = await db.query(query);
     
     console.log(`📊 Found ${result.rows.length} users for leaderboard`);
+    
+    // Log first user for debugging
+    if (result.rows.length > 0) {
+      const topUser = result.rows[0];
+      console.log(`📊 Top user: ${topUser.wallet_address.substring(0, 8)}... - ${topUser.total_invested} APES`);
+    }
     
     res.json({
       leaderboard: result.rows,
