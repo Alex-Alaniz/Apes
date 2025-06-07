@@ -102,7 +102,7 @@ class BelieveApiService {
             'x-believe-api-key': this.apiKey,
             'x-idempotency-key': idempotencyKey
           },
-          timeout: 60000 // 60 second timeout (Believe API can be slow)
+          timeout: 15000 // 15 second timeout (faster failure detection)
         }
       );
 
@@ -167,7 +167,7 @@ class BelieveApiService {
          console.error('- Consider this a "pending" state rather than failed');
          return { 
            success: false, 
-           message: 'Believe API timeout (60s) - Request may still be processing',
+           message: 'Believe API timeout (15s) - Request may still be processing',
            error: 'TIMEOUT',
            isPending: true
          };

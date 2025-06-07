@@ -18,8 +18,8 @@ const RPC_ENDPOINTS = {
     'https://devnet.helius-rpc.com',  // Helius public
   ],
   mainnet: [
-    'https://solana-mainnet.g.alchemy.com/v2/LB4s_CFb80irvbKFWL6qN',  // Alchemy (primary) - Higher rate limits
-    'https://mainnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d',  // Helius (backup)
+    'https://mainnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d',  // Helius (primary) - Supports both RPC and WebSocket
+    'https://solana-mainnet.g.alchemy.com/v2/LB4s_CFb80irvbKFWL6qN',  // Alchemy (backup) - HTTPS only
     'https://api.mainnet-beta.solana.com',  // Public RPC (fallback)
   ]
 };
@@ -31,8 +31,8 @@ const WS_ENDPOINTS = {
     'wss://devnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d',
   ],
   mainnet: [
-    'wss://api.mainnet-beta.solana.com',  // Public WebSocket (primary) - No rate limits
-    'wss://mainnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d',  // Helius (backup)
+    'wss://mainnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d',  // Helius (primary) - Matches RPC endpoint
+    'wss://api.mainnet-beta.solana.com',  // Public WebSocket (backup) - No rate limits
   ]
 };
 
@@ -127,4 +127,6 @@ export const getConnectionConfig = () => {
     confirmTransactionInitialTimeout: config.confirmTransactionInitialTimeout || 30000,
     wsEndpoint: config.wsUrl,
   };
-}; 
+};
+
+ 

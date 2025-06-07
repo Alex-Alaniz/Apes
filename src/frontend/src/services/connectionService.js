@@ -1,11 +1,12 @@
 import { Connection } from '@solana/web3.js';
-import { getAllRpcUrls, config } from '../config/solana';
+import { getAllRpcUrls, getAllWsUrls, config } from '../config/solana';
 
 class ConnectionService {
   constructor() {
     this._connection = null;
     this._currentRpcIndex = 0;
     this._rpcUrls = getAllRpcUrls();
+    this._wsUrls = getAllWsUrls();
     this._lastConnectionTime = 0;
     this._connectionTimeout = 30000; // 30 seconds
   }
@@ -17,21 +18,19 @@ class ConnectionService {
     // Create new connection if none exists or if it's been too long
     if (!this._connection || (now - this._lastConnectionTime) > this._connectionTimeout) {
       const rpcUrl = this._rpcUrls[this._currentRpcIndex];
+      const wsUrl = this._wsUrls[this._currentRpcIndex];
       console.log(`Creating connection to: ${rpcUrl}`);
-      
-      // Simplified WebSocket configuration - disable WebSocket to avoid errors
-      console.log(`📡 Using HTTP-only connection (no WebSocket) for: ${rpcUrl}`);
+      console.log(`📡 Using WebSocket endpoint: ${wsUrl}`);
       
       this._connection = new Connection(rpcUrl, {
         commitment: 'confirmed',
-        confirmTransactionInitialTimeout: 60000, // 60 seconds
-        // Removed wsEndpoint to use HTTP-only mode (more reliable)
+        confirmTransactionInitialTimeout: 15000, // 15 seconds (faster)
+        wsEndpoint: wsUrl, // Enable WebSocket for real-time updates
         httpHeaders: {
           'solana-client': 'solana-prediction-market'
         },
-        // Disable WebSocket subscriptions to prevent errors
         disableRetryOnRateLimit: false,
-        fetch: fetch // Use standard fetch for HTTP requests
+        fetch: fetch
       });
       
       this._lastConnectionTime = now;
