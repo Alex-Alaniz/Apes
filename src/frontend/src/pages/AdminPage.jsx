@@ -64,11 +64,17 @@ const AdminPage = () => {
     try {
       // Call admin-specific endpoint to get ALL markets (including resolved)
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${apiUrl}/api/admin/markets`, {
+      
+      // Add cache busting for admin refresh to force fresh data
+      const cacheBuster = Date.now();
+      
+      const response = await fetch(`${apiUrl}/api/admin/markets?t=${cacheBuster}`, {
         headers: {
           'Content-Type': 'application/json',
           'X-Wallet-Address': publicKey.toString(),
-          'Cache-Control': 'max-age=30' // Allow 30 second cache to reduce requests
+          'Cache-Control': 'no-cache, no-store, must-revalidate', // Force refresh for admin
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
       });
       

@@ -53,7 +53,7 @@ class BlockchainMarketsService {
         { commitment: 'confirmed' }
       );
       
-      this.program = new Program(MARKET_IDL, new PublicKey(PROGRAM_ID), provider);
+      this.program = new Program(MARKET_IDL, PROGRAM_ID, provider);
       console.log('✅ Blockchain markets service initialized');
       return true;
     } catch (error) {
@@ -115,7 +115,7 @@ class BlockchainMarketsService {
       console.log('🔍 Fetching markets via direct RPC...');
       
       // Get all program accounts
-      const accounts = await this.connection.getProgramAccounts(new PublicKey(PROGRAM_ID), {
+      const accounts = await this.connection.getProgramAccounts(PROGRAM_ID, {
         filters: [
           {
             dataSize: 1000, // Approximate size filter for market accounts

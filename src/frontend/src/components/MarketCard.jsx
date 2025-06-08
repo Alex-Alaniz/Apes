@@ -51,27 +51,18 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
   const [userPositions, setUserPositions] = useState([]);
   const [loadingPosition, setLoadingPosition] = useState(false);
   
-  // Fetch user positions when component mounts or wallet changes
+  // DISABLED: Individual position fetching to prevent rate limiting
+  // Use positions passed from parent component instead
   useEffect(() => {
-    const fetchUserPositions = async () => {
-      if (!publicKey) {
-        setUserPositions([]);
-        return;
-      }
-      
-      setLoadingPosition(true);
-      try {
-        const positions = await marketService.getUserPositionsForMarket(publicKey, market.publicKey);
-        setUserPositions(positions);
-      } catch (error) {
-        console.error('Error fetching user positions:', error);
-      } finally {
-        setLoadingPosition(false);
-      }
-    };
+    if (!publicKey) {
+      setUserPositions([]);
+      return;
+    }
     
-    fetchUserPositions();
-  }, [publicKey, market.publicKey]);
+    // Use positions from props if available, otherwise empty array
+    const marketPositions = userPositionsFromProps?.[market.publicKey] || [];
+    setUserPositions(marketPositions);
+  }, [publicKey, market.publicKey, userPositionsFromProps]);
   
   const handleViewDetails = () => {
     navigate(`/markets/${market.publicKey}`);

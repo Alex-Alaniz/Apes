@@ -36,8 +36,8 @@ const MarketsPage = () => {
       loadUserPositions();
     }
     
-    // Initialize blockchain service
-    blockchainMarketsService.initialize();
+    // DISABLED: Initialize blockchain service (was causing rate limit issues)
+    // blockchainMarketsService.initialize();
     
     loadMarkets();
   }, [wallet, connected, publicKey]);

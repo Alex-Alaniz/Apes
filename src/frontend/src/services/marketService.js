@@ -1343,15 +1343,12 @@ class MarketService {
       
       const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       
-      // Add cache busting to ensure fresh data
-      const cacheBuster = `?t=${Date.now()}&r=${Math.random()}`;
-      const response = await fetch(`${backendUrl}/api/predictions/user/${userAddress}${cacheBuster}`, {
+      // Use simpler cache control to prevent rate limiting
+      const response = await fetch(`${backendUrl}/api/predictions/user/${userAddress}`, {
         headers: {
           'Content-Type': 'application/json',
           'x-wallet-address': userAddress,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
+          'Cache-Control': 'max-age=30' // Allow 30 second cache
         }
       });
       
