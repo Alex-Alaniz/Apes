@@ -102,7 +102,9 @@ const ProfilePage = () => {
       console.log('🔄 Profile: Ensuring user exists for', publicKey?.toString());
       
       // Create or get user - with better error handling
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/users/create-or-get`, {
+      const API_URL = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+      console.log('🔧 Profile: Using API URL for user creation:', API_URL);
+      const response = await fetch(`${API_URL}/api/users/create-or-get`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,27 +141,51 @@ const ProfilePage = () => {
     setLoading(true);
     try {
       console.log('✅ Profile: Starting data load...');
+      const API_URL = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+      console.log('🔧 Profile: Using API URL:', API_URL);
+      console.log('🔧 Profile: Wallet address:', publicKey.toString());
       
-      // Fetch user profile and stats
-      const [userResponse, statsResponse] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/users/${publicKey.toString()}`, {
+      // Fetch user profile, stats, and betting history
+      const [userResponse, statsResponse, betsResponse] = await Promise.all([
+        fetch(`${API_URL}/api/users/${publicKey.toString()}`, {
           headers: { 'x-wallet-address': publicKey.toString() }
         }),
-        fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/users/${publicKey.toString()}/stats`, {
+        fetch(`${API_URL}/api/users/${publicKey.toString()}/stats`, {
+          headers: { 'x-wallet-address': publicKey.toString() }
+        }),
+        fetch(`${API_URL}/api/users/${publicKey.toString()}/bets?limit=20`, {
           headers: { 'x-wallet-address': publicKey.toString() }
         })
       ]);
 
+      console.log('🔍 Profile: API responses:', {
+        userStatus: userResponse.status,
+        statsStatus: statsResponse.status,
+        betsStatus: betsResponse.status
+      });
+
       if (userResponse.ok) {
         const userData = await userResponse.json();
         setUserProfile(userData);
-        console.log('✅ Profile: User data loaded');
+        console.log('✅ Profile: User data loaded:', userData);
+      } else {
+        console.error('❌ Profile: User data failed:', userResponse.status, await userResponse.text());
       }
 
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
         setUserStats(statsData);
-        console.log('✅ Profile: Stats loaded');
+        console.log('✅ Profile: Stats loaded:', statsData);
+      } else {
+        console.error('❌ Profile: Stats failed:', statsResponse.status, await statsResponse.text());
+      }
+
+      if (betsResponse.ok) {
+        const betsData = await betsResponse.json();
+        setBetHistory(betsData.bets || []);
+        console.log('✅ Profile: Betting history loaded:', betsData.bets?.length || 0, 'bets');
+      } else {
+        console.error('❌ Profile: Betting history failed:', betsResponse.status, await betsResponse.text());
       }
 
       // Fetch markets with timeout
@@ -250,8 +276,8 @@ const ProfilePage = () => {
 
     setSavingUsername(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const endpoint = `${apiUrl}/api/users/update-username`;
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+      const endpoint = `${apiUrl}/api/users/${publicKey.toString()}/username`;
       
       console.log('Making username update request to:', endpoint);
       console.log('Request headers:', {
