@@ -851,11 +851,26 @@ const AdminMarketDeploymentPage = () => {
               
               {/* Success message when fully initialized */}
               {platformInitialized === true && accessControlInitialized === true && (
-                <div className="mt-3 p-3 bg-green-900/20 border border-green-600/30 rounded-lg">
-                  <p className="text-green-300 text-sm flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" />
-                    Platform is fully initialized! You can now deploy markets.
-                  </p>
+                <div className="mt-3 space-y-3">
+                  <div className="p-3 bg-green-900/20 border border-green-600/30 rounded-lg">
+                    <p className="text-green-300 text-sm flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4" />
+                      Platform is fully initialized! You can now deploy markets.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-yellow-300 text-sm font-medium">Expected Phantom Warning</p>
+                        <p className="text-yellow-300/80 text-xs mt-1">
+                          When deploying markets, Phantom may show a warning about "malicious dApp" or "pre-signed transactions". 
+                          This is expected because market creation requires multiple signatures (your wallet + new market account). 
+                          <strong className="text-yellow-200"> It is safe to proceed</strong> - click "Proceed anyway (unsafe)" if prompted.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
