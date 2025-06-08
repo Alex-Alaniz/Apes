@@ -782,11 +782,32 @@ class MarketService {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = walletPubkey;
       
-      // Sign with market keypair first (partial sign)
-      transaction.partialSign(market);
+      // FIXED: Use Phantom's signAllTransactions for multiple signers
+      // This avoids the warning from signAndSendTransaction with pre-signed transactions
+      // 
+      // Background: Market creation requires TWO signatures:
+      // 1. The user's wallet (via Phantom) - to authorize the transaction
+      // 2. The market keypair - because Solana requires new accounts to sign their creation
+      //
+      // Phantom's signAndSendTransaction requires unsigned transactions, so we use
+      // signAllTransactions instead, which allows us to handle multiple signers properly.
       
-      // Use Phantom's recommended signAndSendTransaction method
-      const { signature: tx } = await this.wallet.signAndSendTransaction(transaction);
+      // Create a version for Phantom to sign (without market signature)
+      const userTransaction = new Transaction().add(instruction);
+      userTransaction.recentBlockhash = blockhash;
+      userTransaction.feePayer = walletPubkey;
+      
+      // Have Phantom sign the transaction
+      const [signedByUser] = await this.wallet.signAllTransactions([userTransaction]);
+      
+      // Add the market keypair signature
+      signedByUser.partialSign(market);
+      
+      // Send the fully signed transaction
+      const tx = await this.connection.sendRawTransaction(signedByUser.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: 'processed'
+      });
 
       console.log('Transaction sent:', tx);
       
