@@ -1081,6 +1081,318 @@ router.get('/deployed-markets', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Scan all onchain markets and compare with database status
+router.get('/blockchain-markets-audit', authenticateAdmin, async (req, res) => {
+  try {
+    console.log('🔍 Starting comprehensive blockchain markets audit...');
+    
+    // Import Solana modules
+    const { Connection, PublicKey } = require('@solana/web3.js');
+    const liveMarketSync = require('../services/liveMarketSyncService');
+    
+    // Get network config
+    const NETWORK = process.env.VITE_SOLANA_NETWORK || process.env.SOLANA_NETWORK || 'devnet';
+    const NETWORK_CONFIG = {
+      devnet: {
+        programId: "F3cFKHXtoYeTnKE6hd7iy21oAZFGyz7dm2WQKS31M46Y",
+        rpcUrl: "https://api.devnet.solana.com"
+      },
+      mainnet: {
+        programId: "APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS", 
+        rpcUrl: process.env.SOLANA_RPC_URL || "https://solana-mainnet.g.alchemy.com/v2/LB4s_CFb80irvbKFWL6qN"
+      }
+    };
+    
+    const config = NETWORK_CONFIG[NETWORK] || NETWORK_CONFIG['mainnet'];
+    const PROGRAM_ID = config.programId;
+    const RPC_ENDPOINT = config.rpcUrl;
+    
+    console.log(`🌐 Scanning ${NETWORK} network (Program ID: ${PROGRAM_ID})`);
+    
+    if (!PROGRAM_ID) {
+      return res.status(500).json({ 
+        error: 'Program ID not configured for network',
+        network: NETWORK
+      });
+    }
+    
+    const connection = new Connection(RPC_ENDPOINT, 'confirmed');
+    const programId = new PublicKey(PROGRAM_ID);
+    
+    // 1. Get ALL market accounts from blockchain
+    console.log('🔎 Fetching all market accounts from blockchain...');
+    const marketAccounts = await connection.getProgramAccounts(programId, {
+      filters: [
+        {
+          dataSize: 1000 // Approximate market account size - adjust if needed
+        }
+      ]
+    });
+    
+    console.log(`📊 Found ${marketAccounts.length} accounts on blockchain`);
+    
+    // 2. Get all markets from database
+    const dbQuery = `SELECT market_address, question, status, resolved_option FROM markets ORDER BY created_at DESC`;
+    const dbResult = await db.query(dbQuery);
+    const dbMarkets = dbResult.rows;
+    
+    console.log(`💾 Found ${dbMarkets.length} markets in database`);
+    
+    // 3. Process each blockchain market
+    const blockchainMarkets = [];
+    const errors = [];
+    
+    for (const { pubkey, account } of marketAccounts) {
+      try {
+        const marketAddress = pubkey.toString();
+        console.log(`🔍 Processing blockchain market: ${marketAddress}`);
+        
+        // Deserialize market data
+        const marketData = liveMarketSync.deserializeMarketAccount(account.data);
+        
+        // Find corresponding database entry
+        const dbMatch = dbMarkets.find(m => m.market_address === marketAddress);
+        
+        const blockchainMarket = {
+          market_address: marketAddress,
+          blockchain_status: marketData.status,
+          blockchain_question: marketData.question?.substring(0, 100),
+          blockchain_winning_option: marketData.winningOption,
+          blockchain_option_count: marketData.optionCount,
+          blockchain_options: marketData.options,
+          database_exists: !!dbMatch,
+          database_status: dbMatch?.status || 'NOT_FOUND',
+          database_question: dbMatch?.question?.substring(0, 100) || 'NOT_FOUND',
+          database_resolved_option: dbMatch?.resolved_option || null,
+          status_mismatch: dbMatch ? (marketData.status !== dbMatch.status) : true,
+          needs_sync: dbMatch ? (marketData.status === 'Resolved' && dbMatch.status !== 'Resolved') : false
+        };
+        
+        blockchainMarkets.push(blockchainMarket);
+        
+      } catch (error) {
+        errors.push({
+          market_address: pubkey.toString(),
+          error: error.message
+        });
+        console.error(`❌ Error processing ${pubkey.toString()}:`, error);
+      }
+    }
+    
+    // 4. Find database-only markets (not on blockchain)
+    const blockchainAddresses = blockchainMarkets.map(m => m.market_address);
+    const databaseOnlyMarkets = dbMarkets.filter(db => !blockchainAddresses.includes(db.market_address));
+    
+    // 5. Generate summary
+    const summary = {
+      total_blockchain_markets: blockchainMarkets.length,
+      total_database_markets: dbMarkets.length,
+      database_only_markets: databaseOnlyMarkets.length,
+      blockchain_resolved: blockchainMarkets.filter(m => m.blockchain_status === 'Resolved').length,
+      blockchain_active: blockchainMarkets.filter(m => m.blockchain_status === 'Active').length,
+      status_mismatches: blockchainMarkets.filter(m => m.status_mismatch).length,
+      needs_sync: blockchainMarkets.filter(m => m.needs_sync).length,
+      errors: errors.length
+    };
+    
+    console.log('📈 Blockchain Markets Audit Summary:', summary);
+    
+    res.json({
+      success: true,
+      network: NETWORK,
+      program_id: PROGRAM_ID,
+      summary,
+      blockchain_markets: blockchainMarkets,
+      database_only_markets: databaseOnlyMarkets.map(m => ({
+        market_address: m.market_address,
+        question: m.question?.substring(0, 100),
+        status: m.status,
+        resolved_option: m.resolved_option
+      })),
+      errors,
+      recommendations: {
+        resolved_markets_to_sync: blockchainMarkets.filter(m => m.needs_sync),
+        database_cleanup_candidates: databaseOnlyMarkets.filter(m => m.status === 'Active')
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in blockchain markets audit:', error);
+    res.status(500).json({ 
+      error: 'Failed to audit blockchain markets',
+      details: error.message 
+    });
+  }
+});
+
+// Batch sync all resolved markets from blockchain to database
+router.post('/batch-sync-resolved-markets', authenticateAdmin, async (req, res) => {
+  try {
+    console.log('🔄 Starting batch sync of resolved markets...');
+    
+    // Import the live market sync service
+    const liveMarketSync = require('../services/liveMarketSyncService');
+    
+    // First, run the audit to find markets that need syncing
+    const { Connection, PublicKey } = require('@solana/web3.js');
+    
+    // Get network config
+    const NETWORK = process.env.VITE_SOLANA_NETWORK || process.env.SOLANA_NETWORK || 'devnet';
+    const NETWORK_CONFIG = {
+      devnet: {
+        programId: "F3cFKHXtoYeTnKE6hd7iy21oAZFGyz7dm2WQKS31M46Y",
+        rpcUrl: "https://api.devnet.solana.com"
+      },
+      mainnet: {
+        programId: "APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS", 
+        rpcUrl: process.env.SOLANA_RPC_URL || "https://solana-mainnet.g.alchemy.com/v2/LB4s_CFb80irvbKFWL6qN"
+      }
+    };
+    
+    const config = NETWORK_CONFIG[NETWORK] || NETWORK_CONFIG['mainnet'];
+    const PROGRAM_ID = config.programId;
+    
+    if (!PROGRAM_ID) {
+      return res.status(500).json({ 
+        error: 'Program ID not configured for network',
+        network: NETWORK
+      });
+    }
+    
+    const connection = new Connection(config.rpcUrl, 'confirmed');
+    const programId = new PublicKey(PROGRAM_ID);
+    
+    // Get all blockchain markets
+    console.log('🔎 Finding markets that need syncing...');
+    const marketAccounts = await connection.getProgramAccounts(programId, {
+      filters: [
+        {
+          dataSize: 1000 // Approximate market account size
+        }
+      ]
+    });
+    
+    // Get database markets
+    const dbQuery = `SELECT market_address, question, status FROM markets`;
+    const dbResult = await db.query(dbQuery);
+    const dbMarkets = dbResult.rows;
+    
+    // Find markets that are resolved on blockchain but active in database
+    const marketsToSync = [];
+    const errors = [];
+    
+    for (const { pubkey, account } of marketAccounts) {
+      try {
+        const marketAddress = pubkey.toString();
+        const marketData = liveMarketSync.deserializeMarketAccount(account.data);
+        const dbMatch = dbMarkets.find(m => m.market_address === marketAddress);
+        
+        // Check if this market needs syncing
+        if (dbMatch && marketData.status === 'Resolved' && dbMatch.status !== 'Resolved') {
+          marketsToSync.push({
+            market_address: marketAddress,
+            blockchain_status: marketData.status,
+            database_status: dbMatch.status,
+            blockchain_winning_option: marketData.winningOption,
+            question: marketData.question?.substring(0, 100)
+          });
+        }
+      } catch (error) {
+        console.error(`❌ Error checking market ${pubkey.toString()}:`, error);
+        errors.push({
+          market_address: pubkey.toString(),
+          error: error.message
+        });
+      }
+    }
+    
+    console.log(`🎯 Found ${marketsToSync.length} markets that need syncing`);
+    
+    if (marketsToSync.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No markets need syncing - all are already in sync!',
+        markets_checked: marketAccounts.length,
+        database_markets: dbMarkets.length,
+        already_synced: 0,
+        errors: errors.length
+      });
+    }
+    
+    // Sync each market
+    const syncResults = [];
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const market of marketsToSync) {
+      try {
+        console.log(`🔄 Syncing ${market.market_address}...`);
+        
+        const syncResult = await liveMarketSync.syncMarketResolutionStatus(market.market_address);
+        
+        if (syncResult.success && syncResult.wasResolved) {
+          successCount++;
+          console.log(`✅ Successfully synced ${market.market_address}`);
+          syncResults.push({
+            market_address: market.market_address,
+            question: market.question,
+            status: 'success',
+            winning_option: syncResult.winningOption,
+            message: 'Synced successfully'
+          });
+        } else {
+          errorCount++;
+          console.error(`❌ Failed to sync ${market.market_address}:`, syncResult.error);
+          syncResults.push({
+            market_address: market.market_address,
+            question: market.question,
+            status: 'error',
+            error: syncResult.error || 'Unknown error',
+            message: 'Sync failed'
+          });
+        }
+        
+        // Add a small delay to avoid overwhelming the RPC
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (error) {
+        errorCount++;
+        console.error(`❌ Exception syncing ${market.market_address}:`, error);
+        syncResults.push({
+          market_address: market.market_address,
+          question: market.question,
+          status: 'error',
+          error: error.message,
+          message: 'Exception during sync'
+        });
+      }
+    }
+    
+    console.log(`🎯 Batch sync completed: ${successCount} successful, ${errorCount} errors`);
+    
+    res.json({
+      success: true,
+      message: `Batch sync completed: ${successCount} markets synced successfully`,
+      network: NETWORK,
+      summary: {
+        total_found: marketsToSync.length,
+        successful_syncs: successCount,
+        failed_syncs: errorCount,
+        processing_errors: errors.length
+      },
+      sync_results: syncResults,
+      processing_errors: errors
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in batch sync:', error);
+    res.status(500).json({ 
+      error: 'Failed to batch sync resolved markets',
+      details: error.message 
+    });
+  }
+});
+
 // Reset incorrectly claimed prediction (for emergency use when claims failed but were marked as claimed)
 router.post('/reset-claim/:predictionId', async (req, res) => {
   try {
