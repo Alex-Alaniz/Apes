@@ -53,13 +53,13 @@ const MarketsPage = () => {
     try {
       setLoading(true);
       
-      console.log('🔄 Loading markets with real-time blockchain resolution checking...');
+      console.log('🔄 Loading markets with simplified fetching...');
       
-      // 🔴 NEW: Use enhanced endpoint with blockchain resolution checking
+      // Use simplified fetching to prevent rate limiting issues
       try {
-        // Try to fetch from our enhanced local endpoint with blockchain resolution checking
-        const fetchedMarkets = await marketService.fetchMarkets(false); // Active markets only
-        console.log(`✅ Loaded ${fetchedMarkets.length} active markets with blockchain verification`);
+        // Fetch active markets using the new simple method
+        const fetchedMarkets = await marketService.fetchMarketsSimple(false); // Active markets only
+        console.log(`✅ Loaded ${fetchedMarkets.length} active markets`);
         setMarkets(fetchedMarkets);
         
         // Also fetch resolved markets separately for filtering
@@ -72,13 +72,24 @@ const MarketsPage = () => {
           setResolvedMarkets([]);
         }
         
-      } catch (enhancedError) {
-        console.warn('Enhanced endpoint failed, falling back to blockchain service:', enhancedError);
+      } catch (error) {
+        console.error('Market fetching failed:', error);
         
-        // Fallback to blockchain service if local backend isn't available
-        const fetchedMarkets = await blockchainMarketsService.fetchMarketsWithFallback();
-        console.log(`✅ Fallback: Loaded ${fetchedMarkets.length} markets`);
-        setMarkets(fetchedMarkets);
+        // Only try blockchain fallback if not rate limited
+        if (!error.message?.includes('Rate limit')) {
+          try {
+            console.log('🔄 Trying blockchain fallback...');
+            const fetchedMarkets = await blockchainMarketsService.fetchMarketsWithFallback();
+            console.log(`✅ Fallback: Loaded ${fetchedMarkets.length} markets`);
+            setMarkets(fetchedMarkets);
+          } catch (fallbackError) {
+            console.error('Blockchain fallback also failed:', fallbackError);
+            setMarkets([]);
+          }
+        } else {
+          console.warn('⚠️ Rate limited - not attempting fallback');
+          setMarkets([]);
+        }
       }
       
     } catch (error) {

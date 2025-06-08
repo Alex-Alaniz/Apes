@@ -41,6 +41,11 @@ class MarketService {
     this.program = null;
     this.provider = null;
     this.wallet = null;
+    
+    // Rate limiting protection
+    this.lastFetchTime = 0;
+    this.minFetchInterval = 2000; // Minimum 2 seconds between fetches
+    this.isCurrentlyFetching = false;
   }
 
   // Custom deserializer for the actual on-chain Market structure
@@ -451,107 +456,74 @@ class MarketService {
     }
   }
 
-  // Modified fetchMarketsWithStats to include blockchain sync
+  // Simplified and fixed fetchMarketsWithStats - no automatic syncing to prevent rate limits
   async fetchMarketsWithStats() {
     try {
       console.log('📊 Starting fetchMarketsWithStats...');
       
-      // First, try to fetch from backend API (this is working)
-      let backendMarkets = [];
+      // Simple fetch from backend API without excessive syncing
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      
       try {
         console.log('🔗 Fetching from backend API...');
-        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
         const response = await fetch(`${backendUrl}/api/markets`, {
-          timeout: 10000 // 10 second timeout
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'max-age=30' // Allow 30 second cache to reduce requests
+          }
         });
         
         if (response.ok) {
-          backendMarkets = await response.json();
+          const backendMarkets = await response.json();
           console.log(`✅ Successfully fetched ${backendMarkets.length} markets from backend API`);
           
-          // Force sync for markets with user positions if possible
-          if (this.program && backendMarkets.length > 0) {
-            console.log('🔄 Force syncing markets to fix data consistency...');
-            
-            // Find markets that likely have user positions (non-zero volume or user has wallet connected)
-            const marketsToSync = backendMarkets.filter(market => 
-              market.totalVolume > 0 || 
-              market.optionPools?.some(pool => pool > 0)
-            ).slice(0, 5); // Sync first 5 active markets
-            
-            if (marketsToSync.length > 0) {
-              console.log(`🎯 Force syncing ${marketsToSync.length} markets with potential user activity`);
-              
-              // Sync markets in parallel for speed
-              const syncPromises = marketsToSync.map(market => 
-                this.syncMarketWithBlockchain(market.publicKey).catch(err => {
-                  console.warn(`Failed to sync ${market.publicKey}:`, err.message);
-                  return null;
-                })
-              );
-              
-              await Promise.all(syncPromises);
-              
-              // Refetch updated data from backend
-              try {
-                const updatedResponse = await fetch(`${backendUrl}/api/markets`, {
-                  timeout: 5000
-                });
-                if (updatedResponse.ok) {
-                  backendMarkets = await updatedResponse.json();
-                  console.log('✅ Refetched updated market data after force sync');
-                }
-              } catch (refetchError) {
-                console.warn('Could not refetch updated data, using original');
-              }
-            }
-          }
-          
-          // Log first market for debugging
+          // Log first market for debugging (no syncing to prevent rate limits)
           if (backendMarkets.length > 0) {
             const firstMarket = backendMarkets[0];
-            console.log('📋 First market from backend (after sync):', {
+            console.log('📋 First market from backend:', {
               question: firstMarket.question?.substring(0, 50),
               totalVolume: firstMarket.totalVolume,
               optionPools: firstMarket.optionPools,
-              optionPercentages: firstMarket.optionPercentages,
-              participantCount: firstMarket.participantCount,
-              assets: Object.keys(firstMarket.assets || {})
+              participantCount: firstMarket.participantCount
             });
           }
           
-          // If we have backend data, return it immediately (it's already properly formatted)
-          if (backendMarkets.length > 0) {
-            console.log('🚀 Returning backend markets with synced data');
-            return backendMarkets;
-        }
+          return backendMarkets;
         } else {
           console.error('❌ Backend API response not ok:', response.status, response.statusText);
+          
+          // Check for rate limiting specifically
+          if (response.status === 429) {
+            throw new Error('Rate limit exceeded. Please wait a moment before trying again.');
+          }
         }
       } catch (apiError) {
         console.error('❌ Error fetching from backend API:', apiError);
+        
+        // If rate limited, don't try fallback immediately
+        if (apiError.message?.includes('Rate limit')) {
+          throw apiError;
+        }
       }
       
-      // If backend failed, try blockchain data as fallback
-      if (backendMarkets.length === 0) {
-        console.log('🔗 Backend failed, trying blockchain data as fallback...');
-        try {
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Blockchain fetch timeout after 8 seconds')), 8000)
-          );
-          
-          const blockchainPromise = this.fetchAllMarkets();
-          const blockchainMarkets = await Promise.race([blockchainPromise, timeoutPromise]);
-          
-          if (blockchainMarkets && blockchainMarkets.length > 0) {
-            console.log(`✅ Successfully fetched ${blockchainMarkets.length} markets from blockchain`);
-      return blockchainMarkets;
-          } else {
-            console.log('📭 No markets found in blockchain data');
-          }
-        } catch (blockchainError) {
-          console.error('❌ Blockchain fetch failed:', blockchainError.message);
+      // Only try blockchain fallback if not rate limited
+      console.log('🔗 Backend failed, trying blockchain data as fallback...');
+      try {
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Blockchain fetch timeout after 8 seconds')), 8000)
+        );
+        
+        const blockchainPromise = this.fetchAllMarkets();
+        const blockchainMarkets = await Promise.race([blockchainPromise, timeoutPromise]);
+        
+        if (blockchainMarkets && blockchainMarkets.length > 0) {
+          console.log(`✅ Successfully fetched ${blockchainMarkets.length} markets from blockchain`);
+          return blockchainMarkets;
+        } else {
+          console.log('📭 No markets found in blockchain data');
         }
+      } catch (blockchainError) {
+        console.error('❌ Blockchain fetch failed:', blockchainError.message);
       }
       
       // If both failed, return empty array
@@ -559,6 +531,13 @@ class MarketService {
       return [];
     } catch (error) {
       console.error('💥 Error in fetchMarketsWithStats:', error);
+      
+      // Don't throw rate limit errors, just return empty array to prevent cascading failures
+      if (error.message?.includes('Rate limit')) {
+        console.warn('⚠️ Rate limited - returning empty array to prevent further requests');
+        return [];
+      }
+      
       return [];
     }
   }
@@ -1819,45 +1798,20 @@ class MarketService {
     }
   }
 
-  // Enhanced fetch method that auto-syncs volumes if needed
+  // REMOVED auto-sync to prevent rate limiting - use manual sync buttons instead
   async fetchMarketsWithAutoSync() {
     try {
-      console.log('📊 Fetching markets with auto-sync capability...');
+      console.log('📊 Fetching markets (auto-sync disabled to prevent rate limits)...');
       
-      // First try to get markets normally
-      const markets = await this.fetchMarketsWithStats();
-      
-      // Check if any markets have zero volume (indicating sync issue)
-      const marketsWithZeroVolume = markets.filter(market => 
-        !market.totalVolume || market.totalVolume === 0
-      );
-      
-      if (marketsWithZeroVolume.length > 0) {
-        console.log(`⚠️ Found ${marketsWithZeroVolume.length} markets with zero volume, triggering sync...`);
-        
-        // Trigger volume sync
-        const syncResult = await this.forceVolumeSync();
-        
-        if (syncResult.success) {
-          console.log('✅ Auto-sync completed, refetching markets...');
-          // Wait a moment for database to update
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          // Fetch fresh data
-          return await this.fetchMarketsWithStats();
-        } else {
-          console.warn('⚠️ Auto-sync failed, returning original data');
-        }
-      }
-      
-      return markets;
+      // Just fetch markets normally without auto-syncing to prevent rate limits
+      return await this.fetchMarketsWithStats();
     } catch (error) {
       console.error('❌ Error in fetchMarketsWithAutoSync:', error);
-      // Fallback to regular fetch
-      return await this.fetchMarketsWithStats();
+      return [];
     }
   }
 
-  // NEW METHOD: Fetch LIVE blockchain data with real-time volumes
+  // SIMPLIFIED: Fetch LIVE blockchain data without fallback loops  
   async fetchLiveMarketsData() {
     try {
       console.log('🔴 Fetching LIVE market data directly from blockchain...');
@@ -1866,8 +1820,7 @@ class MarketService {
       const response = await fetch(`${backendUrl}/api/markets/live`, {
         headers: {
           'Content-Type': 'application/json',
-        },
-        timeout: 15000 // 15 second timeout for blockchain calls
+        }
       });
       
       if (response.ok) {
@@ -1889,13 +1842,24 @@ class MarketService {
         
         return liveMarkets;
       } else {
-        console.warn('⚠️ Live data fetch failed, falling back to cached data');
-        return await this.fetchMarketsWithStats();
+        console.warn(`⚠️ Live data fetch failed with status ${response.status}`);
+        
+        // Don't fall back to prevent recursive calls and rate limiting
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded on live data endpoint');
+        }
+        
+        return [];
       }
     } catch (error) {
       console.error('❌ Error fetching live markets data:', error);
-      console.log('🔄 Falling back to cached market data...');
-      return await this.fetchMarketsWithStats();
+      
+      // Don't fall back to prevent cascading failures and rate limits
+      if (error.message?.includes('Rate limit')) {
+        throw error;
+      }
+      
+      return [];
     }
   }
 
@@ -1998,33 +1962,48 @@ class MarketService {
     }
   }
 
-  // Enhanced fetch method with live data preference
+  // SIMPLIFIED: Fetch markets with live data preference but no cascading fallbacks
   async fetchMarketsWithLiveData() {
     try {
       console.log('📊 Fetching markets with live data preference...');
       
-      // Try to fetch live data first for maximum transparency
-      const liveMarkets = await this.fetchLiveMarketsData();
-      
-      // If live data is available and has valid data, use it
-      if (liveMarkets && liveMarkets.length > 0) {
-        const liveMarketsWithData = liveMarkets.filter(market => 
-          market.isLiveData && market.dataSource === 'live_blockchain'
-        );
+      // Try to fetch live data first
+      try {
+        const liveMarkets = await this.fetchLiveMarketsData();
         
-        if (liveMarketsWithData.length > 0) {
-          console.log(`✅ Using LIVE blockchain data for ${liveMarketsWithData.length} markets`);
-          return liveMarkets; // Return all markets (including fallback data)
+        // If live data is available and has valid data, use it
+        if (liveMarkets && liveMarkets.length > 0) {
+          const liveMarketsWithData = liveMarkets.filter(market => 
+            market.isLiveData && market.dataSource === 'live_blockchain'
+          );
+          
+          if (liveMarketsWithData.length > 0) {
+            console.log(`✅ Using LIVE blockchain data for ${liveMarketsWithData.length} markets`);
+            return liveMarkets; // Return all markets (including fallback data)
+          }
+        }
+      } catch (liveError) {
+        console.warn('⚠️ Live data fetch failed:', liveError.message);
+        
+        // If rate limited, don't try fallback
+        if (liveError.message?.includes('Rate limit')) {
+          throw liveError;
         }
       }
       
-      // Fallback to cached data if live data not available
-      console.log('🔄 Live data not available, using cached data with auto-sync...');
-      return await this.fetchMarketsWithAutoSync();
+      // Single fallback to cached data (no auto-sync to prevent rate limits)
+      console.log('🔄 Live data not available, using cached data...');
+      return await this.fetchMarketsWithStats();
       
     } catch (error) {
       console.error('❌ Error in fetchMarketsWithLiveData:', error);
-      // Final fallback
+      
+      // Don't cascade more fallbacks if rate limited
+      if (error.message?.includes('Rate limit')) {
+        return [];
+      }
+      
+      // Only one final fallback
       return await this.fetchMarketsWithStats();
     }
   }
@@ -2205,38 +2184,35 @@ class MarketService {
     }
   }
 
-  // Enhanced fetch method that auto-syncs resolution status
+  // DISABLED: Auto-resolution sync to prevent rate limiting
   async fetchMarketsWithResolutionSync() {
     try {
-      console.log('📊 Fetching markets with auto-resolution sync...');
+      console.log('📊 Fetching markets (auto-resolution sync disabled to prevent rate limits)...');
       
-      // First get markets normally
-      const markets = await this.fetchMarketsWithLiveData();
-      
-      // Check for any markets that might need resolution syncing
-      const activeMarkets = markets.filter(market => market.status === 'Active');
-      
-      if (activeMarkets.length > 0) {
-        console.log(`🔍 Found ${activeMarkets.length} active markets, checking if any are resolved on blockchain...`);
-        
-        // For now, just log this - in the future, we could auto-sync
-        // Uncomment the line below to enable automatic resolution syncing
-        // await this.syncAllMarketResolutions();
-      }
-      
-      return markets;
+      // Just fetch markets without auto-syncing to prevent rate limits  
+      return await this.fetchMarketsWithStats();
     } catch (error) {
       console.error('❌ Error in fetchMarketsWithResolutionSync:', error);
-      return await this.fetchMarketsWithLiveData();
+      return [];
     }
   }
 
-  // Fetch all markets with optional resolved markets
+  // SIMPLIFIED: Fetch all markets with optional resolved markets - no complex fallbacks
   async fetchMarkets(includeResolved = false) {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/markets${includeResolved ? '?include_resolved=true' : ''}`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/markets${includeResolved ? '?include_resolved=true' : ''}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'max-age=30' // Allow 30 second cache
+        }
+      });
       
       if (!response.ok) {
+        // Handle rate limiting gracefully
+        if (response.status === 429) {
+          console.warn('⚠️ Rate limit exceeded - returning empty array');
+          return [];
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
@@ -2247,7 +2223,14 @@ class MarketService {
       return markets;
     } catch (error) {
       console.error('Error fetching markets:', error);
-      throw error;
+      
+      // Don't throw on rate limit errors, just return empty array
+      if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
+        console.warn('⚠️ Rate limited - returning empty array');
+        return [];
+      }
+      
+      return [];
     }
   }
 
@@ -2277,28 +2260,98 @@ class MarketService {
     }
   }
 
-  // Fetch both active and resolved markets separately
+  // SIMPLIFIED: Fetch both active and resolved markets separately with error handling
   async fetchAllMarketsWithResolved() {
     try {
-      const [activeMarketsResponse, resolvedMarketsResponse] = await Promise.all([
+      // Use Promise.allSettled to prevent one failure from breaking everything
+      const [activeResult, resolvedResult] = await Promise.allSettled([
         this.fetchMarkets(false), // Active only
         this.fetchResolvedMarkets() // Resolved only
       ]);
       
+      // Handle results gracefully
+      const activeMarkets = activeResult.status === 'fulfilled' ? activeResult.value : [];
+      const resolvedResponse = resolvedResult.status === 'fulfilled' ? resolvedResult.value : { markets: [], total: 0, summary: { blockchainVerified: 0 } };
+      
+      if (activeResult.status === 'rejected') {
+        console.warn('❌ Failed to fetch active markets:', activeResult.reason);
+      }
+      
+      if (resolvedResult.status === 'rejected') {
+        console.warn('❌ Failed to fetch resolved markets:', resolvedResult.reason);
+      }
+      
       return {
-        active: activeMarketsResponse,
-        resolved: resolvedMarketsResponse.markets,
+        active: activeMarkets,
+        resolved: resolvedResponse.markets || [],
         summary: {
-          totalActive: activeMarketsResponse.length,
-          totalResolved: resolvedMarketsResponse.total,
-          blockchainVerified: resolvedMarketsResponse.summary.blockchainVerified
+          totalActive: activeMarkets.length,
+          totalResolved: resolvedResponse.total || 0,
+          blockchainVerified: resolvedResponse.summary?.blockchainVerified || 0
         }
       };
     } catch (error) {
       console.error('Error fetching all markets with resolved:', error);
-      throw error;
+      
+      // Return empty structure instead of throwing
+      return {
+        active: [],
+        resolved: [],
+        summary: {
+          totalActive: 0,
+          totalResolved: 0,
+          blockchainVerified: 0
+        }
+      };
     }
   }
+
+  // PRIMARY METHOD: Simple, reliable market fetching for main application use
+  async fetchMarketsSimple(includeResolved = false) {
+    try {
+      // Rate limiting protection
+      const now = Date.now();
+      if (this.isCurrentlyFetching) {
+        console.warn('⚠️ [SIMPLE] Already fetching markets, skipping duplicate request');
+        return [];
+      }
+      
+      if (now - this.lastFetchTime < this.minFetchInterval) {
+        const waitTime = this.minFetchInterval - (now - this.lastFetchTime);
+        console.warn(`⚠️ [SIMPLE] Rate limiting: waiting ${waitTime}ms before next fetch`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+      
+      this.isCurrentlyFetching = true;
+      this.lastFetchTime = Date.now();
+      
+      console.log(`📊 [SIMPLE] Fetching markets (resolved: ${includeResolved})...`);
+      
+      // Use the simplified fetchMarkets method
+      const markets = await this.fetchMarkets(includeResolved);
+      
+      console.log(`✅ [SIMPLE] Successfully fetched ${markets.length} markets`);
+      
+      return markets;
+    } catch (error) {
+      console.error('❌ [SIMPLE] Error fetching markets:', error);
+      
+      // Always return empty array instead of throwing to prevent UI crashes
+      return [];
+    } finally {
+      this.isCurrentlyFetching = false;
+    }
+  }
+
+  // DEPRECATED METHODS - These caused rate limiting and are no longer used
+  // Use fetchMarketsSimple() instead
+  /*
+  fetchMarketsWithStats() - DEPRECATED: Use fetchMarketsSimple()
+  fetchMarketsWithAutoSync() - DEPRECATED: Use manual sync buttons
+  fetchLiveMarketsData() - DEPRECATED: Use fetchMarketsSimple()  
+  fetchMarketsWithLiveData() - DEPRECATED: Use fetchMarketsSimple()
+  fetchMarketsWithResolutionSync() - DEPRECATED: Use manual sync buttons
+  */
 
 }
 

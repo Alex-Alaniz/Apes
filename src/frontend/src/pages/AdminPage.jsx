@@ -67,11 +67,20 @@ const AdminPage = () => {
       const response = await fetch(`${apiUrl}/api/admin/markets`, {
         headers: {
           'Content-Type': 'application/json',
-          'X-Wallet-Address': publicKey.toString()
+          'X-Wallet-Address': publicKey.toString(),
+          'Cache-Control': 'max-age=30' // Allow 30 second cache to reduce requests
         }
       });
       
       if (!response.ok) {
+        // Handle rate limiting gracefully
+        if (response.status === 429) {
+          setToast({
+            message: 'Rate limit exceeded. Please wait a moment before refreshing.',
+            type: 'warning'
+          });
+          return;
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
@@ -95,10 +104,19 @@ const AdminPage = () => {
       setMarkets(transformedMarkets);
     } catch (error) {
       console.error('Error loading admin markets:', error);
-      setToast({
-        message: 'Failed to load markets. Please try again.',
-        type: 'error'
-      });
+      
+      // More specific error handling
+      if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
+        setToast({
+          message: 'Rate limit exceeded. Please wait a moment before refreshing.',
+          type: 'warning'
+        });
+      } else {
+        setToast({
+          message: 'Failed to load markets. Please try again.',
+          type: 'error'
+        });
+      }
     } finally {
       setLoading(false);
     }
