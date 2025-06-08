@@ -675,39 +675,117 @@ router.post('/resolve-market/:address', authenticateAdmin, async (req, res) => {
     
     console.log(`🎯 Admin resolution request for market ${address}, winning option: ${winningOptionIndex}`);
     
+    // First check if this market exists in our database
+    const marketQuery = `SELECT * FROM markets WHERE market_address = $1`;
+    const marketResult = await db.query(marketQuery, [address]);
+    
+    if (marketResult.rows.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Market not found in database',
+        marketAddress: address
+      });
+    }
+    
+    const market = marketResult.rows[0];
+    
     // Import the live market sync service
     const liveMarketSync = require('../services/liveMarketSyncService');
+    
+    // STRATEGY 1: Try to sync from blockchain first (for blockchain markets)
+    console.log('🔄 Attempting to sync resolution from blockchain...');
     
     // Wait a moment for the blockchain transaction to be confirmed
     console.log('⏳ Waiting for blockchain confirmation...');
     await new Promise(resolve => setTimeout(resolve, 3000));
     
-    // Sync the resolution status from blockchain to database
     const syncResult = await liveMarketSync.syncMarketResolutionStatus(address);
     
     if (syncResult.success && syncResult.wasResolved) {
-      console.log(`✅ Market ${address} resolution synced successfully`);
+      // SUCCESS: Blockchain market was resolved and synced
+      console.log(`✅ Blockchain market ${address} resolution synced successfully`);
       res.json({ 
         success: true, 
-        message: 'Market resolved and database updated successfully',
+        message: 'Blockchain market resolved and database updated successfully',
         winningOption: syncResult.winningOption,
-        marketAddress: address
+        marketAddress: address,
+        resolvedVia: 'blockchain'
       });
     } else if (syncResult.success && !syncResult.wasResolved) {
-      console.log(`⚠️ Market ${address} is not yet resolved on blockchain`);
+      // Blockchain market exists but not yet resolved
+      console.log(`⚠️ Blockchain market ${address} is not yet resolved`);
       res.json({ 
         success: false, 
         message: 'Market resolution transaction may still be processing. Please try syncing again in a few moments.',
         marketAddress: address,
-        recommendation: 'Try again in 30-60 seconds'
+        recommendation: 'Try again in 30-60 seconds',
+        resolvedVia: 'blockchain_pending'
       });
+    } else if (syncResult.error && syncResult.error.includes('Market account not found')) {
+      // STRATEGY 2: Market doesn't exist on blockchain - resolve directly in database
+      console.log(`📋 Market ${address} not found on blockchain, resolving database-only market...`);
+      
+      if (winningOptionIndex === undefined || winningOptionIndex === null) {
+        return res.status(400).json({
+          success: false,
+          error: 'winningOptionIndex is required for database-only market resolution',
+          marketAddress: address
+        });
+      }
+      
+      // Validate winning option index
+      const options = market.options || [];
+      if (winningOptionIndex < 0 || winningOptionIndex >= options.length) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid winningOptionIndex. Must be between 0 and ${options.length - 1}`,
+          marketAddress: address,
+          availableOptions: options
+        });
+      }
+      
+      const winningOption = options[winningOptionIndex];
+      
+      // Update database directly
+      const updateQuery = `
+        UPDATE markets 
+        SET 
+          status = 'Resolved',
+          resolved_option = $1,
+          resolved_option_index = $2,
+          resolution_timestamp = NOW(),
+          updated_at = NOW()
+        WHERE market_address = $3
+        RETURNING *
+      `;
+      
+      const updateResult = await db.query(updateQuery, [
+        winningOption,
+        winningOptionIndex,
+        address
+      ]);
+      
+      console.log(`✅ Database-only market ${address} resolved successfully with option: ${winningOption}`);
+      
+      res.json({
+        success: true,
+        message: 'Database-only market resolved successfully',
+        winningOption: winningOption,
+        winningOptionIndex: winningOptionIndex,
+        marketAddress: address,
+        resolvedVia: 'database',
+        market: updateResult.rows[0]
+      });
+      
     } else {
+      // Other blockchain error
       console.error(`❌ Failed to sync resolution for ${address}:`, syncResult.error);
       res.status(500).json({ 
         success: false,
         error: 'Failed to sync market resolution from blockchain',
         details: syncResult.error,
-        recommendation: 'The blockchain transaction may have succeeded. Try manually syncing this market.'
+        recommendation: 'The blockchain transaction may have succeeded. Try manually syncing this market.',
+        resolvedVia: 'error'
       });
     }
   } catch (error) {
@@ -715,7 +793,7 @@ router.post('/resolve-market/:address', authenticateAdmin, async (req, res) => {
     res.status(500).json({ 
       error: 'Failed to resolve market',
       details: error.message,
-      recommendation: 'If the blockchain transaction succeeded, try manually syncing this market.'
+      recommendation: 'Please check the market address and try again.'
     });
   }
 });
