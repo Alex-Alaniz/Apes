@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaXTwitter } from 'react-icons/fa6';
-import { Trophy, Target, DollarSign, Calendar } from 'lucide-react';
+import { Trophy, Target, DollarSign, Calendar, TrendingUp, TrendingDown } from 'lucide-react';
 
 const PublicProfilePage = () => {
   const { walletAddress } = useParams();
   const navigate = useNavigate();
   const [userProfile, setUserProfile] = useState(null);
   const [userStats, setUserStats] = useState(null);
+  const [bettingHistory, setBettingHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -19,10 +20,14 @@ const PublicProfilePage = () => {
     try {
       setLoading(true);
       
-      // Fetch user profile and stats
-      const [profileRes, statsRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/api/users/${walletAddress}/profile`),
-        fetch(`${import.meta.env.VITE_API_URL}/api/users/${walletAddress}/stats`)
+      // Use the same API URL as the working leaderboard
+      const API_URL = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+      
+      // Fetch user profile, stats, and betting history
+      const [profileRes, statsRes, betsRes] = await Promise.all([
+        fetch(`${API_URL}/api/users/${walletAddress}/profile`),
+        fetch(`${API_URL}/api/users/${walletAddress}/stats`),
+        fetch(`${API_URL}/api/users/${walletAddress}/bets?limit=10`)
       ]);
 
       if (profileRes.ok) {
@@ -35,6 +40,11 @@ const PublicProfilePage = () => {
       if (statsRes.ok) {
         const stats = await statsRes.json();
         setUserStats(stats);
+      }
+
+      if (betsRes.ok) {
+        const betsData = await betsRes.json();
+        setBettingHistory(betsData.bets || []);
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
@@ -232,6 +242,62 @@ const PublicProfilePage = () => {
           ) : (
             <div className="text-center py-8">
               <p className="text-gray-500 dark:text-gray-400">No trading activity yet</p>
+            </div>
+          )}
+        </div>
+
+        {/* Recent Betting History */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Bets</h3>
+          
+          {bettingHistory && bettingHistory.length > 0 ? (
+            <div className="space-y-3">
+              {bettingHistory.map((bet, index) => (
+                <div key={index} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900 dark:text-white text-sm mb-1">
+                      {bet.marketTitle || 'Market'}
+                    </h4>
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <span>Position: <span className="font-medium">{bet.position}</span></span>
+                      <span>•</span>
+                      <span>{bet.amount} APES</span>
+                      <span>•</span>
+                      <span>{new Date(bet.date).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {bet.status === 'won' && (
+                      <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                        <TrendingUp className="w-4 h-4" />
+                        <span className="text-sm font-medium">+{(bet.payoutAmount - bet.amount).toFixed(1)}</span>
+                      </div>
+                    )}
+                    {bet.status === 'lost' && (
+                      <div className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                        <TrendingDown className="w-4 h-4" />
+                        <span className="text-sm font-medium">-{bet.amount}</span>
+                      </div>
+                    )}
+                    {bet.status === 'pending' && (
+                      <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm font-medium">Pending</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500 dark:text-gray-400">No betting history yet</p>
+              <button
+                onClick={() => navigate('/markets')}
+                className="mt-3 text-purple-600 dark:text-purple-400 hover:underline"
+              >
+                Explore Markets →
+              </button>
             </div>
           )}
         </div>
