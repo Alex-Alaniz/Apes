@@ -616,22 +616,107 @@ router.post('/decline-market/:polyId', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Manual sync market resolution status from blockchain
+router.post('/sync-market-resolution/:address', authenticateAdmin, async (req, res) => {
+  try {
+    const { address } = req.params;
+    
+    console.log(`🔄 Admin manual sync requested for market ${address}`);
+    
+    // Import the live market sync service
+    const liveMarketSync = require('../services/liveMarketSyncService');
+    
+    // Sync the resolution status from blockchain to database
+    const syncResult = await liveMarketSync.syncMarketResolutionStatus(address);
+    
+    if (syncResult.success && syncResult.wasResolved) {
+      console.log(`✅ Market ${address} was resolved and database updated`);
+      res.json({ 
+        success: true, 
+        message: 'Market resolution status synced successfully',
+        wasResolved: true,
+        winningOption: syncResult.winningOption,
+        marketAddress: address,
+        previousStatus: syncResult.previousStatus,
+        newStatus: syncResult.newStatus
+      });
+    } else if (syncResult.success && !syncResult.wasResolved) {
+      console.log(`📊 Market ${address} is still active on blockchain`);
+      res.json({ 
+        success: true, 
+        message: 'Market is still active on blockchain',
+        wasResolved: false,
+        marketAddress: address,
+        currentStatus: syncResult.currentStatus
+      });
+    } else {
+      console.error(`❌ Failed to sync resolution for ${address}:`, syncResult.error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to sync market resolution status',
+        details: syncResult.error,
+        marketAddress: address
+      });
+    }
+  } catch (error) {
+    console.error('Error in manual sync endpoint:', error);
+    res.status(500).json({ 
+      error: 'Failed to sync market resolution',
+      details: error.message 
+    });
+  }
+});
+
 // Resolve market
 router.post('/resolve-market/:address', authenticateAdmin, async (req, res) => {
   try {
     const { address } = req.params;
     const { winningOptionIndex } = req.body;
     
-    // Implement market resolution logic here
-    // This would interact with your Solana program
+    console.log(`🎯 Admin resolution request for market ${address}, winning option: ${winningOptionIndex}`);
     
-    res.json({ 
-      success: true, 
-      message: 'Market resolved successfully' 
-    });
+    // Import the live market sync service
+    const liveMarketSync = require('../services/liveMarketSyncService');
+    
+    // Wait a moment for the blockchain transaction to be confirmed
+    console.log('⏳ Waiting for blockchain confirmation...');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Sync the resolution status from blockchain to database
+    const syncResult = await liveMarketSync.syncMarketResolutionStatus(address);
+    
+    if (syncResult.success && syncResult.wasResolved) {
+      console.log(`✅ Market ${address} resolution synced successfully`);
+      res.json({ 
+        success: true, 
+        message: 'Market resolved and database updated successfully',
+        winningOption: syncResult.winningOption,
+        marketAddress: address
+      });
+    } else if (syncResult.success && !syncResult.wasResolved) {
+      console.log(`⚠️ Market ${address} is not yet resolved on blockchain`);
+      res.json({ 
+        success: false, 
+        message: 'Market resolution transaction may still be processing. Please try syncing again in a few moments.',
+        marketAddress: address,
+        recommendation: 'Try again in 30-60 seconds'
+      });
+    } else {
+      console.error(`❌ Failed to sync resolution for ${address}:`, syncResult.error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to sync market resolution from blockchain',
+        details: syncResult.error,
+        recommendation: 'The blockchain transaction may have succeeded. Try manually syncing this market.'
+      });
+    }
   } catch (error) {
-    console.error('Error resolving market:', error);
-    res.status(500).json({ error: 'Failed to resolve market' });
+    console.error('Error in resolve market endpoint:', error);
+    res.status(500).json({ 
+      error: 'Failed to resolve market',
+      details: error.message,
+      recommendation: 'If the blockchain transaction succeeded, try manually syncing this market.'
+    });
   }
 });
 

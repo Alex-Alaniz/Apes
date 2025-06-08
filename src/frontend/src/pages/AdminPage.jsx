@@ -13,6 +13,7 @@ const AdminPage = () => {
   const [markets, setMarkets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [resolvingMarket, setResolvingMarket] = useState({});
+  const [syncingMarket, setSyncingMarket] = useState({});
   const [toast, setToast] = useState(null);
   const [filter, setFilter] = useState('all'); // all, active, resolved
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -119,18 +120,18 @@ const AdminPage = () => {
       
       if (result.warning) {
         setToast({
-          message: `Market resolution submitted! ${result.warning}`,
+          message: `Market resolution submitted! ${result.warning} The database will sync automatically.`,
           type: 'warning'
         });
       } else {
         setToast({
-          message: `Market resolved successfully! TX: ${result.transaction.slice(0, 8)}...`,
+          message: `Market resolved successfully! TX: ${result.transaction.slice(0, 8)}... Database will sync automatically.`,
           type: 'success'
         });
       }
       
-      // Reload markets after a short delay
-      setTimeout(loadMarkets, 2000);
+      // Reload markets after a longer delay to allow for blockchain confirmation and sync
+      setTimeout(loadMarkets, 5000);
     } catch (error) {
       console.error('Error resolving market:', error);
       setToast({
@@ -139,6 +140,55 @@ const AdminPage = () => {
       });
     } finally {
       setResolvingMarket(prev => ({ ...prev, [marketPubkey]: false }));
+    }
+  };
+
+  const handleManualSync = async (marketPubkey) => {
+    setSyncingMarket(prev => ({ ...prev, [marketPubkey]: true }));
+    
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${apiUrl}/api/admin/sync-market-resolution/${marketPubkey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Wallet-Address': publicKey.toString()
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.wasResolved) {
+        setToast({
+          message: `Market synced! Now shows as resolved with winner: Option ${result.winningOption}`,
+          type: 'success'
+        });
+      } else if (result.success && !result.wasResolved) {
+        setToast({
+          message: 'Market is still active on blockchain - no resolution to sync',
+          type: 'info'
+        });
+      } else {
+        setToast({
+          message: result.error || 'Failed to sync market resolution',
+          type: 'error'
+        });
+      }
+      
+      // Reload markets to show updated status
+      setTimeout(loadMarkets, 1000);
+    } catch (error) {
+      console.error('Error syncing market:', error);
+      setToast({
+        message: error.message || 'Failed to sync market resolution',
+        type: 'error'
+      });
+    } finally {
+      setSyncingMarket(prev => ({ ...prev, [marketPubkey]: false }));
     }
   };
 
@@ -362,10 +412,19 @@ const AdminPage = () => {
                   ))}
                 </div>
 
-                {/* Resolution Section */}
+                {/* Resolution and Sync Section */}
                 {market.status === 'Active' && (
                   <div className="border-t border-gray-700 pt-4">
-                    <h4 className="text-sm font-medium text-gray-400 mb-3">Resolve Market</h4>
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-sm font-medium text-gray-400">Resolve Market</h4>
+                      <button
+                        onClick={() => handleManualSync(market.publicKey)}
+                        disabled={syncingMarket[market.publicKey]}
+                        className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                      >
+                        {syncingMarket[market.publicKey] ? 'Syncing...' : 'Sync Status'}
+                      </button>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       {market.options.map((option, index) => (
                         <button
@@ -380,6 +439,9 @@ const AdminPage = () => {
                         </button>
                       ))}
                     </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      💡 After resolving onchain, the status will sync automatically. Use "Sync Status" if needed.
+                    </p>
                   </div>
                 )}
 
@@ -387,9 +449,18 @@ const AdminPage = () => {
                 {market.status === 'Resolved' && market.winningOption !== null && (
                   <div className="border-t border-gray-700 pt-4">
                     <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
-                      <p className="text-green-400 font-medium">
-                        ✓ Resolved - Winner: {market.options?.[market.winningOption]}
-                      </p>
+                      <div className="flex justify-between items-center">
+                        <p className="text-green-400 font-medium">
+                          ✓ Resolved - Winner: {market.options?.[market.winningOption]}
+                        </p>
+                        <button
+                          onClick={() => handleManualSync(market.publicKey)}
+                          disabled={syncingMarket[market.publicKey]}
+                          className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                        >
+                          {syncingMarket[market.publicKey] ? 'Syncing...' : 'Re-sync'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
