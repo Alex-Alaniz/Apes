@@ -1091,7 +1091,7 @@ router.get('/blockchain-markets-audit', authenticateAdmin, async (req, res) => {
     const liveMarketSync = require('../services/liveMarketSyncService');
     
     // Get network config
-    const NETWORK = process.env.VITE_SOLANA_NETWORK || process.env.SOLANA_NETWORK || 'devnet';
+    const NETWORK = process.env.VITE_SOLANA_NETWORK || process.env.SOLANA_NETWORK || 'mainnet';
     const NETWORK_CONFIG = {
       devnet: {
         programId: "F3cFKHXtoYeTnKE6hd7iy21oAZFGyz7dm2WQKS31M46Y",
@@ -1237,7 +1237,7 @@ router.post('/batch-sync-resolved-markets', authenticateAdmin, async (req, res) 
     const { Connection, PublicKey } = require('@solana/web3.js');
     
     // Get network config
-    const NETWORK = process.env.VITE_SOLANA_NETWORK || process.env.SOLANA_NETWORK || 'devnet';
+    const NETWORK = process.env.VITE_SOLANA_NETWORK || process.env.SOLANA_NETWORK || 'mainnet';
     const NETWORK_CONFIG = {
       devnet: {
         programId: "F3cFKHXtoYeTnKE6hd7iy21oAZFGyz7dm2WQKS31M46Y",

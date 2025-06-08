@@ -10,7 +10,7 @@ const { Program, AnchorProvider, BN } = require('@coral-xyz/anchor');
 const db = require('../config/database');
 
 // Configuration based on network
-const NETWORK = process.env.VITE_SOLANA_NETWORK || process.env.SOLANA_NETWORK || 'devnet';
+const NETWORK = process.env.VITE_SOLANA_NETWORK || process.env.SOLANA_NETWORK || 'mainnet';
 
 const NETWORK_CONFIG = {
   devnet: {
