@@ -9,31 +9,6 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
   const [engagements, setEngagements] = useState({});
   const [pointsEarned, setPointsEarned] = useState(0);
   const [isVerifying, setIsVerifying] = useState({});
-  const [twitterUsername, setTwitterUsername] = useState(null);
-
-  // Check if user has actually linked Twitter account
-  useEffect(() => {
-    if (publicKey && twitterLinked) {
-      checkTwitterStatus();
-    }
-  }, [publicKey, twitterLinked]);
-
-  const checkTwitterStatus = async () => {
-    try {
-      const response = await fetch(`https://apes-production.up.railway.app/api/twitter/profile`, {
-        headers: {
-          'x-wallet-address': publicKey.toString(),
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setTwitterUsername(data.twitter_username);
-      }
-    } catch (error) {
-      console.error('Error checking Twitter status:', error);
-    }
-  };
 
   const handleEngagement = async (postId, type) => {
     if (!publicKey) {
@@ -41,7 +16,7 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
       return;
     }
 
-    if (!twitterLinked || !twitterUsername) {
+    if (!twitterLinked) {
       alert('🔗 Please link your 𝕏 account first!\n\nGo to Profile → Link 𝕏 Account to start earning points.');
       return;
     }
@@ -76,7 +51,7 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
         const points = type === 'like' ? 5 : type === 'repost' ? 10 : 15;
         
         // Track the engagement activity
-        const trackResponse = await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
+        const trackResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/engagement/track`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -136,8 +111,8 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
     return `${Math.floor(diffInHours / 24)}d`;
   };
 
-  // Show a banner if not authenticated, but still show tweets below
-  const isAuthenticated = twitterLinked && twitterUsername;
+  // Authentication status is now properly passed from parent component
+  const isAuthenticated = twitterLinked;
 
   return (
     <div className="space-y-6">
@@ -427,10 +402,17 @@ const EngageToEarnPage = () => {
   const fetchPrimapePosts = async () => {
     try {
       setPostsLoading(true);
+      setPostsError(null);
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/twitter/primape-posts?limit=5`);
-      if (!response.ok) throw new Error('Failed to fetch posts');
+      
+      if (!response.ok) {
+        console.error('API response not ok:', response.status, response.statusText);
+        throw new Error(`API Error: ${response.status}`);
+      }
       
       const data = await response.json();
+      console.log('Fetched posts data:', data);
+      
       // Transform API response to match the expected format
       const transformedPosts = (data.tweets || []).map(tweet => ({
         id: tweet.id,
@@ -444,20 +426,44 @@ const EngageToEarnPage = () => {
           reply_count: 0 
         }
       }));
-      setPosts(transformedPosts);
-      setPostsError(null);
+      
+      if (transformedPosts.length > 0) {
+        setPosts(transformedPosts);
+        setPostsError(null);
+      } else {
+        throw new Error('No tweets returned from API');
+      }
     } catch (error) {
       console.error('Error fetching @PrimapeApp posts:', error);
-      setPostsError('Failed to load posts');
-      // Fallback to a single demo post if API fails
-      setPosts([{
-        id: 'demo-post',
-        text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n\nConnect your wallet and start predicting!\n\n🚀 apes.primape.app/tournaments',
-        created_at: new Date().toISOString(),
-        author_username: 'PrimapeApp',
-        url: 'https://twitter.com/PrimapeApp',
-        engagement_stats: { like_count: 45, retweet_count: 12, reply_count: 8 }
-      }]);
+      setPostsError('Failed to load posts - showing demo content');
+      
+      // Enhanced fallback with multiple demo posts
+      setPosts([
+        {
+          id: 'demo-post-1',
+          text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n⚡ Early bird bonus still available!\n\n🚀 apes.primape.app/tournaments\n\n#PredictionMarkets #FIFA #ClubWorldCup #Web3',
+          created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+          author_username: 'PrimapeApp',
+          url: 'https://twitter.com/PrimapeApp',
+          engagement_stats: { like_count: 45, retweet_count: 12, reply_count: 8 }
+        },
+        {
+          id: 'demo-post-2',
+          text: 'GM Apes! 🦍\n\nReady to make some epic predictions today?\n\n✨ New markets added daily\n💎 Earn APES points for every prediction\n🎯 Tournament leaderboards heating up\n\nWhat\'s your play today? 👀\n\n#GM #PredictionMarkets #Solana',
+          created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
+          author_username: 'PrimapeApp',
+          url: 'https://twitter.com/PrimapeApp',
+          engagement_stats: { like_count: 23, retweet_count: 6, reply_count: 4 }
+        },
+        {
+          id: 'demo-post-3',
+          text: '🎉 Community Milestone Alert! 🎉\n\n✅ 1,000+ Active Predictors\n✅ 500+ Markets Created\n✅ 100,000+ Predictions Made\n✅ 50,000+ APES Distributed\n\nThanks to our amazing community! The future of prediction markets is bright 🚀\n\n#Community #Milestones #Web3',
+          created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
+          author_username: 'PrimapeApp',
+          url: 'https://twitter.com/PrimapeApp',
+          engagement_stats: { like_count: 67, retweet_count: 18, reply_count: 12 }
+        }
+      ]);
     } finally {
       setPostsLoading(false);
     }
