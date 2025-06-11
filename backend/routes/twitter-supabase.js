@@ -581,14 +581,15 @@ router.get('/primape-posts', async (req, res) => {
   try {
     console.log('🐦 PRIMAPE-POSTS ENDPOINT HIT! Fetching from database first');
     const limit = parseInt(req.query.limit) || 10;
+    const offset = parseInt(req.query.offset) || 0;
     
-    // First, try to get tweets from database
-    console.log('📊 Checking database for stored tweets...');
+    // First, try to get tweets from database with pagination
+    console.log('📊 Checking database for stored tweets...', { limit, offset });
     const { data: storedTweets, error: dbError } = await supabase
       .from('primape_tweets')
       .select('*')
-      .order('posted_at', { ascending: false })
-      .limit(limit);
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
     
     if (dbError) {
       console.warn('⚠️ Database query error:', dbError.message);
@@ -723,13 +724,14 @@ async function fetchAndStorePrimapeTweets(limit = 10) {
     throw new Error('No Twitter Bearer Token available');
   }
   
-  // Fetch tweets from X API
-  const timelineUrl = `https://api.twitter.com/2/users/${primapeUserId}/tweets?max_results=${Math.min(limit, 25)}&tweet.fields=created_at,public_metrics`;
+  // Fetch tweets from X API - EXCLUDE replies and retweets for original posts only
+  const timelineUrl = `https://api.twitter.com/2/users/${primapeUserId}/tweets?max_results=${Math.min(limit, 50)}&tweet.fields=created_at,public_metrics,referenced_tweets,in_reply_to_user_id&exclude=replies,retweets`;
   console.log('🔗 Fetching from:', timelineUrl);
   
   const response = await fetch(timelineUrl, {
     headers: {
-      'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
+      'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`,
+      'User-Agent': 'PrimapeApp/1.0'
     }
   });
   
@@ -740,8 +742,46 @@ async function fetchAndStorePrimapeTweets(limit = 10) {
   }
   
   const data = await response.json();
-  const tweets = data.data || [];
-  console.log('📥 Received', tweets.length, 'tweets from X API');
+  const rawTweets = data.data || [];
+  console.log('📥 Received', rawTweets.length, 'tweets from X API');
+  
+  // Filter out replies, retweets, and fake tweets for ORIGINAL POSTS ONLY
+  const tweets = rawTweets.filter(tweet => {
+    // Skip if it's a reply
+    if (tweet.in_reply_to_user_id) {
+      console.log('🚫 Skipping reply:', tweet.id);
+      return false;
+    }
+    
+    // Skip if it's a retweet 
+    if (tweet.text.startsWith('RT @')) {
+      console.log('🚫 Skipping retweet:', tweet.id);
+      return false;
+    }
+    
+    // Skip if it starts with @ (likely a reply)
+    if (tweet.text.startsWith('@')) {
+      console.log('🚫 Skipping @reply:', tweet.id);
+      return false;
+    }
+    
+    // Skip if it has referenced tweets (replies, quotes, retweets)
+    if (tweet.referenced_tweets && tweet.referenced_tweets.length > 0) {
+      console.log('🚫 Skipping referenced tweet:', tweet.id);
+      return false;
+    }
+    
+    // Skip fake tweets with pattern 186770123456789012X
+    if (tweet.id.startsWith('1867') && tweet.id.length === 19) {
+      console.log('🚫 Skipping fake tweet:', tweet.id);
+      return false;
+    }
+    
+    console.log('✅ Original post accepted:', tweet.id);
+    return true;
+  });
+  
+  console.log('✅ Filtered to', tweets.length, 'original posts only');
   
   // Store tweets in database
   if (tweets.length > 0) {

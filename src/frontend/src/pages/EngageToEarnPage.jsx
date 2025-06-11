@@ -323,15 +323,33 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
         )}
 
         <div className="mt-6 text-center">
-          <a
-            href="https://twitter.com/PrimapeApp"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"
+          <button
+            onClick={loadMorePosts}
+            disabled={postsLoading}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <FaXTwitter />
-            View More on 𝕏
-          </a>
+            {postsLoading ? (
+              <>
+                <FaSpinner className="animate-spin" />
+                Loading More...
+              </>
+            ) : (
+              <>
+                <FaXTwitter />
+                Load More Posts
+              </>
+            )}
+          </button>
+          <div className="mt-2">
+            <a
+              href="https://twitter.com/PrimapeApp"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 dark:text-blue-400 hover:underline text-sm flex items-center gap-1 justify-center"
+            >
+              Follow @PrimapeApp <FaExternalLinkAlt className="text-xs" />
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -351,6 +369,7 @@ const EngageToEarnPage = () => {
   const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [postsOffset, setPostsOffset] = useState(0);
 
   useEffect(() => {
     if (connected && publicKey) {
@@ -524,6 +543,50 @@ const EngageToEarnPage = () => {
           isRealData: false
         }
       ]);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  const loadMorePosts = async () => {
+    try {
+      setPostsLoading(true);
+      const newOffset = postsOffset + 10;
+      
+      console.log('🔄 Loading more posts with offset:', newOffset);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/primape-posts?limit=10&offset=${newOffset}`);
+      
+      if (!response.ok) {
+        console.error('Failed to load more posts:', response.status);
+        return;
+      }
+      
+      const data = await response.json();
+      const newPosts = data.tweets.map(tweet => ({
+        id: tweet.id,
+        text: tweet.text,
+        created_at: tweet.created_at,
+        author_username: 'PrimapeApp',
+        url: `https://twitter.com/PrimapeApp/status/${tweet.id}`,
+        engagement_stats: {
+          like_count: tweet.public_metrics?.like_count || 0,
+          retweet_count: tweet.public_metrics?.retweet_count || 0,
+          reply_count: tweet.public_metrics?.reply_count || 0
+        },
+        isRealData: data.source === 'database' || data.source === 'api_fresh'
+      }));
+      
+      // Only append if we got new posts
+      if (newPosts.length > 0) {
+        setPosts(prev => [...prev, ...newPosts]);
+        setPostsOffset(newOffset);
+        console.log(`✅ Loaded ${newPosts.length} more posts`);
+      } else {
+        console.log('📭 No more posts available');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error loading more posts:', error);
     } finally {
       setPostsLoading(false);
     }
