@@ -415,7 +415,7 @@ const TournamentLeaderboard = ({ tournamentId }) => {
 
   const loadLeaderboard = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/tournaments/${tournamentId}/leaderboard`);
+      const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournamentId}/leaderboard`);
       if (response.ok) {
         const data = await response.json();
         setLeaderboard(data.leaderboard || []);
@@ -431,7 +431,7 @@ const TournamentLeaderboard = ({ tournamentId }) => {
     if (!publicKey) return;
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/tournaments/${tournamentId}/status/${publicKey.toString()}`);
+      const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournamentId}/status/${publicKey.toString()}`);
       if (response.ok) {
         const data = await response.json();
         setParticipating(data.participating);
@@ -446,7 +446,7 @@ const TournamentLeaderboard = ({ tournamentId }) => {
     if (!publicKey) return;
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/tournaments/${tournamentId}/join`, {
+      const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournamentId}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userAddress: publicKey.toString() })
@@ -458,7 +458,7 @@ const TournamentLeaderboard = ({ tournamentId }) => {
         
         // Award engagement points for joining
         try {
-          const pointsResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/engagement/award`, {
+          const pointsResponse = await fetch(`https://apes-production.up.railway.app/api/engagement/award`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -471,7 +471,7 @@ const TournamentLeaderboard = ({ tournamentId }) => {
           
           // Early bird bonus for first 100 participants
           if (leaderboard.length < 100) {
-            await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/engagement/award`, {
+            await fetch(`https://apes-production.up.railway.app/api/engagement/award`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -677,7 +677,7 @@ const TournamentDetailPage = () => {
     
     // Load tournament participant count
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/tournaments/${tournamentId}/leaderboard`);
+      const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournamentId}/leaderboard`);
       if (response.ok) {
         const data = await response.json();
         setParticipantCount(data.totalParticipants || 0);
