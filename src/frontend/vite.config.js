@@ -30,7 +30,7 @@ export default defineConfig({
   define: {
     global: 'globalThis',
     'process.env': {},
-    'import.meta.env.VITE_API_URL': '"http://localhost:5001"'
+    'import.meta.env.VITE_API_URL': '"https://apes-production.up.railway.app"'
   },
   resolve: {
     alias: {
