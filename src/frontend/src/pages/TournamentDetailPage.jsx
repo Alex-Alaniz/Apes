@@ -26,21 +26,21 @@ const NBA_FINALS_SERIES = {
   id: 'nba-finals-2025',
   name: 'NBA Finals 2025',
   description: 'The ultimate basketball championship series',
-  team1: 'Boston Celtics',
-  team2: 'Golden State Warriors',
+  team1: 'Oklahoma City Thunder',
+  team2: 'Indiana Pacers',
   seriesFormat: 'Best of 7',
   games: [
-    { id: 1, status: 'completed', winner: 'Boston Celtics', score: '108-105', date: '2025-06-05', venue: 'TD Garden' },
-    { id: 2, status: 'completed', winner: 'Golden State Warriors', score: '112-97', date: '2025-06-08', venue: 'TD Garden' },
-    { id: 3, status: 'live', score: '0-0', date: '2025-06-11', venue: 'Chase Center' },
-    { id: 4, status: 'upcoming', date: '2025-06-13', venue: 'Chase Center' },
-    { id: 5, status: 'upcoming', date: '2025-06-16', venue: 'TD Garden' },
-    { id: 6, status: 'upcoming', date: '2025-06-18', venue: 'Chase Center' },
-    { id: 7, status: 'upcoming', date: '2025-06-20', venue: 'TD Garden' }
+    { id: 1, status: 'completed', winner: 'Oklahoma City Thunder', score: '118-105', date: '2025-06-05', venue: 'Paycom Center' },
+    { id: 2, status: 'completed', winner: 'Indiana Pacers', score: '112-108', date: '2025-06-08', venue: 'Paycom Center' },
+    { id: 3, status: 'live', score: '0-0', date: '2025-06-11', venue: 'Gainbridge Fieldhouse' },
+    { id: 4, status: 'upcoming', date: '2025-06-13', venue: 'Gainbridge Fieldhouse' },
+    { id: 5, status: 'upcoming', date: '2025-06-16', venue: 'Paycom Center' },
+    { id: 6, status: 'upcoming', date: '2025-06-18', venue: 'Gainbridge Fieldhouse' },
+    { id: 7, status: 'upcoming', date: '2025-06-20', venue: 'Paycom Center' }
   ],
   standings: {
-    'Boston Celtics': 1,
-    'Golden State Warriors': 1
+    'Oklahoma City Thunder': 1,
+    'Indiana Pacers': 1
   }
 };
 
@@ -118,8 +118,8 @@ const TournamentDetailPage = () => {
       // Create market for NBA Finals game
       const marketData = {
         question: `NBA Finals 2025 - Game ${gameNumber}`,
-        description: `Predict the winner of NBA Finals Game ${gameNumber} between Boston Celtics and Golden State Warriors`,
-        options: ['Boston Celtics', 'Golden State Warriors'],
+        description: `Predict the winner of NBA Finals Game ${gameNumber} between Oklahoma City Thunder and Indiana Pacers`,
+        options: ['Oklahoma City Thunder', 'Indiana Pacers'],
         category: 'Sports',
         league: 'nba',
         tournament_type: 'tournament',
@@ -132,8 +132,8 @@ const TournamentDetailPage = () => {
           icon: tournament.banner
         },
         optionsMetadata: [
-          { label: 'Boston Celtics', icon: null },
-          { label: 'Golden State Warriors', icon: null }
+          { label: 'Oklahoma City Thunder', icon: null },
+          { label: 'Indiana Pacers', icon: null }
         ]
       };
 
@@ -298,13 +298,13 @@ const TournamentDetailPage = () => {
                 {/* Series Scoreboard */}
                 <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-xl p-6 mb-6 border border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between mb-4">
-                    <div className="text-center flex-1">
-                      <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <span className="text-green-600 dark:text-green-400 font-bold text-xl">C</span>
+                                          <div className="text-center flex-1">
+                        <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-2">
+                          <span className="text-blue-600 dark:text-blue-400 font-bold text-xl">OKC</span>
+                        </div>
+                        <div className="text-xl font-bold text-gray-900 dark:text-white">Oklahoma City Thunder</div>
+                        <div className="text-4xl font-bold text-blue-600 mt-2">1</div>
                       </div>
-                      <div className="text-xl font-bold text-gray-900 dark:text-white">Boston Celtics</div>
-                      <div className="text-4xl font-bold text-green-600 mt-2">1</div>
-                    </div>
                     
                     <div className="text-center px-8">
                       <div className="text-gray-500 dark:text-gray-400 text-sm">Best of 7 Series</div>
@@ -316,15 +316,15 @@ const TournamentDetailPage = () => {
                           return (
                             <div
                               key={gameNum}
-                              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
-                                game.status === 'completed'
-                                  ? game.winner === 'Boston Celtics'
-                                    ? 'bg-green-500 text-white border-green-500'
-                                    : 'bg-blue-500 text-white border-blue-500'
-                                  : game.status === 'live'
-                                  ? 'bg-red-100 text-red-600 border-red-500 animate-pulse'
-                                  : 'bg-gray-100 text-gray-400 border-gray-300 dark:bg-gray-700 dark:border-gray-600'
-                              }`}
+                                                             className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
+                                 game.status === 'completed'
+                                   ? game.winner === 'Oklahoma City Thunder'
+                                     ? 'bg-blue-500 text-white border-blue-500'
+                                     : 'bg-yellow-500 text-white border-yellow-500'
+                                   : game.status === 'live'
+                                   ? 'bg-red-100 text-red-600 border-red-500 animate-pulse'
+                                   : 'bg-gray-100 text-gray-400 border-gray-300 dark:bg-gray-700 dark:border-gray-600'
+                               }`}
                             >
                               {gameNum}
                             </div>
@@ -333,13 +333,13 @@ const TournamentDetailPage = () => {
                       </div>
                     </div>
                     
-                    <div className="text-center flex-1">
-                      <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <span className="text-blue-600 dark:text-blue-400 font-bold text-xl">W</span>
+                                          <div className="text-center flex-1">
+                        <div className="w-16 h-16 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center mx-auto mb-2">
+                          <span className="text-yellow-600 dark:text-yellow-400 font-bold text-xl">IND</span>
+                        </div>
+                        <div className="text-xl font-bold text-gray-900 dark:text-white">Indiana Pacers</div>
+                        <div className="text-4xl font-bold text-yellow-600 mt-2">1</div>
                       </div>
-                      <div className="text-xl font-bold text-gray-900 dark:text-white">Golden State Warriors</div>
-                      <div className="text-4xl font-bold text-blue-600 mt-2">1</div>
-                    </div>
                   </div>
                 </div>
 
@@ -376,13 +376,13 @@ const TournamentDetailPage = () => {
                           <div className="flex items-center gap-6">
                             <div className="text-center">
                               <div className={`font-bold text-lg ${
-                                game.status === 'completed' && game.winner === 'Boston Celtics' 
-                                  ? 'text-green-600 dark:text-green-400' 
+                                game.status === 'completed' && game.winner === 'Oklahoma City Thunder' 
+                                  ? 'text-blue-600 dark:text-blue-400' 
                                   : 'text-gray-900 dark:text-white'
                               }`}>
-                                Celtics
+                                Thunder
                               </div>
-                              {game.status === 'completed' && game.winner === 'Boston Celtics' && (
+                              {game.status === 'completed' && game.winner === 'Oklahoma City Thunder' && (
                                 <Crown className="w-5 h-5 text-yellow-500 mx-auto mt-1" />
                               )}
                             </div>
@@ -400,13 +400,13 @@ const TournamentDetailPage = () => {
                             
                             <div className="text-center">
                               <div className={`font-bold text-lg ${
-                                game.status === 'completed' && game.winner === 'Golden State Warriors' 
-                                  ? 'text-blue-600 dark:text-blue-400' 
+                                game.status === 'completed' && game.winner === 'Indiana Pacers' 
+                                  ? 'text-yellow-600 dark:text-yellow-400' 
                                   : 'text-gray-900 dark:text-white'
                               }`}>
-                                Warriors
+                                Pacers
                               </div>
-                              {game.status === 'completed' && game.winner === 'Golden State Warriors' && (
+                              {game.status === 'completed' && game.winner === 'Indiana Pacers' && (
                                 <Crown className="w-5 h-5 text-yellow-500 mx-auto mt-1" />
                               )}
                             </div>
@@ -481,11 +481,11 @@ const TournamentDetailPage = () => {
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-8">
                   <div className="text-center">
-                    <div className="w-20 h-20 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <span className="text-green-600 dark:text-green-400 font-bold text-2xl">C</span>
+                    <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-blue-600 dark:text-blue-400 font-bold text-2xl">OKC</span>
                     </div>
-                    <div className="font-bold text-gray-900 dark:text-white">Boston Celtics</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">(Eastern Champion)</div>
+                    <div className="font-bold text-gray-900 dark:text-white">Oklahoma City Thunder</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">(Western Champion)</div>
                   </div>
                   
                   <div className="flex-1 max-w-md">
@@ -498,7 +498,7 @@ const TournamentDetailPage = () => {
                     {/* Series Progress Bar */}
                     <div className="bg-gray-100 dark:bg-gray-700 rounded-full p-2 mb-4">
                       <div className="flex justify-between items-center">
-                        <div className="text-sm font-medium text-green-600 dark:text-green-400">BOS: 1</div>
+                        <div className="text-sm font-medium text-blue-600 dark:text-blue-400">OKC: 1</div>
                         <div className="flex gap-1">
                           {[1, 2, 3, 4, 5, 6, 7].map((gameNum) => {
                             const game = NBA_FINALS_SERIES.games[gameNum - 1];
@@ -507,9 +507,9 @@ const TournamentDetailPage = () => {
                                 key={gameNum}
                                 className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
                                   game.status === 'completed'
-                                    ? game.winner === 'Boston Celtics'
-                                      ? 'bg-green-500 text-white'
-                                      : 'bg-blue-500 text-white'
+                                    ? game.winner === 'Oklahoma City Thunder'
+                                      ? 'bg-blue-500 text-white'
+                                      : 'bg-yellow-500 text-white'
                                     : game.status === 'live'
                                     ? 'bg-red-500 text-white animate-pulse'
                                     : 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400'
@@ -520,7 +520,7 @@ const TournamentDetailPage = () => {
                             );
                           })}
                         </div>
-                        <div className="text-sm font-medium text-blue-600 dark:text-blue-400">GSW: 1</div>
+                        <div className="text-sm font-medium text-yellow-600 dark:text-yellow-400">IND: 1</div>
                       </div>
                     </div>
                     
@@ -531,11 +531,11 @@ const TournamentDetailPage = () => {
                   </div>
                   
                   <div className="text-center">
-                    <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <span className="text-blue-600 dark:text-blue-400 font-bold text-2xl">W</span>
+                    <div className="w-20 h-20 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-yellow-600 dark:text-yellow-400 font-bold text-2xl">IND</span>
                     </div>
-                    <div className="font-bold text-gray-900 dark:text-white">Golden State Warriors</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">(Western Champion)</div>
+                    <div className="font-bold text-gray-900 dark:text-white">Indiana Pacers</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">(Eastern Champion)</div>
                   </div>
                 </div>
               </div>
@@ -543,15 +543,15 @@ const TournamentDetailPage = () => {
               {/* Championship Path */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
                 <div className="text-center">
-                  <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-4">Eastern Conference</h4>
+                  <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-4">Western Conference</h4>
                   <div className="space-y-3">
-                    <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                      <div className="font-bold text-green-700 dark:text-green-300">Conference Finals</div>
-                      <div className="text-sm text-green-600 dark:text-green-400">Celtics def. Heat 4-2</div>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="font-bold text-blue-700 dark:text-blue-300">Conference Finals</div>
+                      <div className="text-sm text-blue-600 dark:text-blue-400">Thunder def. Nuggets 4-3</div>
                     </div>
-                    <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                      <div className="font-bold text-green-700 dark:text-green-300">Conference Semifinals</div>
-                      <div className="text-sm text-green-600 dark:text-green-400">Celtics def. 76ers 4-1</div>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="font-bold text-blue-700 dark:text-blue-300">Conference Semifinals</div>
+                      <div className="text-sm text-blue-600 dark:text-blue-400">Thunder def. Lakers 4-2</div>
                     </div>
                   </div>
                 </div>
@@ -567,15 +567,15 @@ const TournamentDetailPage = () => {
                 </div>
                 
                 <div className="text-center">
-                  <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-4">Western Conference</h4>
+                  <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-4">Eastern Conference</h4>
                   <div className="space-y-3">
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <div className="font-bold text-blue-700 dark:text-blue-300">Conference Finals</div>
-                      <div className="text-sm text-blue-600 dark:text-blue-400">Warriors def. Nuggets 4-3</div>
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                      <div className="font-bold text-yellow-700 dark:text-yellow-300">Conference Finals</div>
+                      <div className="text-sm text-yellow-600 dark:text-yellow-400">Pacers def. Celtics 4-2</div>
                     </div>
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <div className="font-bold text-blue-700 dark:text-blue-300">Conference Semifinals</div>
-                      <div className="text-sm text-blue-600 dark:text-blue-400">Warriors def. Lakers 4-2</div>
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                      <div className="font-bold text-yellow-700 dark:text-yellow-300">Conference Semifinals</div>
+                      <div className="text-sm text-yellow-600 dark:text-yellow-400">Pacers def. 76ers 4-1</div>
                     </div>
                   </div>
                 </div>
