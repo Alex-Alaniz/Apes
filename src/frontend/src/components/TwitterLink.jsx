@@ -21,7 +21,7 @@ const TwitterLink = ({ onLinked }) => {
 
   const checkTwitterStatus = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${publicKey.toString()}`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/users/${publicKey.toString()}`);
       if (response.ok) {
         const data = await response.json();
         if (data.twitter_username) {
@@ -45,7 +45,7 @@ const TwitterLink = ({ onLinked }) => {
 
     try {
       // Get auth URL from backend
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/twitter/auth/link`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/auth/link`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

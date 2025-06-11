@@ -21,7 +21,7 @@ const TwitterFeed = ({ twitterLinked }) => {
 
   const fetchTweets = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/twitter/primape-posts?limit=5`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/primape-posts?limit=5`);
       if (!response.ok) throw new Error('Failed to fetch tweets');
       
       const data = await response.json();
@@ -38,7 +38,7 @@ const TwitterFeed = ({ twitterLinked }) => {
     if (!publicKey) return;
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/twitter/engagement-summary`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/engagement-summary`, {
         headers: {
           'x-wallet-address': publicKey.toString(),
         },
@@ -91,7 +91,7 @@ const TwitterFeed = ({ twitterLinked }) => {
       // Wait a bit then verify engagement
       setTimeout(async () => {
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/twitter/validate-engagement`, {
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/validate-engagement`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

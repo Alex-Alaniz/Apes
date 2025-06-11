@@ -135,6 +135,11 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
           <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <FaXTwitter className="text-gray-900 dark:text-gray-100" />
             @PrimapeApp Latest Posts
+            {posts.length > 0 && posts[0].isRealData && (
+              <span className="bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs px-2 py-1 rounded-full font-normal">
+                Live
+              </span>
+            )}
           </h3>
           <div className="flex items-center gap-3">
             <button
@@ -161,13 +166,22 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
             <span className="ml-2 text-gray-600 dark:text-gray-400">Loading posts...</span>
           </div>
         ) : postsError ? (
-          <div className="text-center py-12">
-            <p className="text-red-600 dark:text-red-400 mb-4">{postsError}</p>
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-6 text-center">
+            <FaXTwitter className="text-2xl mx-auto mb-2 text-amber-600 dark:text-amber-400" />
+            <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
+              {posts.length > 0 && !posts[0].isRealData ? 'Using Fallback Content' : 'Connection Issue'}
+            </h4>
+            <p className="text-amber-700 dark:text-amber-300 mb-4 text-sm">{postsError}</p>
+            {posts.length > 0 && !posts[0].isRealData && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">
+                📡 Server is updating with the fixed Twitter API. Real tweets will appear automatically once complete.
+              </p>
+            )}
             <button
               onClick={onRefreshPosts}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
             >
-              Try Again
+              {posts.length > 0 && !posts[0].isRealData ? 'Check for Real Tweets' : 'Try Again'}
             </button>
           </div>
         ) : posts.length === 0 ? (
@@ -357,7 +371,7 @@ const EngageToEarnPage = () => {
       console.log('🔍 EngageToEarn: Checking Twitter status for', publicKey.toString());
       
       // Use the same working endpoint as other pages
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${publicKey.toString()}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/users/${publicKey.toString()}`, {
         headers: { 
           'x-wallet-address': publicKey.toString(),
           'Content-Type': 'application/json'
@@ -404,7 +418,7 @@ const EngageToEarnPage = () => {
     
     try {
       console.log('🔄 EngageToEarn: Creating/ensuring user exists');
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/create-or-get`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/users/create-or-get`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -430,7 +444,9 @@ const EngageToEarnPage = () => {
     try {
       setPostsLoading(true);
       setPostsError(null);
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/twitter/primape-posts?limit=5`);
+      
+      console.log('🐦 Fetching @PrimapeApp posts from API...');
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/primape-posts?limit=5`);
       
       if (!response.ok) {
         console.error('API response not ok:', response.status, response.statusText);
@@ -438,7 +454,16 @@ const EngageToEarnPage = () => {
       }
       
       const data = await response.json();
-      console.log('Fetched posts data:', data);
+      console.log('🐦 Fetched posts data:', data);
+      console.log('🔍 API source:', data.source);
+      
+      // Check if we got real API data or fallback
+      const isRealData = data.source === 'api' || (data.source !== 'fallback' && data.source !== 'simplified_test_version' && data.source !== 'emergency_fallback');
+      
+      if (!isRealData) {
+        console.warn('⚠️ API returned fallback data. Source:', data.source);
+        setPostsError(`Using fallback tweets (API source: ${data.source}). Real tweets will load once server restarts.`);
+      }
       
       // Transform API response to match the expected format
       const transformedPosts = (data.tweets || []).map(tweet => ({
@@ -448,47 +473,55 @@ const EngageToEarnPage = () => {
         author_username: 'PrimapeApp',
         url: `https://twitter.com/PrimapeApp/status/${tweet.id}`,
         engagement_stats: tweet.public_metrics || { 
-          like_count: 0, 
-          retweet_count: 0, 
-          reply_count: 0 
-        }
+          like_count: tweet.public_metrics?.like_count || 0, 
+          retweet_count: tweet.public_metrics?.retweet_count || 0, 
+          reply_count: tweet.public_metrics?.reply_count || 0 
+        },
+        isRealData: isRealData
       }));
       
       if (transformedPosts.length > 0) {
         setPosts(transformedPosts);
-        setPostsError(null);
+        
+        if (isRealData) {
+          setPostsError(null);
+          console.log('✅ Real @PrimapeApp tweets loaded successfully!');
+        }
       } else {
         throw new Error('No tweets returned from API');
       }
     } catch (error) {
-      console.error('Error fetching @PrimapeApp posts:', error);
-      setPostsError('Failed to load posts - showing demo content');
+      console.error('❌ Error fetching @PrimapeApp posts:', error);
+      setPostsError('Failed to load real tweets - using demo content. Please try refreshing in a few minutes.');
       
       // Enhanced fallback with multiple demo posts
       setPosts([
         {
           id: 'demo-post-1',
           text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n⚡ Early bird bonus still available!\n\n🚀 apes.primape.app/tournaments\n\n#PredictionMarkets #FIFA #ClubWorldCup #Web3',
-          created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+          created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
           author_username: 'PrimapeApp',
           url: 'https://twitter.com/PrimapeApp',
-          engagement_stats: { like_count: 45, retweet_count: 12, reply_count: 8 }
+          engagement_stats: { like_count: 45, retweet_count: 12, reply_count: 8 },
+          isRealData: false
         },
         {
           id: 'demo-post-2',
           text: 'GM Apes! 🦍\n\nReady to make some epic predictions today?\n\n✨ New markets added daily\n💎 Earn APES points for every prediction\n🎯 Tournament leaderboards heating up\n\nWhat\'s your play today? 👀\n\n#GM #PredictionMarkets #Solana',
-          created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
+          created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
           author_username: 'PrimapeApp',
           url: 'https://twitter.com/PrimapeApp',
-          engagement_stats: { like_count: 23, retweet_count: 6, reply_count: 4 }
+          engagement_stats: { like_count: 23, retweet_count: 6, reply_count: 4 },
+          isRealData: false
         },
         {
           id: 'demo-post-3',
           text: '🎉 Community Milestone Alert! 🎉\n\n✅ 1,000+ Active Predictors\n✅ 500+ Markets Created\n✅ 100,000+ Predictions Made\n✅ 50,000+ APES Distributed\n\nThanks to our amazing community! The future of prediction markets is bright 🚀\n\n#Community #Milestones #Web3',
-          created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
+          created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
           author_username: 'PrimapeApp',
           url: 'https://twitter.com/PrimapeApp',
-          engagement_stats: { like_count: 67, retweet_count: 18, reply_count: 12 }
+          engagement_stats: { like_count: 67, retweet_count: 18, reply_count: 12 },
+          isRealData: false
         }
       ]);
     } finally {

@@ -49,7 +49,7 @@ const TwitterCallback = () => {
       }
 
       // Exchange authorization code for access token
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/twitter/auth/callback`, {
+              const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/auth/callback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
