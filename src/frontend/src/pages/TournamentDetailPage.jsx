@@ -22,7 +22,10 @@ import {
   Globe,
   ChevronDown,
   ChevronUp,
-  Eye
+  Eye,
+  Clock,
+  Zap,
+  Gift
 } from 'lucide-react';
 
 // NBA Finals Series Data
@@ -158,6 +161,63 @@ const getUpcomingMatches = () => {
     .filter(match => new Date(match.date) >= today)
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(0, 10);
+};
+
+// Countdown Timer Component
+const CountdownTimer = ({ targetDate, label }) => {
+  const [timeLeft, setTimeLeft] = useState({});
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date().getTime();
+      const distance = new Date(targetDate).getTime() - now;
+
+      if (distance > 0) {
+        setTimeLeft({
+          days: Math.floor(distance / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+          minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
+          seconds: Math.floor((distance % (1000 * 60)) / 1000)
+        });
+      } else {
+        setTimeLeft({ expired: true });
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [targetDate]);
+
+  if (timeLeft.expired) {
+    return (
+      <div className="text-center text-red-600 dark:text-red-400 font-bold">
+        🔴 {label} has begun!
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-center">
+      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">{label}</div>
+      <div className="flex justify-center gap-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 min-w-[60px]">
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{timeLeft.days || 0}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Days</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 min-w-[60px]">
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{timeLeft.hours || 0}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Hours</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 min-w-[60px]">
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{timeLeft.minutes || 0}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Mins</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 min-w-[60px]">
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{timeLeft.seconds || 0}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Secs</div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // Club World Cup Matches Component with group-based organization
@@ -395,12 +455,48 @@ const TournamentLeaderboard = ({ tournamentId }) => {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setParticipating(true);
+        
+        // Award engagement points for joining
+        try {
+          const pointsResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/engagement/award`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userAddress: publicKey.toString(),
+              activityType: 'TOURNAMENT_JOIN',
+              points: 50, // Base join reward
+              metadata: { tournamentId }
+            })
+          });
+          
+          // Early bird bonus for first 100 participants
+          if (leaderboard.length < 100) {
+            await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/engagement/award`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userAddress: publicKey.toString(),
+                activityType: 'EARLY_BIRD_BONUS',
+                points: 100,
+                metadata: { tournamentId, reason: 'First 100 participants' }
+              })
+            });
+          }
+        } catch (pointsError) {
+          console.error('Error awarding join points:', pointsError);
+        }
+        
         loadLeaderboard(); // Refresh leaderboard
         checkUserStatus(); // Refresh user stats
+        
+        // Show success message with rewards
+        alert(`🎉 Successfully joined tournament!\n💰 Earned ${leaderboard.length < 100 ? '150' : '50'} APES points\n🏆 Good luck in the competition!`);
       }
     } catch (error) {
       console.error('Error joining tournament:', error);
+      alert('❌ Failed to join tournament. Please try again.');
     }
   };
 
@@ -531,10 +627,28 @@ const TournamentLeaderboard = ({ tournamentId }) => {
       )}
 
       {/* Tournament info */}
-      <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl p-4 border border-yellow-200 dark:border-yellow-700">
-        <div className="text-sm text-yellow-800 dark:text-yellow-200">
-          <strong>How it works:</strong> Join the tournament, make predictions on tournament matches, and earn APES tokens based on your accuracy. 
-          Leaderboard updates automatically as matches resolve.
+      <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl p-6 border border-yellow-200 dark:border-yellow-700">
+        <h4 className="font-bold text-yellow-800 dark:text-yellow-200 mb-3 flex items-center gap-2">
+          ⚡ How Tournament Competition Works
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-yellow-700 dark:text-yellow-300">
+          <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded-lg p-3">
+            <div className="font-bold mb-1">1️⃣ Join Tournament</div>
+            <div>Click "Join Tournament" to register and earn instant rewards + early bird bonuses</div>
+          </div>
+          <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded-lg p-3">
+            <div className="font-bold mb-1">2️⃣ Make Predictions</div>
+            <div>Predict outcomes on Club World Cup matches to earn points and climb the leaderboard</div>
+          </div>
+          <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded-lg p-3">
+            <div className="font-bold mb-1">3️⃣ Win Prizes</div>
+            <div>Top performers share the {tournamentId === 'club-world-cup-2025' ? '25,000' : '10,000'} APES prize pool based on accuracy</div>
+          </div>
+        </div>
+        <div className="mt-4 p-3 bg-yellow-200 dark:bg-yellow-800/50 rounded-lg">
+          <div className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+            💡 <strong>Pro Tip:</strong> Join early to secure your early bird bonus and get first access to prediction markets!
+          </div>
         </div>
       </div>
     </div>
@@ -550,6 +664,8 @@ const TournamentDetailPage = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedGroup, setSelectedGroup] = useState('groups');
   const [loading, setLoading] = useState(true);
+  const [participantCount, setParticipantCount] = useState(0);
+  const [recentJoiners, setRecentJoiners] = useState([]);
   
   // Check if user is admin
   const isAdmin = publicKey && isWalletAuthorized(publicKey.toString());
@@ -561,6 +677,27 @@ const TournamentDetailPage = () => {
   const loadTournamentData = async () => {
     setLoading(true);
     
+    // Load tournament participant count
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/tournaments/${tournamentId}/leaderboard`);
+      if (response.ok) {
+        const data = await response.json();
+        setParticipantCount(data.totalParticipants || 0);
+        
+        // Get recent joiners (last 3)
+        const recentJoiners = (data.leaderboard || [])
+          .sort((a, b) => new Date(b.joined_at) - new Date(a.joined_at))
+          .slice(0, 3)
+          .map(user => ({
+            username: user.username || user.twitter_username || `${user.user_address.substring(0, 8)}...`,
+            joinedAt: user.joined_at
+          }));
+        setRecentJoiners(recentJoiners);
+      }
+    } catch (error) {
+      console.error('Error loading tournament data:', error);
+    }
+    
     // Mock tournament data based on ID
     if (tournamentId === 'club-world-cup-2025') {
       setTournament({
@@ -571,9 +708,12 @@ const TournamentDetailPage = () => {
         startDate: '2025-06-14',
         endDate: '2025-07-13',
         totalMarkets: 63,
-        prizePool: 0, // Configured through admin
-        participants: 0, // To be updated as users join
-        type: 'football'
+        prizePool: 25000, // Enhanced prize pool for FOMO
+        participants: participantCount,
+        maxParticipants: 1000, // Create scarcity
+        type: 'football',
+        earlyBirdBonus: 100, // Points for early joiners
+        joinReward: 50 // Base points for joining
       });
     } else if (tournamentId === 'nba-finals-2025') {
       setTournament({
@@ -584,9 +724,12 @@ const TournamentDetailPage = () => {
         startDate: '2025-06-05',
         endDate: '2025-06-22',
         totalMarkets: 7, // Up to 7 games in best of 7 series
-        prizePool: 0, // Configured through admin
-        participants: 0, // To be updated as users join
-        type: 'basketball'
+        prizePool: 10000,
+        participants: participantCount,
+        maxParticipants: 500,
+        type: 'basketball',
+        earlyBirdBonus: 50,
+        joinReward: 25
       });
     }
     
@@ -687,20 +830,36 @@ const TournamentDetailPage = () => {
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Tournament Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center border-2 border-yellow-200 dark:border-yellow-800">
             <Trophy className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
               {tournament.prizePool.toLocaleString()}
             </div>
             <div className="text-gray-600 dark:text-gray-400 text-sm">Prize Pool (APES)</div>
+            <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">🔥 Enhanced Pool</div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center">
+          
+          <div className={`bg-white dark:bg-gray-800 rounded-xl p-6 text-center border-2 ${
+            tournament.participants >= tournament.maxParticipants * 0.8 
+              ? 'border-red-200 dark:border-red-800' 
+              : 'border-blue-200 dark:border-blue-800'
+          }`}>
             <Users className="w-8 h-8 text-blue-500 mx-auto mb-2" />
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
               {tournament.participants.toLocaleString()}
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                /{tournament.maxParticipants.toLocaleString()}
+              </span>
             </div>
             <div className="text-gray-600 dark:text-gray-400 text-sm">Participants</div>
+            {tournament.participants >= tournament.maxParticipants * 0.8 && (
+              <div className="text-xs text-red-600 dark:text-red-400 mt-1">⚡ Almost Full!</div>
+            )}
+            {tournament.participants < tournament.maxParticipants * 0.5 && (
+              <div className="text-xs text-green-600 dark:text-green-400 mt-1">🌟 Early Bird Bonus</div>
+            )}
           </div>
+          
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center">
             <Target className="w-8 h-8 text-green-500 mx-auto mb-2" />
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -708,14 +867,102 @@ const TournamentDetailPage = () => {
             </div>
             <div className="text-gray-600 dark:text-gray-400 text-sm">Total Markets</div>
           </div>
+          
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center">
             <Calendar className="w-8 h-8 text-purple-500 mx-auto mb-2" />
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {Math.ceil((new Date(tournament.endDate) - new Date(tournament.startDate)) / (1000 * 60 * 60 * 24))}
+              {Math.ceil((new Date(tournament.startDate) - new Date()) / (1000 * 60 * 60 * 24))}
             </div>
-            <div className="text-gray-600 dark:text-gray-400 text-sm">Days Duration</div>
+            <div className="text-gray-600 dark:text-gray-400 text-sm">Days Until Start</div>
+            {Math.ceil((new Date(tournament.startDate) - new Date()) / (1000 * 60 * 60 * 24)) <= 7 && (
+              <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">⏰ Starting Soon</div>
+            )}
           </div>
         </div>
+
+        {/* Join Tournament CTA Section */}
+        {!connected && (
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl p-6 mb-8 border border-purple-200 dark:border-purple-700">
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                🚀 Connect Wallet to Join Tournament
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                Connect your wallet to participate in the FIFA Club World Cup 2025 and earn rewards!
+              </p>
+              <div className="flex items-center justify-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                <span>💰 {tournament.joinReward} APES for joining</span>
+                <span>🎯 {tournament.earlyBirdBonus} bonus points if first 100</span>
+                <span>🏆 Prize pool: {tournament.prizePool.toLocaleString()} APES</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Countdown Timer & Urgency */}
+        <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-6 mb-8 border border-purple-200 dark:border-purple-700">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                <Clock className="w-6 h-6 text-purple-500" />
+                Tournament Starts In
+              </h3>
+              <CountdownTimer 
+                targetDate={tournament.startDate} 
+                label="⚽ FIFA Club World Cup 2025"
+              />
+            </div>
+            
+            <div className="text-center lg:text-right">
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4">
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Tournament Fill Status</div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                    <div 
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 h-3 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min((tournament.participants / tournament.maxParticipants) * 100, 100)}%` }}
+                    ></div>
+                  </div>
+                  <span className="text-sm font-bold text-gray-900 dark:text-white">
+                    {Math.round((tournament.participants / tournament.maxParticipants) * 100)}%
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {tournament.maxParticipants - tournament.participants} spots remaining
+                </div>
+              </div>
+              
+              {tournament.participants < 100 && (
+                <div className="bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200 text-sm font-medium px-3 py-2 rounded-lg">
+                  🌟 Early Bird Bonus Still Available!
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Activity & FOMO */}
+        {recentJoiners.length > 0 && (
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-4 mb-8 border border-green-200 dark:border-green-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-green-800 dark:text-green-200 mb-1">🔥 Recent Joiners</h4>
+                <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-300">
+                  {recentJoiners.map((joiner, index) => (
+                    <span key={index} className="bg-green-100 dark:bg-green-900/50 px-2 py-1 rounded">
+                      {joiner.username}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-green-600 dark:text-green-400 font-medium">
+                  Join now to compete!
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Navigation Tabs */}
         <div className="border-b border-gray-200 dark:border-gray-700 mb-8">

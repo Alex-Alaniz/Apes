@@ -33,6 +33,36 @@ router.post('/track', async (req, res) => {
   }
 });
 
+// Award points directly
+router.post('/award', async (req, res) => {
+  try {
+    const { userAddress, activityType, points, metadata } = req.body;
+    
+    if (!userAddress || !activityType || !points) {
+      return res.status(400).json({ error: 'User address, activity type, and points are required' });
+    }
+
+    // Award points using the engagement service
+    const result = await engagementService.awardPoints(
+      userAddress,
+      activityType,
+      points,
+      metadata
+    );
+
+    console.log(`✅ Awarded ${points} points to ${userAddress.substring(0, 8)}... for ${activityType}`);
+
+    res.json({
+      success: true,
+      points_awarded: points,
+      activity: result
+    });
+  } catch (error) {
+    console.error('Error awarding points:', error);
+    res.status(500).json({ error: 'Failed to award points' });
+  }
+});
+
 // Get user's point balance
 router.get('/balance/:walletAddress', async (req, res) => {
   try {

@@ -22,6 +22,12 @@ const ACTIVITY_POINTS = {
   FOLLOW_USER: 10,
   GET_FOLLOWED: 15,
   
+  // Tournament activities
+  TOURNAMENT_JOIN: 50,
+  EARLY_BIRD_BONUS: 100,
+  TOURNAMENT_PREDICTION: 15,
+  TOURNAMENT_WIN: 75,
+  
   // Twitter activities
   FOLLOW_PRIMAPE: 50,
   TWITTER_LIKE: 5,
@@ -61,6 +67,40 @@ class EngagementService {
     }
     
     return result && result.twitter_id !== null;
+  }
+
+  // Award points directly (for special activities like tournament joining)
+  async awardPoints(userAddress, activityType, points, metadata = {}) {
+    try {
+      console.log(`🎯 Awarding ${points} points to ${userAddress.substring(0, 8)}... for ${activityType}`);
+
+      // Insert the engagement activity
+      const { data: result, error: insertError } = await supabase
+        .from('engagement_points')
+        .insert({
+          user_address: userAddress,
+          activity_type: activityType,
+          points_earned: points,
+          metadata: metadata,
+          requires_twitter: false
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Error inserting engagement points:', insertError);
+        throw insertError;
+      }
+
+      // Update point_balances table for real-time display
+      await this.updatePointBalance(userAddress);
+
+      console.log(`✅ Successfully awarded ${points} points to ${userAddress.substring(0, 8)}... for ${activityType}`);
+      return result;
+    } catch (error) {
+      console.error('Error awarding points:', error);
+      throw error;
+    }
   }
 
   // Track an activity and award points
