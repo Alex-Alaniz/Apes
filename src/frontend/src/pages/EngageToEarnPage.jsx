@@ -163,43 +163,45 @@ const TwitterEngagement = ({ twitterLinked }) => {
     return `${Math.floor(diffInHours / 24)}d`;
   };
 
-  if (!twitterLinked || !twitterUsername) {
-    return (
-      <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6 text-center">
-        <FaXTwitter className="text-4xl mx-auto mb-4 text-gray-900 dark:text-gray-100" />
-        <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Connect Your 𝕏 Account</h3>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Link your 𝕏 account to engage with @PrimapeApp posts and earn APES points!
-        </p>
-        <div className="grid grid-cols-3 gap-4 text-sm text-gray-500 dark:text-gray-400 mb-4">
-          <div>💖 +5 pts per like</div>
-          <div>🔄 +10 pts per repost</div>
-          <div>💬 +15 pts per comment</div>
-        </div>
-        {!twitterLinked ? (
-          <button
-            onClick={() => window.location.href = '/profile'}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Link 𝕏 Account
-          </button>
-        ) : (
-          <div className="text-orange-600 dark:text-orange-400">
-            <p className="mb-2">⚠️ Twitter account verification in progress...</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
-            >
-              Refresh Page
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
+  // Show a banner if not authenticated, but still show tweets below
+  const isAuthenticated = twitterLinked && twitterUsername;
 
   return (
     <div className="space-y-6">
+      {/* Twitter Authentication Banner for non-authenticated users */}
+      {!isAuthenticated && (
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6 text-center">
+          <FaXTwitter className="text-4xl mx-auto mb-4 text-gray-900 dark:text-gray-100" />
+          <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Connect Your 𝕏 Account</h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Link your 𝕏 account to engage with @PrimapeApp posts and earn APES points!
+          </p>
+          <div className="grid grid-cols-3 gap-4 text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <div>💖 +5 pts per like</div>
+            <div>🔄 +10 pts per repost</div>
+            <div>💬 +15 pts per comment</div>
+          </div>
+          {!twitterLinked ? (
+            <button
+              onClick={() => window.location.href = '/profile'}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Link 𝕏 Account
+            </button>
+          ) : (
+            <div className="text-orange-600 dark:text-orange-400">
+              <p className="mb-2">⚠️ Twitter account verification in progress...</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
+              >
+                Refresh Page
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Points Summary */}
       {pointsEarned > 0 && (
         <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
@@ -273,10 +275,12 @@ const TwitterEngagement = ({ twitterLinked }) => {
 
                 <div className="flex items-center gap-4 border-t border-gray-200 dark:border-gray-700 pt-4">
                   <button
-                    onClick={() => handleEngagement(post.id, 'like')}
-                    disabled={postEngagements.like || isVerifying[`${post.id}-like`]}
+                    onClick={() => isAuthenticated ? handleEngagement(post.id, 'like') : alert('🔗 Please link your 𝕏 account first!\n\nGo to Profile → Link 𝕏 Account to start earning points.')}
+                    disabled={!isAuthenticated || postEngagements.like || isVerifying[`${post.id}-like`]}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
-                      postEngagements.like
+                      !isAuthenticated
+                        ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60'
+                        : postEngagements.like
                         ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 cursor-default'
                         : isVerifying[`${post.id}-like`]
                         ? 'bg-gray-200 dark:bg-gray-600 text-gray-500 cursor-wait'
@@ -284,7 +288,9 @@ const TwitterEngagement = ({ twitterLinked }) => {
                     }`}
                   >
                     <FaHeart className={postEngagements.like ? 'fill-current' : ''} />
-                    {isVerifying[`${post.id}-like`] ? (
+                    {!isAuthenticated ? (
+                      'Link 𝕏 to Like'
+                    ) : isVerifying[`${post.id}-like`] ? (
                       'Verifying...'
                     ) : postEngagements.like ? (
                       <span className="flex items-center gap-1">
@@ -297,10 +303,12 @@ const TwitterEngagement = ({ twitterLinked }) => {
                   </button>
 
                   <button
-                    onClick={() => handleEngagement(post.id, 'repost')}
-                    disabled={postEngagements.repost || isVerifying[`${post.id}-repost`]}
+                    onClick={() => isAuthenticated ? handleEngagement(post.id, 'repost') : alert('🔗 Please link your 𝕏 account first!\n\nGo to Profile → Link 𝕏 Account to start earning points.')}
+                    disabled={!isAuthenticated || postEngagements.repost || isVerifying[`${post.id}-repost`]}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
-                      postEngagements.repost
+                      !isAuthenticated
+                        ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60'
+                        : postEngagements.repost
                         ? 'bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 cursor-default'
                         : isVerifying[`${post.id}-repost`]
                         ? 'bg-gray-200 dark:bg-gray-600 text-gray-500 cursor-wait'
@@ -308,7 +316,9 @@ const TwitterEngagement = ({ twitterLinked }) => {
                     }`}
                   >
                     <FaRetweet />
-                    {isVerifying[`${post.id}-repost`] ? (
+                    {!isAuthenticated ? (
+                      'Link 𝕏 to Repost'
+                    ) : isVerifying[`${post.id}-repost`] ? (
                       'Verifying...'
                     ) : postEngagements.repost ? (
                       <span className="flex items-center gap-1">
@@ -321,10 +331,12 @@ const TwitterEngagement = ({ twitterLinked }) => {
                   </button>
 
                   <button
-                    onClick={() => handleEngagement(post.id, 'comment')}
-                    disabled={postEngagements.comment || isVerifying[`${post.id}-comment`]}
+                    onClick={() => isAuthenticated ? handleEngagement(post.id, 'comment') : alert('🔗 Please link your 𝕏 account first!\n\nGo to Profile → Link 𝕏 Account to start earning points.')}
+                    disabled={!isAuthenticated || postEngagements.comment || isVerifying[`${post.id}-comment`]}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
-                      postEngagements.comment
+                      !isAuthenticated
+                        ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60'
+                        : postEngagements.comment
                         ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 cursor-default'
                         : isVerifying[`${post.id}-comment`]
                         ? 'bg-gray-200 dark:bg-gray-600 text-gray-500 cursor-wait'
@@ -332,7 +344,9 @@ const TwitterEngagement = ({ twitterLinked }) => {
                     }`}
                   >
                     <FaComment />
-                    {isVerifying[`${post.id}-comment`] ? (
+                    {!isAuthenticated ? (
+                      'Link 𝕏 to Comment'
+                    ) : isVerifying[`${post.id}-comment`] ? (
                       'Verifying...'
                     ) : postEngagements.comment ? (
                       <span className="flex items-center gap-1">
