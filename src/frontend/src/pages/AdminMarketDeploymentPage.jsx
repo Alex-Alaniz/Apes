@@ -130,7 +130,7 @@ const AdminMarketDeploymentPage = () => {
     
     try {
       const walletAddress = publicKey.toString();
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const endpoint = showAll 
         ? `${apiUrl}/api/admin/all-polymarket-markets`
         : `${apiUrl}/api/admin/pending-markets`;
@@ -169,7 +169,7 @@ const AdminMarketDeploymentPage = () => {
     
     try {
       const walletAddress = publicKey.toString();
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${apiUrl}/api/admin/deployed-markets`, {
         headers: {
           'X-Wallet-Address': walletAddress
@@ -281,7 +281,7 @@ const AdminMarketDeploymentPage = () => {
       const walletAddress = publicKey.toString();
       
       // First, get the market data from backend
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${apiUrl}/api/admin/deploy-market/${polyId}`, {
         method: 'POST',
         headers: {
@@ -626,7 +626,7 @@ const AdminMarketDeploymentPage = () => {
     
     try {
       const walletAddress = publicKey.toString();
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${apiUrl}/api/admin/decline-market/${polyId}`, {
         method: 'POST',
         headers: {

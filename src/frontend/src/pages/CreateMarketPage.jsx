@@ -135,7 +135,7 @@ const CreateMarketPage = () => {
         try {
           console.log('🔄 Attempting to save market to database...');
           
-          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+          const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
           
           // Try multiple endpoints in case of routing issues
           let saveResponse;

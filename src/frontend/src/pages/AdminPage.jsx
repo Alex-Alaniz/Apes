@@ -63,7 +63,7 @@ const AdminPage = () => {
     setLoading(true);
     try {
       // Call admin-specific endpoint to get ALL markets (including resolved)
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       
       // Add cache busting for admin refresh to force fresh data
       const cacheBuster = Date.now();
@@ -171,7 +171,7 @@ const AdminPage = () => {
     setSyncingMarket(prev => ({ ...prev, [marketPubkey]: true }));
     
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${apiUrl}/api/admin/sync-market-resolution/${marketPubkey}`, {
         method: 'POST',
         headers: {
@@ -220,7 +220,7 @@ const AdminPage = () => {
     setSyncingVolumes(true);
     
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${apiUrl}/api/markets/force-sync`, {
         method: 'POST',
         headers: {

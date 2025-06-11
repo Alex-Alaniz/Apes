@@ -942,7 +942,7 @@ class MarketService {
         // Track engagement points for placing a prediction
         try {
           console.log('🎯 Calling predictions API:', {
-            url: `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/predictions/place`,
+            url: `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/predictions/place`,
             walletAddress: walletPubkey.toString(),
             marketAddress: marketPubkey,
             optionIndex,
@@ -950,7 +950,7 @@ class MarketService {
           });
           
           const response = await fetch(
-            `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/predictions/place`,
+            `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/predictions/place`,
             {
               method: 'POST',
               headers: {
@@ -975,7 +975,7 @@ class MarketService {
             
             // Update participant count for this market
             try {
-              await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/markets/update-participant`, {
+              await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets/update-participant`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -1019,7 +1019,7 @@ class MarketService {
         // Try to track engagement even on timeout
         try {
           console.log('🎯 Calling predictions API (timeout fallback):', {
-            url: `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/predictions/place`,
+            url: `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/predictions/place`,
             walletAddress: walletPubkey.toString(),
             marketAddress: marketPubkey,
             optionIndex,
@@ -1027,7 +1027,7 @@ class MarketService {
           });
           
           const response = await fetch(
-            `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/predictions/place`,
+            `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/predictions/place`,
             {
               method: 'POST',
               headers: {
@@ -1137,7 +1137,7 @@ class MarketService {
       console.log(`💰 Claiming reward for prediction ID: ${predictionId}`);
       
       // CRITICAL FIX: Get market address from prediction first
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       
       // First, get the prediction details to get market address
       const userPositionsResponse = await fetch(`${backendUrl}/api/predictions/user/${this.wallet?.publicKey?.toString()}`, {
@@ -1355,7 +1355,7 @@ class MarketService {
     try {
       console.log(`📊 Fetching all positions for user: ${userAddress}`);
       
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       
       // Use simpler cache control to prevent rate limiting
       const response = await fetch(`${backendUrl}/api/predictions/user/${userAddress}`, {
@@ -1771,7 +1771,7 @@ class MarketService {
     try {
       console.log('🔄 Triggering force volume sync for all markets...');
       
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${backendUrl}/api/markets/force-sync`, {
         method: 'POST',
         headers: {
@@ -1827,7 +1827,7 @@ class MarketService {
     try {
       console.log('🔴 Fetching LIVE market data directly from blockchain...');
       
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${backendUrl}/api/markets/live`, {
         headers: {
           'Content-Type': 'application/json',
@@ -2024,7 +2024,7 @@ class MarketService {
     try {
       console.log(`🔍 Syncing resolution status for market: ${marketAddress}`);
       
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${backendUrl}/api/markets/sync-resolution/${marketAddress}`, {
         method: 'POST',
         headers: {
@@ -2089,7 +2089,7 @@ class MarketService {
     try {
       console.log('🔄 Syncing resolution status for ALL markets...');
       
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${backendUrl}/api/markets/sync-all-resolutions`, {
         method: 'POST',
         headers: {
@@ -2147,7 +2147,7 @@ class MarketService {
     try {
       console.log(`👀 Checking resolution status for market: ${marketAddress}`);
       
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${backendUrl}/api/markets/resolution-status/${marketAddress}`, {
         headers: {
           'Content-Type': 'application/json',
