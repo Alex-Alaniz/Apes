@@ -10,6 +10,7 @@ const adminRoutes = require('./routes/admin');
 const engagementRoutes = require('./routes/engagement');
 const twitterRoutes = require('./routes/twitter-supabase');
 const setupRoutes = require('./routes/setup');
+const tournamentRoutes = require('./routes/tournaments');
 const syncService = require('./services/syncService');
 
 dotenv.config();
@@ -35,6 +36,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/engagement', engagementRoutes);
 app.use('/api/twitter', twitterRoutes);
 app.use('/api/setup', setupRoutes);
+app.use('/api/tournaments', tournamentRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

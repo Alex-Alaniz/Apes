@@ -19,7 +19,10 @@ import {
   Target,
   Zap,
   Flag,
-  Globe
+  Globe,
+  ChevronDown,
+  ChevronUp,
+  Eye
 } from 'lucide-react';
 
 // NBA Finals Series Data
@@ -155,6 +158,387 @@ const getUpcomingMatches = () => {
     .filter(match => new Date(match.date) >= today)
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(0, 10);
+};
+
+// Club World Cup Matches Component with group-based organization
+const ClubWorldCupMatches = () => {
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
+  const [showAllMatches, setShowAllMatches] = useState(false);
+
+  const toggleGroup = (group) => {
+    const newExpanded = new Set(expandedGroups);
+    if (newExpanded.has(group)) {
+      newExpanded.delete(group);
+    } else {
+      newExpanded.add(group);
+    }
+    setExpandedGroups(newExpanded);
+  };
+
+  // Group matches by group and round
+  const groupStageMatches = CLUB_WC_ALL_MATCHES.filter(match => match.round === 'Group Stage');
+  const knockoutMatches = CLUB_WC_ALL_MATCHES.filter(match => match.round !== 'Group Stage');
+
+  // Group stage matches by group
+  const matchesByGroup = {};
+  Object.keys(CLUB_WC_GROUPS).forEach(groupLetter => {
+    matchesByGroup[groupLetter] = groupStageMatches.filter(match => match.group === groupLetter);
+  });
+
+  // Get first match for each group (for initial display)
+  const getFirstMatchForGroup = (groupLetter) => {
+    return matchesByGroup[groupLetter]?.[0];
+  };
+
+  const MatchCard = ({ match, isFirst = false }) => (
+    <div className={`bg-white dark:bg-gray-800 rounded-xl p-4 ${isFirst ? 'border-2 border-purple-200 dark:border-purple-700' : 'border border-gray-200 dark:border-gray-700'}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="text-center min-w-[60px]">
+            <div className="text-xs text-gray-500 dark:text-gray-400">#{match.match}</div>
+            <div className="font-bold text-purple-600 dark:text-purple-400 text-sm">{match.round === 'Group Stage' ? `Group ${match.group}` : match.round}</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right min-w-[120px]">
+              <div className="font-bold text-gray-900 dark:text-white text-sm">{match.home}</div>
+            </div>
+            <div className="text-gray-400 font-bold">vs</div>
+            <div className="text-left min-w-[120px]">
+              <div className="font-bold text-gray-900 dark:text-white text-sm">{match.away}</div>
+            </div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-sm font-medium text-gray-900 dark:text-white">{match.date}</div>
+          <div className="text-xs text-gray-600 dark:text-gray-400">{match.time} {match.timezone}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-500">{match.venue}</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Tournament Matches</h3>
+        <button
+          onClick={() => setShowAllMatches(!showAllMatches)}
+          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+        >
+          <Eye className="w-4 h-4" />
+          {showAllMatches ? 'Show Groups Only' : 'Show All Matches'}
+        </button>
+      </div>
+
+      {!showAllMatches ? (
+        // Group-based view
+        <div className="space-y-4">
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-700">
+            <div className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+              <strong>Group Stage Overview:</strong> Showing first match for each group. Click to expand and see all 6 matches per group.
+            </div>
+            <div className="text-xs text-blue-600 dark:text-blue-300">
+              48 total group stage matches • 8 groups with 4 teams each
+            </div>
+          </div>
+
+          {Object.keys(CLUB_WC_GROUPS).map(groupLetter => {
+            const firstMatch = getFirstMatchForGroup(groupLetter);
+            const groupMatches = matchesByGroup[groupLetter];
+            const isExpanded = expandedGroups.has(groupLetter);
+            
+            if (!firstMatch) return null;
+
+            return (
+              <div key={groupLetter} className="space-y-2">
+                {/* Group Header with First Match */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold">
+                        {groupLetter}
+                      </div>
+                      <div>
+                        <div className="font-bold text-gray-900 dark:text-white">Group {groupLetter}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {CLUB_WC_GROUPS[groupLetter].teams.join(' • ')}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleGroup(groupLetter)}
+                      className="flex items-center gap-2 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                    >
+                      <span className="text-sm font-medium">
+                        {isExpanded ? 'Hide' : 'Show'} all {groupMatches.length} matches
+                      </span>
+                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  
+                  {/* First match (always shown) */}
+                  <MatchCard match={firstMatch} isFirst={true} />
+                </div>
+
+                {/* Expanded matches */}
+                {isExpanded && (
+                  <div className="space-y-2 ml-4 border-l-2 border-purple-200 dark:border-purple-700 pl-4">
+                    {groupMatches.slice(1).map(match => (
+                      <MatchCard key={match.match} match={match} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Knockout Stage Preview */}
+          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl p-4 border border-yellow-200 dark:border-yellow-700">
+            <h4 className="font-bold text-yellow-800 dark:text-yellow-200 mb-2 flex items-center gap-2">
+              <Trophy className="w-5 h-5" />
+              Knockout Stage
+            </h4>
+            <div className="text-sm text-yellow-700 dark:text-yellow-300 mb-2">
+              15 knockout matches: Round of 16 (8) • Quarterfinals (4) • Semifinals (2) • Final (1)
+            </div>
+            <div className="text-xs text-yellow-600 dark:text-yellow-400">
+              Click "Show All Matches" to see the complete knockout bracket
+            </div>
+          </div>
+        </div>
+      ) : (
+        // All matches view
+        <div className="space-y-6">
+          {/* Group Stage */}
+          <div>
+            <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Flag className="w-5 h-5 text-blue-500" />
+              Group Stage (48 matches)
+            </h4>
+            <div className="space-y-2">
+              {groupStageMatches.map(match => (
+                <MatchCard key={match.match} match={match} />
+              ))}
+            </div>
+          </div>
+
+          {/* Knockout Stage */}
+          <div>
+            <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-yellow-500" />
+              Knockout Stage (15 matches)
+            </h4>
+            <div className="space-y-2">
+              {knockoutMatches.map(match => (
+                <MatchCard key={match.match} match={match} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Tournament Leaderboard Component
+const TournamentLeaderboard = ({ tournamentId }) => {
+  const { publicKey } = useWallet();
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [userStats, setUserStats] = useState(null);
+  const [participating, setParticipating] = useState(false);
+
+  useEffect(() => {
+    loadLeaderboard();
+    if (publicKey) {
+      checkUserStatus();
+    }
+  }, [tournamentId, publicKey]);
+
+  const loadLeaderboard = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/tournaments/${tournamentId}/leaderboard`);
+      if (response.ok) {
+        const data = await response.json();
+        setLeaderboard(data.leaderboard || []);
+      }
+    } catch (error) {
+      console.error('Error loading tournament leaderboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkUserStatus = async () => {
+    if (!publicKey) return;
+    
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/tournaments/${tournamentId}/status/${publicKey.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setParticipating(data.participating);
+        setUserStats(data.stats);
+      }
+    } catch (error) {
+      console.error('Error checking user tournament status:', error);
+    }
+  };
+
+  const handleJoinTournament = async () => {
+    if (!publicKey) return;
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/tournaments/${tournamentId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userAddress: publicKey.toString() })
+      });
+
+      if (response.ok) {
+        setParticipating(true);
+        loadLeaderboard(); // Refresh leaderboard
+        checkUserStatus(); // Refresh user stats
+      }
+    } catch (error) {
+      console.error('Error joining tournament:', error);
+    }
+  };
+
+  const getBadgeForRank = (rank) => {
+    switch (rank) {
+      case 1: return '🥇';
+      case 2: return '🥈';
+      case 3: return '🥉';
+      default: return rank <= 10 ? '🏆' : '📊';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600 dark:text-gray-400">Loading tournament leaderboard...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Tournament Leaderboard</h3>
+        {!participating && publicKey && (
+          <button
+            onClick={handleJoinTournament}
+            className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            Join Tournament
+          </button>
+        )}
+      </div>
+
+      {/* User's participation status */}
+      {participating && userStats && (
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl p-6 border border-purple-200 dark:border-purple-700">
+          <h4 className="font-bold text-purple-800 dark:text-purple-200 mb-4 flex items-center gap-2">
+            <Medal className="w-5 h-5" />
+            Your Tournament Performance
+          </h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{userStats.total_predictions}</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Predictions</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{userStats.accuracy_rate.toFixed(1)}%</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Accuracy</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{userStats.total_profit > 0 ? '+' : ''}{userStats.total_profit.toFixed(2)}</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Profit (APES)</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{userStats.winning_predictions}</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Wins</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leaderboard */}
+      {leaderboard.length > 0 ? (
+        <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden">
+          <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+            <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Crown className="w-5 h-5 text-yellow-500" />
+              Top Performers ({leaderboard.length} participants)
+            </h4>
+          </div>
+          
+          <div className="space-y-1">
+            {leaderboard.map((user, index) => (
+              <div 
+                key={user.user_address} 
+                className={`flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                  user.user_address === publicKey?.toString() ? 'bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500' : ''
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="text-center min-w-[60px]">
+                    <div className="text-2xl">{getBadgeForRank(user.rank)}</div>
+                    <div className="text-sm font-bold text-gray-600 dark:text-gray-400">#{user.rank}</div>
+                  </div>
+                  
+                  <div>
+                    <div className="font-bold text-gray-900 dark:text-white">
+                      {user.username || user.twitter_username || `${user.user_address.substring(0, 8)}...`}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      {user.total_predictions} predictions • {user.accuracy_rate.toFixed(1)}% accuracy
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="text-right">
+                  <div className="font-bold text-lg text-gray-900 dark:text-white">
+                    {user.total_profit > 0 ? '+' : ''}{user.total_profit.toFixed(2)} APES
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    {user.winning_predictions}/{user.total_predictions} wins
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <div className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            No participants yet
+          </div>
+          <div className="text-gray-600 dark:text-gray-400 mb-6">
+            Be the first to join this tournament and start predicting!
+          </div>
+          {!participating && publicKey && (
+            <button
+              onClick={handleJoinTournament}
+              className="bg-purple-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+            >
+              Join Tournament
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Tournament info */}
+      <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl p-4 border border-yellow-200 dark:border-yellow-700">
+        <div className="text-sm text-yellow-800 dark:text-yellow-200">
+          <strong>How it works:</strong> Join the tournament, make predictions on tournament matches, and earn APES tokens based on your accuracy. 
+          Leaderboard updates automatically as matches resolve.
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const TournamentDetailPage = () => {
@@ -355,37 +739,7 @@ const TournamentDetailPage = () => {
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <div className="space-y-8">
-            {tournament.id === 'club-world-cup-2025' && (
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Upcoming Matches</h3>
-                <div className="space-y-4">
-                  {CLUB_WC_ALL_MATCHES.slice(0, 5).map((match) => (
-                    <div key={match.match} className="bg-white dark:bg-gray-800 rounded-xl p-6 flex items-center justify-between">
-                      <div className="flex items-center gap-6">
-                        <div className="text-center">
-                          <div className="text-sm text-gray-500 dark:text-gray-400">Group {match.group}</div>
-                          <div className="font-bold text-purple-600 dark:text-purple-400">#{match.match}</div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <div className="font-bold text-gray-900 dark:text-white">{match.home}</div>
-                          </div>
-                          <div className="text-gray-400">vs</div>
-                          <div className="text-left">
-                            <div className="font-bold text-gray-900 dark:text-white">{match.away}</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm text-gray-600 dark:text-gray-400">{match.date}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">{match.time}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-500">{match.venue}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {tournament.id === 'club-world-cup-2025' && <ClubWorldCupMatches />}
 
             {tournament.id === 'nba-finals-2025' && (
               <div>
@@ -970,121 +1324,7 @@ const TournamentDetailPage = () => {
         )}
 
         {activeTab === 'leaderboard' && (
-          <div>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Tournament Leaderboard</h3>
-            
-            {tournament.id === 'nba-finals-2025' && (
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-blue-50 to-yellow-50 dark:from-blue-900/20 dark:to-yellow-900/20 rounded-xl p-6">
-                  <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Crown className="w-5 h-5 text-yellow-500" />
-                    NBA Finals 2025 Live Leaderboard
-                  </h4>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Based on predictions for Games 1-3 • Updated live as series progresses
-                  </div>
-                  
-                  {/* Top 3 */}
-                  <div className="space-y-3 mb-6">
-                    {[
-                      { rank: 1, user: 'ThunderFan2025', points: 285, streak: 3, badge: '🥇' },
-                      { rank: 2, user: 'PacersNation', points: 260, streak: 2, badge: '🥈' },
-                      { rank: 3, user: 'BasketballPro', points: 240, streak: 1, badge: '🥉' }
-                    ].map((player) => (
-                      <div key={player.rank} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg p-4">
-                        <div className="flex items-center gap-4">
-                          <div className="text-2xl">{player.badge}</div>
-                          <div>
-                            <div className="font-bold text-gray-900 dark:text-white">{player.user}</div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400">
-                              {player.streak} game streak
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-bold text-lg text-gray-900 dark:text-white">{player.points} pts</div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400">Rank #{player.rank}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                    <h5 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Series Predictions Accuracy</h5>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                        <div className="font-medium text-gray-900 dark:text-white">Game 1 (Thunder Won)</div>
-                        <div className="text-gray-600 dark:text-gray-400">68% predicted correctly</div>
-                      </div>
-                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                        <div className="font-medium text-gray-900 dark:text-white">Game 2 (Pacers Won)</div>
-                        <div className="text-gray-600 dark:text-gray-400">45% predicted correctly</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                  <div className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>Next Update:</strong> Game 3 results will update leaderboard positions. Game 4+ predictions open to registered users.
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {tournament.id === 'club-world-cup-2025' && (
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-xl p-6">
-                  <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Trophy className="w-5 h-5 text-yellow-500" />
-                    Club World Cup 2025 Leaderboard
-                  </h4>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Tournament begins June 14, 2025 • Register now to compete for prizes
-                  </div>
-                  
-                  {/* Pre-tournament Registration */}
-                  <div className="text-center py-8">
-                    <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <div className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                      Pre-Tournament Registration Open
-                    </div>
-                    <div className="text-gray-600 dark:text-gray-400 mb-6">
-                      Be among the first to predict group stage outcomes and compete for the championship
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">63</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Total Matches</div>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">48</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Group Stage</div>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                        <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">15</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Knockout</div>
-                      </div>
-                    </div>
-                    
-                    <button 
-                      onClick={() => navigate('/markets')}
-                      className="bg-green-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors"
-                    >
-                      View Group Stage Markets
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4">
-                  <div className="text-sm text-yellow-800 dark:text-yellow-200">
-                    <strong>Prize Distribution:</strong> Automatic payouts based on tournament performance. Top predictors earn APES tokens for each correct prediction.
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <TournamentLeaderboard tournamentId={tournament.id} />
         )}
       </div>
     </div>
