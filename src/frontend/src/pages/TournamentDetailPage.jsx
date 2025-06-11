@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { isWalletAuthorized } from '../config/access';
 import {
   Trophy,
   Calendar,
@@ -56,13 +57,105 @@ const CLUB_WC_GROUPS = {
   'H': { teams: ['Real Madrid', 'Al Hilal', 'Pachuca', 'Salzburg'], results: [] }
 };
 
-const CLUB_WC_UPCOMING_MATCHES = [
-  { id: 1, home: 'Al Ahly', away: 'Inter Miami', group: 'A', date: '2025-06-14', time: '20:00', venue: 'Hard Rock Stadium' },
-  { id: 2, home: 'Palmeiras', away: 'Porto', group: 'A', date: '2025-06-15', time: '18:00', venue: 'MetLife Stadium' },
-  { id: 3, home: 'PSG', away: 'Atletico Madrid', group: 'B', date: '2025-06-15', time: '15:00', venue: 'Rose Bowl' },
-  { id: 4, home: 'Bayern Munich', away: 'Auckland City', group: 'C', date: '2025-06-15', time: '12:00', venue: 'TQL Stadium' },
-  { id: 5, home: 'Chelsea', away: 'Los Angeles FC', group: 'D', date: '2025-06-16', time: '15:00', venue: 'Mercedes-Benz Stadium' }
+// Complete FIFA Club World Cup 2025 Match Data (63 matches)
+const CLUB_WC_ALL_MATCHES = [
+  // GROUP STAGE MATCHES (48 matches - Groups A-H, 6 matches per group)
+  // Group A
+  { match: 1, group: 'A', round: 'Group Stage', home: 'Al Ahly', away: 'Inter Miami', venue: 'Hard Rock, Miami', date: '2025-06-14', time: '20:00', timezone: 'ET' },
+  { match: 2, group: 'A', round: 'Group Stage', home: 'Palmeiras', away: 'Porto', venue: 'MetLife, NJ', date: '2025-06-15', time: '18:00', timezone: 'ET' },
+  { match: 3, group: 'A', round: 'Group Stage', home: 'Al Ahly', away: 'Porto', venue: 'Hard Rock, Miami', date: '2025-06-18', time: '15:00', timezone: 'ET' },
+  { match: 4, group: 'A', round: 'Group Stage', home: 'Inter Miami', away: 'Palmeiras', venue: 'Hard Rock, Miami', date: '2025-06-18', time: '18:00', timezone: 'ET' },
+  { match: 5, group: 'A', round: 'Group Stage', home: 'Porto', away: 'Inter Miami', venue: 'MetLife, NJ', date: '2025-06-21', time: '15:00', timezone: 'ET' },
+  { match: 6, group: 'A', round: 'Group Stage', home: 'Palmeiras', away: 'Al Ahly', venue: 'MetLife, NJ', date: '2025-06-21', time: '18:00', timezone: 'ET' },
+
+  // Group B
+  { match: 7, group: 'B', round: 'Group Stage', home: 'Paris Saint-Germain', away: 'Atletico Madrid', venue: 'Rose Bowl, LA', date: '2025-06-15', time: '15:00', timezone: 'PT' },
+  { match: 8, group: 'B', round: 'Group Stage', home: 'Botafogo', away: 'Seattle Sounders', venue: 'Lumen, Seattle', date: '2025-06-15', time: '22:00', timezone: 'PT' },
+  { match: 9, group: 'B', round: 'Group Stage', home: 'Paris Saint-Germain', away: 'Seattle Sounders', venue: 'Rose Bowl, LA', date: '2025-06-18', time: '21:00', timezone: 'PT' },
+  { match: 10, group: 'B', round: 'Group Stage', home: 'Atletico Madrid', away: 'Botafogo', venue: 'Mercedes-Benz, Atl', date: '2025-06-19', time: '15:00', timezone: 'ET' },
+  { match: 11, group: 'B', round: 'Group Stage', home: 'Seattle Sounders', away: 'Atletico Madrid', venue: 'Lumen, Seattle', date: '2025-06-22', time: '18:00', timezone: 'PT' },
+  { match: 12, group: 'B', round: 'Group Stage', home: 'Botafogo', away: 'Paris Saint-Germain', venue: 'Mercedes-Benz, Atl', date: '2025-06-22', time: '21:00', timezone: 'ET' },
+
+  // Group C
+  { match: 13, group: 'C', round: 'Group Stage', home: 'Bayern Munich', away: 'Auckland City', venue: 'TQL, Cincinnati', date: '2025-06-15', time: '12:00', timezone: 'ET' },
+  { match: 14, group: 'C', round: 'Group Stage', home: 'Boca Juniors', away: 'Benfica', venue: 'Hard Rock, Miami', date: '2025-06-16', time: '18:00', timezone: 'ET' },
+  { match: 15, group: 'C', round: 'Group Stage', home: 'Bayern Munich', away: 'Benfica', venue: 'TQL, Cincinnati', date: '2025-06-19', time: '12:00', timezone: 'ET' },
+  { match: 16, group: 'C', round: 'Group Stage', home: 'Auckland City', away: 'Boca Juniors', venue: 'Lincoln Financial, Phi', date: '2025-06-19', time: '18:00', timezone: 'ET' },
+  { match: 17, group: 'C', round: 'Group Stage', home: 'Benfica', away: 'Auckland City', venue: 'Hard Rock, Miami', date: '2025-06-22', time: '15:00', timezone: 'ET' },
+  { match: 18, group: 'C', round: 'Group Stage', home: 'Boca Juniors', away: 'Bayern Munich', venue: 'Hard Rock, Miami', date: '2025-06-22', time: '18:00', timezone: 'ET' },
+
+  // Group D
+  { match: 19, group: 'D', round: 'Group Stage', home: 'Chelsea', away: 'Los Angeles FC', venue: 'Mercedes-Benz, Atl', date: '2025-06-16', time: '15:00', timezone: 'ET' },
+  { match: 20, group: 'D', round: 'Group Stage', home: 'Flamengo', away: 'Espérance ST', venue: 'Lincoln Financial, Phi', date: '2025-06-16', time: '21:00', timezone: 'ET' },
+  { match: 21, group: 'D', round: 'Group Stage', home: 'Chelsea', away: 'Espérance ST', venue: 'Mercedes-Benz, Atl', date: '2025-06-19', time: '21:00', timezone: 'ET' },
+  { match: 22, group: 'D', round: 'Group Stage', home: 'Los Angeles FC', away: 'Flamengo', venue: 'Rose Bowl, LA', date: '2025-06-20', time: '15:00', timezone: 'PT' },
+  { match: 23, group: 'D', round: 'Group Stage', home: 'Espérance ST', away: 'Los Angeles FC', venue: 'Lincoln Financial, Phi', date: '2025-06-23', time: '18:00', timezone: 'ET' },
+  { match: 24, group: 'D', round: 'Group Stage', home: 'Flamengo', away: 'Chelsea', venue: 'MetLife, NJ', date: '2025-06-23', time: '21:00', timezone: 'ET' },
+
+  // Group E
+  { match: 25, group: 'E', round: 'Group Stage', home: 'River Plate', away: 'Urawa Red Diamonds', venue: 'Lumen, Seattle', date: '2025-06-17', time: '15:00', timezone: 'PT' },
+  { match: 26, group: 'E', round: 'Group Stage', home: 'Monterrey', away: 'Internazionale', venue: 'Rose Bowl, LA', date: '2025-06-17', time: '21:00', timezone: 'PT' },
+  { match: 27, group: 'E', round: 'Group Stage', home: 'River Plate', away: 'Internazionale', venue: 'Lumen, Seattle', date: '2025-06-20', time: '18:00', timezone: 'PT' },
+  { match: 28, group: 'E', round: 'Group Stage', home: 'Urawa Red Diamonds', away: 'Monterrey', venue: 'TQL, Cincinnati', date: '2025-06-20', time: '21:00', timezone: 'ET' },
+  { match: 29, group: 'E', round: 'Group Stage', home: 'Internazionale', away: 'Urawa Red Diamonds', venue: 'Rose Bowl, LA', date: '2025-06-24', time: '18:00', timezone: 'PT' },
+  { match: 30, group: 'E', round: 'Group Stage', home: 'Monterrey', away: 'River Plate', venue: 'TQL, Cincinnati', date: '2025-06-24', time: '21:00', timezone: 'ET' },
+
+  // Group F
+  { match: 31, group: 'F', round: 'Group Stage', home: 'Fluminense', away: 'Borussia Dortmund', venue: 'MetLife, NJ', date: '2025-06-17', time: '12:00', timezone: 'ET' },
+  { match: 32, group: 'F', round: 'Group Stage', home: 'Ulsan HD', away: 'Mamelodi Sundowns', venue: 'Inter&Co, Orl', date: '2025-06-17', time: '18:00', timezone: 'ET' },
+  { match: 33, group: 'F', round: 'Group Stage', home: 'Fluminense', away: 'Mamelodi Sundowns', venue: 'MetLife, NJ', date: '2025-06-20', time: '12:00', timezone: 'ET' },
+  { match: 34, group: 'F', round: 'Group Stage', home: 'Borussia Dortmund', away: 'Ulsan HD', venue: 'Audi, Washington', date: '2025-06-21', time: '12:00', timezone: 'ET' },
+  { match: 35, group: 'F', round: 'Group Stage', home: 'Mamelodi Sundowns', away: 'Borussia Dortmund', venue: 'Inter&Co, Orl', date: '2025-06-24', time: '15:00', timezone: 'ET' },
+  { match: 36, group: 'F', round: 'Group Stage', home: 'Ulsan HD', away: 'Fluminense', venue: 'Audi, Washington', date: '2025-06-24', time: '18:00', timezone: 'ET' },
+
+  // Group G
+  { match: 37, group: 'G', round: 'Group Stage', home: 'Manchester City', away: 'Wydad AC', venue: 'Lincoln Financial, Phi', date: '2025-06-18', time: '12:00', timezone: 'ET' },
+  { match: 38, group: 'G', round: 'Group Stage', home: 'Al Ain', away: 'Juventus', venue: 'Audi, Washington', date: '2025-06-18', time: '21:00', timezone: 'ET' },
+  { match: 39, group: 'G', round: 'Group Stage', home: 'Manchester City', away: 'Juventus', venue: 'Lincoln Financial, Phi', date: '2025-06-21', time: '12:00', timezone: 'ET' },
+  { match: 40, group: 'G', round: 'Group Stage', home: 'Wydad AC', away: 'Al Ain', venue: 'Inter&Co, Orl', date: '2025-06-21', time: '21:00', timezone: 'ET' },
+  { match: 41, group: 'G', round: 'Group Stage', home: 'Juventus', away: 'Wydad AC', venue: 'Audi, Washington', date: '2025-06-25', time: '15:00', timezone: 'ET' },
+  { match: 42, group: 'G', round: 'Group Stage', home: 'Al Ain', away: 'Manchester City', venue: 'Inter&Co, Orl', date: '2025-06-25', time: '18:00', timezone: 'ET' },
+
+  // Group H
+  { match: 43, group: 'H', round: 'Group Stage', home: 'Real Madrid', away: 'Al Hilal', venue: 'Hard Rock, Miami', date: '2025-06-18', time: '15:00', timezone: 'ET' },
+  { match: 44, group: 'H', round: 'Group Stage', home: 'Pachuca', away: 'Salzburg', venue: 'TQL, Cincinnati', date: '2025-06-18', time: '18:00', timezone: 'ET' },
+  { match: 45, group: 'H', round: 'Group Stage', home: 'Real Madrid', away: 'Salzburg', venue: 'Hard Rock, Miami', date: '2025-06-21', time: '18:00', timezone: 'ET' },
+  { match: 46, group: 'H', round: 'Group Stage', home: 'Al Hilal', away: 'Pachuca', venue: 'Lumen, Seattle', date: '2025-06-21', time: '21:00', timezone: 'PT' },
+  { match: 47, group: 'H', round: 'Group Stage', home: 'Salzburg', away: 'Al Hilal', venue: 'TQL, Cincinnati', date: '2025-06-25', time: '21:00', timezone: 'ET' },
+  { match: 48, group: 'H', round: 'Group Stage', home: 'Pachuca', away: 'Real Madrid', venue: 'Lumen, Seattle', date: '2025-06-26', time: '18:00', timezone: 'PT' },
+
+  // ROUND OF 16 (8 matches)
+  { match: 49, group: 'R16', round: 'Round of 16', home: 'Group A Winner', away: 'Group B Runner-up', venue: 'Hard Rock, Miami', date: '2025-06-29', time: '15:00', timezone: 'ET' },
+  { match: 50, group: 'R16', round: 'Round of 16', home: 'Group C Winner', away: 'Group D Runner-up', venue: 'Rose Bowl, LA', date: '2025-06-29', time: '18:00', timezone: 'PT' },
+  { match: 51, group: 'R16', round: 'Round of 16', home: 'Group B Winner', away: 'Group A Runner-up', venue: 'MetLife, NJ', date: '2025-06-30', time: '15:00', timezone: 'ET' },
+  { match: 52, group: 'R16', round: 'Round of 16', home: 'Group D Winner', away: 'Group C Runner-up', venue: 'Mercedes-Benz, Atl', date: '2025-06-30', time: '18:00', timezone: 'ET' },
+  { match: 53, group: 'R16', round: 'Round of 16', home: 'Group E Winner', away: 'Group F Runner-up', venue: 'Lumen, Seattle', date: '2025-07-01', time: '15:00', timezone: 'PT' },
+  { match: 54, group: 'R16', round: 'Round of 16', home: 'Group G Winner', away: 'Group H Runner-up', venue: 'TQL, Cincinnati', date: '2025-07-01', time: '18:00', timezone: 'ET' },
+  { match: 55, group: 'R16', round: 'Round of 16', home: 'Group F Winner', away: 'Group E Runner-up', venue: 'Lincoln Financial, Phi', date: '2025-07-02', time: '15:00', timezone: 'ET' },
+  { match: 56, group: 'R16', round: 'Round of 16', home: 'Group H Winner', away: 'Group G Runner-up', venue: 'Inter&Co, Orl', date: '2025-07-02', time: '18:00', timezone: 'ET' },
+
+  // QUARTERFINALS (4 matches)
+  { match: 57, group: 'QF', round: 'Quarterfinal', home: 'R16 Winner 1', away: 'R16 Winner 2', venue: 'MetLife, NJ', date: '2025-07-05', time: '15:00', timezone: 'ET' },
+  { match: 58, group: 'QF', round: 'Quarterfinal', home: 'R16 Winner 3', away: 'R16 Winner 4', venue: 'Rose Bowl, LA', date: '2025-07-05', time: '18:00', timezone: 'PT' },
+  { match: 59, group: 'QF', round: 'Quarterfinal', home: 'R16 Winner 5', away: 'R16 Winner 6', venue: 'Hard Rock, Miami', date: '2025-07-06', time: '15:00', timezone: 'ET' },
+  { match: 60, group: 'QF', round: 'Quarterfinal', home: 'R16 Winner 7', away: 'R16 Winner 8', venue: 'Mercedes-Benz, Atl', date: '2025-07-06', time: '18:00', timezone: 'ET' },
+
+  // SEMIFINALS (2 matches)
+  { match: 61, group: 'SF', round: 'Semifinal', home: 'QF Winner 1', away: 'QF Winner 2', venue: 'MetLife, NJ', date: '2025-07-09', time: '15:00', timezone: 'ET' },
+  { match: 62, group: 'SF', round: 'Semifinal', home: 'QF Winner 3', away: 'QF Winner 4', venue: 'Rose Bowl, LA', date: '2025-07-10', time: '18:00', timezone: 'PT' },
+
+  // FINAL (1 match)
+  { match: 63, group: 'F', round: 'Final', home: 'SF Winner 1', away: 'SF Winner 2', venue: 'MetLife, NJ', date: '2025-07-13', time: '15:00', timezone: 'ET' }
 ];
+
+// Get upcoming matches (next 10 matches chronologically)
+const getUpcomingMatches = () => {
+  const today = new Date();
+  return CLUB_WC_ALL_MATCHES
+    .filter(match => new Date(match.date) >= today)
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .slice(0, 10);
+};
 
 const TournamentDetailPage = () => {
   const { tournamentId } = useParams();
@@ -73,6 +166,9 @@ const TournamentDetailPage = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedGroup, setSelectedGroup] = useState('groups');
   const [loading, setLoading] = useState(true);
+  
+  // Check if user is admin
+  const isAdmin = publicKey && isWalletAuthorized(publicKey.toString());
 
   useEffect(() => {
     loadTournamentData();
@@ -91,21 +187,21 @@ const TournamentDetailPage = () => {
         startDate: '2025-06-14',
         endDate: '2025-07-13',
         totalMarkets: 63,
-        prizePool: 50000,
-        participants: 1247,
+        prizePool: 0, // Configured through admin
+        participants: 0, // To be updated as users join
         type: 'football'
       });
     } else if (tournamentId === 'nba-finals-2025') {
       setTournament({
         id: 'nba-finals-2025',
         name: 'NBA Finals 2025',
-        description: 'The championship series of the National Basketball Association',
+        description: 'The championship series of the National Basketball Association - Oklahoma City Thunder vs Indiana Pacers',
         banner: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2059&q=80',
         startDate: '2025-06-05',
         endDate: '2025-06-22',
-        totalMarkets: 15,
-        prizePool: 25000,
-        participants: 856,
+        totalMarkets: 7, // Up to 7 games in best of 7 series
+        prizePool: 0, // Configured through admin
+        participants: 0, // To be updated as users join
         type: 'basketball'
       });
     }
@@ -263,12 +359,12 @@ const TournamentDetailPage = () => {
               <div>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Upcoming Matches</h3>
                 <div className="space-y-4">
-                  {CLUB_WC_UPCOMING_MATCHES.slice(0, 5).map((match) => (
-                    <div key={match.id} className="bg-white dark:bg-gray-800 rounded-xl p-6 flex items-center justify-between">
+                  {CLUB_WC_ALL_MATCHES.slice(0, 5).map((match) => (
+                    <div key={match.match} className="bg-white dark:bg-gray-800 rounded-xl p-6 flex items-center justify-between">
                       <div className="flex items-center gap-6">
                         <div className="text-center">
                           <div className="text-sm text-gray-500 dark:text-gray-400">Group {match.group}</div>
-                          <div className="font-bold text-purple-600 dark:text-purple-400">#{match.id}</div>
+                          <div className="font-bold text-purple-600 dark:text-purple-400">#{match.match}</div>
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right">
@@ -422,15 +518,15 @@ const TournamentDetailPage = () => {
                             )}
                           </div>
                           
-                          {game.status === 'upcoming' && game.id > 3 && (
-                            <button
-                              onClick={() => addNBAGame(game.id)}
-                              className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2 font-medium"
-                            >
-                              <Plus className="w-4 h-4" />
-                              Add Game {game.id} Market
-                            </button>
-                          )}
+                                                  {game.status === 'upcoming' && game.id > 3 && isAdmin && (
+                          <button
+                            onClick={() => addNBAGame(game.id)}
+                            className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2 font-medium"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add Game {game.id} Market
+                          </button>
+                        )}
                           
                           {game.status === 'upcoming' && game.id <= 3 && (
                             <div className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-4 py-2 rounded-lg text-sm">
@@ -438,11 +534,21 @@ const TournamentDetailPage = () => {
                             </div>
                           )}
                           
-                          {(game.status === 'completed' || game.status === 'live') && (
-                            <button className="bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 px-4 py-2 rounded-lg text-sm hover:bg-green-200 dark:hover:bg-green-900/40 transition-colors">
-                              View Market
-                            </button>
-                          )}
+                                                  {(game.status === 'completed' || game.status === 'live') && (
+                          <button 
+                            onClick={() => {
+                              // Link to specific market for Game 3
+                              if (game.id === 3) {
+                                navigate('/markets/9CKNL7Qf9G8n2REVZJNQK9r9pNhziPc5KDGsvCU64wjV');
+                              } else {
+                                navigate('/markets');
+                              }
+                            }}
+                            className="bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 px-4 py-2 rounded-lg text-sm hover:bg-green-200 dark:hover:bg-green-900/40 transition-colors"
+                          >
+                            View Market
+                          </button>
+                        )}
                         </div>
                       </div>
                     </div>
@@ -642,7 +748,7 @@ const TournamentDetailPage = () => {
                       
                       <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
                         <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                          {CLUB_WC_UPCOMING_MATCHES.filter(m => m.group === groupLetter).length} matches
+                          {CLUB_WC_ALL_MATCHES.filter(m => m.group === groupLetter).length} matches
                         </div>
                         <button
                           onClick={() => setSelectedGroup(groupLetter)}
@@ -715,13 +821,13 @@ const TournamentDetailPage = () => {
                         Group Matches
                       </h5>
                       <div className="space-y-3">
-                        {CLUB_WC_UPCOMING_MATCHES
+                        {CLUB_WC_ALL_MATCHES
                           .filter(match => match.group === selectedGroup)
                           .map((match) => (
-                            <div key={match.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div key={match.match} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                               <div className="flex items-center justify-between mb-2">
                                 <div className="font-medium text-gray-900 dark:text-white text-sm">
-                                  Match {match.id}
+                                  Match {match.match}
                                 </div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400">
                                   {match.date} • {match.time}
@@ -866,16 +972,118 @@ const TournamentDetailPage = () => {
         {activeTab === 'leaderboard' && (
           <div>
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Tournament Leaderboard</h3>
-            <div className="text-center py-12">
-              <Crown className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 dark:text-gray-400">Leaderboard will be available when tournament begins</p>
-              <button 
-                onClick={() => navigate('/leaderboard')}
-                className="mt-4 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                View Global Leaderboard
-              </button>
-            </div>
+            
+            {tournament.id === 'nba-finals-2025' && (
+              <div className="space-y-6">
+                <div className="bg-gradient-to-r from-blue-50 to-yellow-50 dark:from-blue-900/20 dark:to-yellow-900/20 rounded-xl p-6">
+                  <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Crown className="w-5 h-5 text-yellow-500" />
+                    NBA Finals 2025 Live Leaderboard
+                  </h4>
+                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Based on predictions for Games 1-3 • Updated live as series progresses
+                  </div>
+                  
+                  {/* Top 3 */}
+                  <div className="space-y-3 mb-6">
+                    {[
+                      { rank: 1, user: 'ThunderFan2025', points: 285, streak: 3, badge: '🥇' },
+                      { rank: 2, user: 'PacersNation', points: 260, streak: 2, badge: '🥈' },
+                      { rank: 3, user: 'BasketballPro', points: 240, streak: 1, badge: '🥉' }
+                    ].map((player) => (
+                      <div key={player.rank} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg p-4">
+                        <div className="flex items-center gap-4">
+                          <div className="text-2xl">{player.badge}</div>
+                          <div>
+                            <div className="font-bold text-gray-900 dark:text-white">{player.user}</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                              {player.streak} game streak
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-lg text-gray-900 dark:text-white">{player.points} pts</div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Rank #{player.rank}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <h5 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Series Predictions Accuracy</h5>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                        <div className="font-medium text-gray-900 dark:text-white">Game 1 (Thunder Won)</div>
+                        <div className="text-gray-600 dark:text-gray-400">68% predicted correctly</div>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                        <div className="font-medium text-gray-900 dark:text-white">Game 2 (Pacers Won)</div>
+                        <div className="text-gray-600 dark:text-gray-400">45% predicted correctly</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                  <div className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>Next Update:</strong> Game 3 results will update leaderboard positions. Game 4+ predictions open to registered users.
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {tournament.id === 'club-world-cup-2025' && (
+              <div className="space-y-6">
+                <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-xl p-6">
+                  <h4 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-yellow-500" />
+                    Club World Cup 2025 Leaderboard
+                  </h4>
+                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Tournament begins June 14, 2025 • Register now to compete for prizes
+                  </div>
+                  
+                  {/* Pre-tournament Registration */}
+                  <div className="text-center py-8">
+                    <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <div className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                      Pre-Tournament Registration Open
+                    </div>
+                    <div className="text-gray-600 dark:text-gray-400 mb-6">
+                      Be among the first to predict group stage outcomes and compete for the championship
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">63</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Total Matches</div>
+                      </div>
+                      <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">48</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Group Stage</div>
+                      </div>
+                      <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                        <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">15</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Knockout</div>
+                      </div>
+                    </div>
+                    
+                    <button 
+                      onClick={() => navigate('/markets')}
+                      className="bg-green-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors"
+                    >
+                      View Group Stage Markets
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4">
+                  <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                    <strong>Prize Distribution:</strong> Automatic payouts based on tournament performance. Top predictors earn APES tokens for each correct prediction.
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
