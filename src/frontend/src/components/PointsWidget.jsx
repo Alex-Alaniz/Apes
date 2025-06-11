@@ -22,7 +22,7 @@ const PointsWidget = () => {
   const fetchBalance = async () => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/engagement/balance/${publicKey.toString()}`
+        `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/engagement/balance/${publicKey.toString()}`
       );
       
       if (response.ok) {

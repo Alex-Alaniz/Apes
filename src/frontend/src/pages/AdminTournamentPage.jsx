@@ -203,7 +203,7 @@ const AdminTournamentPage = () => {
         };
 
         // Simulate API call to create market
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/markets`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

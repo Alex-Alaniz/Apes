@@ -53,7 +53,7 @@ const MarketDetailPage = ({ marketId }) => {
         try {
           console.log('MarketDetailPage: Fetching from backend API...');
           // Use proper API URL configuration
-          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+          const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
           const apiUrl = `${backendUrl}/api/markets/${actualMarketId}`;
           
           console.log('MarketDetailPage: API URL:', apiUrl);

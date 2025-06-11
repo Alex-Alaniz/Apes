@@ -421,7 +421,7 @@ class MarketService {
       
       // Send sync data to backend
       try {
-        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+        const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
         const response = await fetch(`${backendUrl}/api/markets/sync-volumes`, {
           method: 'POST',
           headers: {
@@ -462,7 +462,7 @@ class MarketService {
       console.log('📊 Starting fetchMarketsWithStats...');
       
       // Simple fetch from backend API without excessive syncing
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       
       try {
         console.log('🔗 Fetching from backend API...');
@@ -1879,7 +1879,7 @@ class MarketService {
     try {
       console.log(`🔴 Fetching LIVE data for market: ${marketAddress}`);
       
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${backendUrl}/api/markets/live/${marketAddress}`, {
         headers: {
           'Content-Type': 'application/json',
@@ -1918,7 +1918,7 @@ class MarketService {
     try {
       console.log(`🔄 Force refreshing LIVE data for market: ${marketAddress}`);
       
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${backendUrl}/api/markets/refresh-live/${marketAddress}`, {
         method: 'POST',
         headers: {
@@ -1958,7 +1958,7 @@ class MarketService {
   // NEW METHOD: Get live cache statistics
   async getLiveCacheStats() {
     try {
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${backendUrl}/api/markets/cache-stats`);
       
       if (response.ok) {
@@ -2211,7 +2211,7 @@ class MarketService {
   // SIMPLIFIED: Fetch all markets with optional resolved markets - no complex fallbacks
   async fetchMarkets(includeResolved = false) {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/markets${includeResolved ? '?include_resolved=true' : ''}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets${includeResolved ? '?include_resolved=true' : ''}`, {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'max-age=30' // Allow 30 second cache
@@ -2250,7 +2250,7 @@ class MarketService {
     try {
       console.log('🏆 Fetching resolved markets with blockchain verification...');
       
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/markets/resolved`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets/resolved`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
