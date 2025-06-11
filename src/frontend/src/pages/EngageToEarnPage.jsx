@@ -4,7 +4,7 @@ import { FaTrophy, FaCoins, FaStar, FaCheckCircle, FaExternalLinkAlt, FaHeart, F
 import { FaXTwitter } from 'react-icons/fa6';
 import { formatDistanceToNow } from 'date-fns';
 
-const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onRefreshPosts, onRefreshAuth }) => {
+const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onRefreshPosts, onRefreshAuth, onLoadMorePosts }) => {
   const { publicKey } = useWallet();
   const [engagements, setEngagements] = useState({});
   const [pointsEarned, setPointsEarned] = useState(0);
@@ -324,7 +324,7 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
 
         <div className="mt-6 text-center">
           <button
-            onClick={loadMorePosts}
+            onClick={onLoadMorePosts}
             disabled={postsLoading}
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -818,6 +818,7 @@ const EngageToEarnPage = () => {
               postsError={postsError}
               onRefreshPosts={fetchPrimapePosts}
               onRefreshAuth={checkTwitterStatus}
+              onLoadMorePosts={loadMorePosts}
             />
           )}
         </div>
