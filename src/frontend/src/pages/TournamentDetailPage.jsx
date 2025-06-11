@@ -457,40 +457,47 @@ const TournamentLeaderboard = ({ tournamentId }) => {
         setParticipating(true);
         
         // Award engagement points for joining
+        let totalPointsEarned = 50; // Base join reward
         try {
-          const pointsResponse = await fetch(`https://apes-production.up.railway.app/api/engagement/award`, {
+          const pointsResponse = await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              userAddress: publicKey.toString(),
-              activityType: 'TOURNAMENT_JOIN',
-              points: 50, // Base join reward
-              metadata: { tournamentId }
+              wallet_address: publicKey.toString(),
+              activity_type: 'TOURNAMENT_JOIN',
+              metadata: { tournamentId, tournament_name: 'FIFA Club World Cup 2025' }
             })
           });
           
           // Early bird bonus for first 100 participants
-          if (leaderboard.length < 100) {
-            await fetch(`https://apes-production.up.railway.app/api/engagement/award`, {
+          if (participantCount < 100) {
+            await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                userAddress: publicKey.toString(),
-                activityType: 'EARLY_BIRD_BONUS',
-                points: 100,
+                wallet_address: publicKey.toString(),
+                activity_type: 'EARLY_BIRD_BONUS',
                 metadata: { tournamentId, reason: 'First 100 participants' }
               })
             });
+            totalPointsEarned = 150; // 50 + 100 bonus
           }
         } catch (pointsError) {
           console.error('Error awarding join points:', pointsError);
         }
         
+        // Force refresh all tournament data
+        await loadTournamentData(); // This will update participant count
         loadLeaderboard(); // Refresh leaderboard
         checkUserStatus(); // Refresh user stats
         
         // Show success message with rewards
-        alert(`🎉 Successfully joined tournament!\n💰 Earned ${leaderboard.length < 100 ? '150' : '50'} APES points\n🏆 Good luck in the competition!`);
+        alert(`🎉 Successfully joined tournament!\n💰 Earned ${totalPointsEarned} APES points\n🏆 Good luck in the competition!\n\n📊 Participant count will update shortly.`);
+        
+        // Force a page refresh after 2 seconds to ensure all data is updated
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       }
     } catch (error) {
       console.error('Error joining tournament:', error);
