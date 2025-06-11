@@ -4,6 +4,14 @@ const supabase = require('../config/supabase');
 const engagementService = require('../services/engagementService');
 const crypto = require('crypto');
 
+console.log('🐦 TWITTER-SUPABASE ROUTES LOADING...');
+console.log('🔍 Environment check on routes load:', {
+  bearer_token: process.env.TWITTER_BEARER_TOKEN ? 'SET' : 'NOT_SET',
+  client_id: process.env.TWITTER_CLIENT_ID ? 'SET' : 'NOT_SET', 
+  client_secret: process.env.TWITTER_CLIENT_SECRET ? 'SET' : 'NOT_SET',
+  primape_id: process.env.PRIMAPE_TWITTER_ID
+});
+
 // Store OAuth states temporarily (in production, use Redis or database)
 const oauthStore = new Map();
 
@@ -634,5 +642,17 @@ async function fetchPrimapeTweetsFromAPI(limit = 10) {
   
   throw new Error('No valid Twitter API credentials found');
 }
+
+console.log('✅ TWITTER-SUPABASE ROUTES REGISTERED:', [
+  'GET /test',
+  'POST /auth/link', 
+  'POST /auth/callback',
+  'POST /auth/debug-link',
+  'GET /twitter-by-wallet/:walletAddress',
+  'GET /linked-wallets/:twitterId',
+  'GET /check-link/:walletAddress',
+  'DELETE /unlink/:walletAddress',
+  'GET /primape-posts'
+]);
 
 module.exports = router; 

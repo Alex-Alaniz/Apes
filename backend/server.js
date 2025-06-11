@@ -34,7 +34,9 @@ app.use('/api/predictions', predictionRoutes);
 app.use('/api/markets', marketRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/engagement', engagementRoutes);
+console.log('🐦 Loading Twitter routes from twitter-supabase.js...');
 app.use('/api/twitter', twitterRoutes);
+console.log('✅ Twitter routes loaded and mounted at /api/twitter');
 app.use('/api/setup', setupRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 
