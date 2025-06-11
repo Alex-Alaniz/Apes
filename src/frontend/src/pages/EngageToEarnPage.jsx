@@ -1,37 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { FaTrophy, FaCoins, FaStar, FaCheckCircle, FaExternalLinkAlt, FaHeart, FaRetweet, FaComment } from 'react-icons/fa';
+import { FaTrophy, FaCoins, FaStar, FaCheckCircle, FaExternalLinkAlt, FaHeart, FaRetweet, FaComment, FaSpinner } from 'react-icons/fa';
 import { FaXTwitter } from 'react-icons/fa6';
+import { formatDistanceToNow } from 'date-fns';
 
-// Real @PrimapeApp posts - These should be fetched from Twitter API in production
-const PRIMAPE_POSTS = [
-  {
-    id: '1867901234567890123',
-    text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n⚡ Early bird bonus still available!\n\nConnect your wallet and start predicting!\n\n🚀 apes.primape.app/tournaments\n\n#PredictionMarkets #FIFA #ClubWorldCup #Web3',
-    created_at: '2025-06-11T10:00:00.000Z',
-    author_username: 'PrimapeApp',
-    url: 'https://twitter.com/PrimapeApp/status/1867901234567890123',
-    engagement_stats: { likes: 45, retweets: 12, comments: 8 }
-  },
-  {
-    id: '1867801234567890124', 
-    text: 'GM Apes! 🦍\n\nReady to make some epic predictions today?\n\n✨ New markets added daily\n💎 Earn APES points for every prediction\n🎯 Tournament leaderboards heating up\n🏆 25K prize pool waiting\n\nWhat\'s your play today? 👀\n\n#GM #PredictionMarkets #Solana',
-    created_at: '2025-06-11T08:00:00.000Z',
-    author_username: 'PrimapeApp',
-    url: 'https://twitter.com/PrimapeApp/status/1867801234567890124',
-    engagement_stats: { likes: 23, retweets: 6, comments: 4 }
-  },
-  {
-    id: '1867701234567890125',
-    text: '🎮 The future of prediction markets is here!\n\n🔮 Real-time market resolution\n⚡ Lightning-fast transactions on Solana\n🏆 Tournament system with massive prizes\n💰 Earn while you predict\n🎯 Join 1000+ active predictors\n\nJoin the evolution: apes.primape.app 🚀',
-    created_at: '2025-06-10T20:00:00.000Z',
-    author_username: 'PrimapeApp', 
-    url: 'https://twitter.com/PrimapeApp/status/1867701234567890125',
-    engagement_stats: { likes: 67, retweets: 18, comments: 12 }
-  }
-];
-
-const TwitterEngagement = ({ twitterLinked }) => {
+const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onRefreshPosts }) => {
   const { publicKey } = useWallet();
   const [engagements, setEngagements] = useState({});
   const [pointsEarned, setPointsEarned] = useState(0);
@@ -81,7 +54,7 @@ const TwitterEngagement = ({ twitterLinked }) => {
     setIsVerifying(prev => ({ ...prev, [`${postId}-${type}`]: true }));
 
     // Open Twitter for engagement
-    const post = PRIMAPE_POSTS.find(p => p.id === postId);
+    const post = posts.find(p => p.id === postId);
     if (post) {
       let twitterUrl = '';
       switch (type) {
@@ -221,18 +194,47 @@ const TwitterEngagement = ({ twitterLinked }) => {
             <FaXTwitter className="text-gray-900 dark:text-gray-100" />
             @PrimapeApp Latest Posts
           </h3>
-          <a
-            href="https://twitter.com/PrimapeApp"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 dark:text-blue-400 hover:underline text-sm flex items-center gap-1"
-          >
-            Follow <FaExternalLinkAlt className="text-xs" />
-          </a>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onRefreshPosts}
+              disabled={postsLoading}
+              className="text-blue-600 dark:text-blue-400 hover:underline text-sm flex items-center gap-1"
+            >
+              {postsLoading ? 'Loading...' : 'Refresh'}
+            </button>
+            <a
+              href="https://twitter.com/PrimapeApp"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 dark:text-blue-400 hover:underline text-sm flex items-center gap-1"
+            >
+              Follow <FaExternalLinkAlt className="text-xs" />
+            </a>
+          </div>
         </div>
 
-        <div className="space-y-4">
-          {PRIMAPE_POSTS.map(post => {
+        {postsLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <FaSpinner className="animate-spin text-2xl text-blue-600" />
+            <span className="ml-2 text-gray-600 dark:text-gray-400">Loading posts...</span>
+          </div>
+        ) : postsError ? (
+          <div className="text-center py-12">
+            <p className="text-red-600 dark:text-red-400 mb-4">{postsError}</p>
+            <button
+              onClick={onRefreshPosts}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-600 dark:text-gray-400">No posts available</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {posts.map(post => {
             const postEngagements = engagements[post.id] || {};
             
             return (
@@ -268,9 +270,9 @@ const TwitterEngagement = ({ twitterLinked }) => {
 
                 {/* Engagement Stats */}
                 <div className="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  <span>{post.engagement_stats.likes} likes</span>
-                  <span>{post.engagement_stats.retweets} reposts</span>
-                  <span>{post.engagement_stats.comments} comments</span>
+                  <span>{post.engagement_stats.like_count || post.engagement_stats.likes || 0} likes</span>
+                  <span>{post.engagement_stats.retweet_count || post.engagement_stats.retweets || 0} reposts</span>
+                  <span>{post.engagement_stats.reply_count || post.engagement_stats.comments || 0} comments</span>
                 </div>
 
                 <div className="flex items-center gap-4 border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -380,12 +382,85 @@ const TwitterEngagement = ({ twitterLinked }) => {
 };
 
 const EngageToEarnPage = () => {
-  const { publicKey } = useWallet();
+  const { publicKey, connected } = useWallet();
+  const [userProfile, setUserProfile] = useState(null);
+  const [isTwitterLinked, setIsTwitterLinked] = useState(false);
+  const [posts, setPosts] = useState([]);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [postsError, setPostsError] = useState(null);
+  const [engagements, setEngagements] = useState({});
+  const [verifying, setVerifying] = useState({});
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
-  const [twitterLinked, setTwitterLinked] = useState(false);
-  const [twitterStats, setTwitterStats] = useState(null);
+
+  useEffect(() => {
+    if (connected && publicKey) {
+      checkTwitterStatus();
+      fetchPrimapePosts();
+    } else {
+      // Show posts even when not connected
+      fetchPrimapePosts();
+      setLoadingProfile(false);
+    }
+  }, [connected, publicKey]);
+
+  const checkTwitterStatus = async () => {
+    if (!publicKey) return;
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${publicKey.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setUserProfile(data);
+        setIsTwitterLinked(!!data.twitter_username);
+      }
+    } catch (error) {
+      console.error('Error checking Twitter status:', error);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  const fetchPrimapePosts = async () => {
+    try {
+      setPostsLoading(true);
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/twitter/primape-posts?limit=5`);
+      if (!response.ok) throw new Error('Failed to fetch posts');
+      
+      const data = await response.json();
+      // Transform API response to match the expected format
+      const transformedPosts = (data.tweets || []).map(tweet => ({
+        id: tweet.id,
+        text: tweet.text,
+        created_at: tweet.created_at,
+        author_username: 'PrimapeApp',
+        url: `https://twitter.com/PrimapeApp/status/${tweet.id}`,
+        engagement_stats: tweet.public_metrics || { 
+          like_count: 0, 
+          retweet_count: 0, 
+          reply_count: 0 
+        }
+      }));
+      setPosts(transformedPosts);
+      setPostsError(null);
+    } catch (error) {
+      console.error('Error fetching @PrimapeApp posts:', error);
+      setPostsError('Failed to load posts');
+      // Fallback to a single demo post if API fails
+      setPosts([{
+        id: 'demo-post',
+        text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n\nConnect your wallet and start predicting!\n\n🚀 apes.primape.app/tournaments',
+        created_at: new Date().toISOString(),
+        author_username: 'PrimapeApp',
+        url: 'https://twitter.com/PrimapeApp',
+        engagement_stats: { like_count: 45, retweet_count: 12, reply_count: 8 }
+      }]);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (publicKey) {
@@ -401,11 +476,7 @@ const EngageToEarnPage = () => {
       if (balanceRes.ok) {
         const balanceData = await balanceRes.json();
         setBalance(balanceData);
-        setTwitterLinked(balanceData.has_twitter_linked);
       }
-
-      // Check if user has Twitter linked (will be false until properly authenticated)
-      // setTwitterLinked(true); // Commented out - user must actually link Twitter account
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -492,7 +563,7 @@ const EngageToEarnPage = () => {
           <FaXTwitter className="text-gray-900 dark:text-gray-100 text-2xl mb-2" />
           <p className="text-sm text-gray-600 dark:text-gray-400">𝕏 Status</p>
           <p className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            {twitterLinked ? (
+            {isTwitterLinked ? (
               <>
                 Linked <FaCheckCircle className="text-green-500" />
               </>
@@ -500,7 +571,7 @@ const EngageToEarnPage = () => {
               'Not Linked'
             )}
           </p>
-          {twitterLinked && (
+          {isTwitterLinked && (
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Ready for engagement tracking
             </p>
@@ -610,7 +681,13 @@ const EngageToEarnPage = () => {
           )}
 
           {activeTab === 'twitter' && (
-            <TwitterEngagement twitterLinked={twitterLinked} />
+            <TwitterEngagement 
+              twitterLinked={isTwitterLinked} 
+              posts={posts}
+              postsLoading={postsLoading}
+              postsError={postsError}
+              onRefreshPosts={fetchPrimapePosts}
+            />
           )}
         </div>
       </div>
