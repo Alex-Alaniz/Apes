@@ -23,6 +23,7 @@ import EngageToEarnPage from './pages/EngageToEarnPage';
 import TwitterCallback from './pages/TwitterCallback';
 import ProfilePage from './pages/ProfilePage';
 import PublicProfilePage from './pages/PublicProfilePage';
+import DebugApiPage from './pages/DebugApiPage';
 import { Toaster } from 'react-hot-toast';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
@@ -82,6 +83,7 @@ function App() {
                   <Route path="/admin/tournament" element={<AdminTournamentPage />} />
                   <Route path="/engage-to-earn" element={<EngageToEarnPage />} />
                   <Route path="/auth/twitter/callback" element={<TwitterCallback />} />
+                  <Route path="/debug-api" element={<DebugApiPage />} />
                 </Routes>
               </main>
               <Toaster position="bottom-right" />
