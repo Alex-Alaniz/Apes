@@ -4,7 +4,7 @@ const supabase = require('../config/supabase');
 const engagementService = require('../services/engagementService');
 const crypto = require('crypto');
 
-console.log('🐦 TWITTER-SUPABASE ROUTES LOADING... (Fixed Bearer Token URL Encoding)');
+console.log('🐦 TWITTER-SUPABASE ROUTES LOADING... (Deploy v2.0 - Real Twitter API)');
 console.log('🔍 Environment check on routes load:', {
   bearer_token: process.env.TWITTER_BEARER_TOKEN ? 'SET' : 'NOT_SET',
   client_id: process.env.TWITTER_CLIENT_ID ? 'SET' : 'NOT_SET', 
@@ -499,6 +499,15 @@ router.delete('/unlink/:walletAddress', async (req, res) => {
 router.get('/route-test-2', (req, res) => {
   console.log('🔍 Route test 2 hit - before primape-posts');
   res.json({ message: 'Route test 2 working' });
+});
+
+// Force deployment test endpoint
+router.get('/deployment-test', (req, res) => {
+  res.json({ 
+    message: 'v2.0 deployment successful - Real Twitter API active',
+    timestamp: new Date().toISOString(),
+    bearer_token_status: process.env.TWITTER_BEARER_TOKEN ? 'SET' : 'NOT_SET'
+  });
 });
 
 // Debug endpoint to test Twitter API directly
