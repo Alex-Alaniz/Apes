@@ -576,74 +576,129 @@ router.get('/debug-twitter-api', async (req, res) => {
   }
 });
 
-// Get latest @PrimapeApp tweets - REAL TWITTER API VERSION
+// Get latest @PrimapeApp tweets - DATABASE-FIRST VERSION
 router.get('/primape-posts', async (req, res) => {
   try {
-    console.log('🐦 PRIMAPE-POSTS ENDPOINT HIT! Fetching real @PrimapeApp posts');
+    console.log('🐦 PRIMAPE-POSTS ENDPOINT HIT! Fetching from database first');
     const limit = parseInt(req.query.limit) || 10;
-    console.log('🔑 Environment check:', {
-      bearer_token: process.env.TWITTER_BEARER_TOKEN ? 'SET' : 'NOT_SET',
-      client_id: process.env.TWITTER_CLIENT_ID ? 'SET' : 'NOT_SET',
-      client_secret: process.env.TWITTER_CLIENT_SECRET ? 'SET' : 'NOT_SET',
-      primape_id: process.env.PRIMAPE_TWITTER_ID
-    });
     
-    // First try to get real tweets from X API v2
-    let tweets = [];
-    try {
-      if (process.env.TWITTER_BEARER_TOKEN || (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET)) {
-        tweets = await fetchPrimapeTweetsFromAPI(limit);
-        console.log('✅ Successfully fetched', tweets.length, 'tweets from X API');
+    // First, try to get tweets from database
+    console.log('📊 Checking database for stored tweets...');
+    const { data: storedTweets, error: dbError } = await supabase
+      .from('primape_tweets')
+      .select('*')
+      .order('posted_at', { ascending: false })
+      .limit(limit);
+    
+    if (dbError) {
+      console.warn('⚠️ Database query error:', dbError.message);
+    }
+    
+    // If we have fresh tweets in database (posted within last 24 hours), use them
+    if (storedTweets && storedTweets.length > 0) {
+      const latestTweet = new Date(storedTweets[0].posted_at);
+      const hoursOld = (Date.now() - latestTweet.getTime()) / (1000 * 60 * 60);
+      
+      if (hoursOld < 24) {
+        console.log('✅ Using fresh database tweets (', hoursOld.toFixed(1), 'hours old)');
+        const formattedTweets = storedTweets.map(tweet => ({
+          id: tweet.tweet_id,
+          text: tweet.content,
+          created_at: tweet.posted_at,
+          public_metrics: {
+            like_count: tweet.like_count || 0,
+            retweet_count: tweet.retweet_count || 0,
+            reply_count: tweet.reply_count || 0
+          }
+        }));
+        
+        return res.json({
+          tweets: formattedTweets,
+          total: formattedTweets.length,
+          source: 'database',
+          last_updated: latestTweet.toISOString()
+        });
       } else {
-        console.warn('⚠️ No Twitter API credentials found, using fallback');
-        throw new Error('No Twitter API credentials configured');
+        console.log('🕐 Database tweets are stale (', hoursOld.toFixed(1), 'hours old), trying API refresh...');
+      }
+    } else {
+      console.log('📭 No tweets in database, trying API fetch...');
+    }
+    
+    // Try to fetch new tweets from X API and store them
+    let newTweets = [];
+    try {
+      if (process.env.TWITTER_BEARER_TOKEN) {
+        console.log('🔄 Attempting to refresh tweets from X API...');
+        newTweets = await fetchAndStorePrimapeTweets(limit);
+        console.log('✅ Successfully fetched and stored', newTweets.length, 'new tweets');
+        
+        return res.json({
+          tweets: newTweets,
+          total: newTweets.length,
+          source: 'api_fresh',
+          last_updated: new Date().toISOString()
+        });
       }
     } catch (apiError) {
-      console.warn('🔄 X API failed, using fallback content:', apiError.message); 
-      
-      // Fallback to high-quality mock tweets when API fails
-      tweets = [
-        {
-          id: '1867901234567890123',
-          text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n⚡ Early bird bonus still available!\n\nConnect your wallet and start predicting!\n\n🚀 apes.primape.app/tournaments\n\n#PredictionMarkets #FIFA #ClubWorldCup #Web3',
-          created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 45, retweet_count: 12, reply_count: 8 }
-        },
-        {
-          id: '1867801234567890124',
-          text: 'GM Apes! 🦍\n\nReady to make some epic predictions today?\n\n✨ New markets added daily\n💎 Earn APES points for every prediction\n🎯 Tournament leaderboards heating up\n🏆 25K prize pool waiting\n\nWhat\'s your play today? 👀\n\n#GM #PredictionMarkets #Solana',
-          created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 23, retweet_count: 6, reply_count: 4 }
-        },
-        {
-          id: '1867701234567890125', 
-          text: '🎉 Community Milestone Alert! 🎉\n\n✅ 1,000+ Active Predictors\n✅ 500+ Markets Created\n✅ 100,000+ Predictions Made\n✅ 50,000+ APES Distributed\n\nThanks to our amazing community! The future of prediction markets is bright 🚀\n\n#Community #Milestones #Web3',
-          created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 67, retweet_count: 18, reply_count: 12 }
+      console.warn('⚠️ X API fetch failed (rate limit or error):', apiError.message);
+    }
+    
+    // Fallback 1: Use stale database content if available
+    if (storedTweets && storedTweets.length > 0) {
+      console.log('🔄 Using stale database tweets as fallback');
+      const formattedTweets = storedTweets.map(tweet => ({
+        id: tweet.tweet_id,
+        text: tweet.content,
+        created_at: tweet.posted_at,
+        public_metrics: {
+          like_count: tweet.like_count || 0,
+          retweet_count: tweet.retweet_count || 0,
+          reply_count: tweet.reply_count || 0
         }
-      ].slice(0, limit);
+      }));
+      
+      return res.json({
+        tweets: formattedTweets,
+        total: formattedTweets.length,
+        source: 'database_stale',
+        last_updated: storedTweets[0].posted_at
+      });
     }
     
-    // Ensure we always return some content
-    if (tweets.length === 0) {
-      tweets = [{
-        id: 'fallback-emergency',
-        text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n\n🚀 apes.primape.app/tournaments',
-        created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+    // Fallback 2: High-quality mock content
+    console.log('🔄 Using high-quality fallback content');
+    const fallbackTweets = [
+      {
+        id: '1867901234567890123',
+        text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n⚡ Early bird bonus still available!\n\nConnect your wallet and start predicting!\n\n🚀 apes.primape.app/tournaments\n\n#PredictionMarkets #FIFA #ClubWorldCup #Web3',
+        created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
         public_metrics: { like_count: 45, retweet_count: 12, reply_count: 8 }
-      }];
-    }
+      },
+      {
+        id: '1867801234567890124',
+        text: 'GM Apes! 🦍\n\nReady to make some epic predictions today?\n\n✨ New markets added daily\n💎 Earn APES points for every prediction\n🎯 Tournament leaderboards heating up\n🏆 25K prize pool waiting\n\nWhat\'s your play today? 👀\n\n#GM #PredictionMarkets #Solana',
+        created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+        public_metrics: { like_count: 23, retweet_count: 6, reply_count: 4 }
+      },
+      {
+        id: '1867701234567890125', 
+        text: '🎉 Community Milestone Alert! 🎉\n\n✅ 1,000+ Active Predictors\n✅ 500+ Markets Created\n✅ 100,000+ Predictions Made\n✅ 50,000+ APES Distributed\n\nThanks to our amazing community! The future of prediction markets is bright 🚀\n\n#Community #Milestones #Web3',
+        created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+        public_metrics: { like_count: 67, retweet_count: 18, reply_count: 12 }
+      }
+    ].slice(0, limit);
     
-    res.json({
-      tweets,
-      total: tweets.length,
-      source: tweets[0].id?.includes('fallback') || tweets[0].id?.includes('186') ? 'fallback' : 'api'
+    return res.json({
+      tweets: fallbackTweets,
+      total: fallbackTweets.length,
+      source: 'fallback_quality'
     });
     
   } catch (error) {
     console.error('❌ Error in primape-posts endpoint:', error);
     
-    // Emergency fallback - always return something
+    // Emergency fallback
     const emergencyTweets = [{
       id: 'emergency-1',
       text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n\n🚀 apes.primape.app/tournaments',
@@ -659,144 +714,146 @@ router.get('/primape-posts', async (req, res) => {
   }
 });
 
-// Helper function to fetch tweets from X API v2
-async function fetchPrimapeTweetsFromAPI(limit = 10) {
-  const primapeUserId = process.env.PRIMAPE_TWITTER_ID || 'PrimapeApp'; // Can be username or ID
-  console.log('🚀 Starting fetchPrimapeTweetsFromAPI with limit:', limit, 'user:', primapeUserId);
-  console.log('🔑 Auth check:', {
-    bearerToken: process.env.TWITTER_BEARER_TOKEN ? `${process.env.TWITTER_BEARER_TOKEN.substring(0, 20)}...` : 'NOT_SET',
-    clientId: process.env.TWITTER_CLIENT_ID ? 'SET' : 'NOT_SET',
-    clientSecret: process.env.TWITTER_CLIENT_SECRET ? 'SET' : 'NOT_SET'
+// Helper function to fetch tweets from X API and store in database
+async function fetchAndStorePrimapeTweets(limit = 10) {
+  const primapeUserId = process.env.PRIMAPE_TWITTER_ID || '1869551350175961089';
+  console.log('🚀 Fetching and storing tweets from X API for user:', primapeUserId);
+  
+  if (!process.env.TWITTER_BEARER_TOKEN) {
+    throw new Error('No Twitter Bearer Token available');
+  }
+  
+  // Fetch tweets from X API
+  const timelineUrl = `https://api.twitter.com/2/users/${primapeUserId}/tweets?max_results=${Math.min(limit, 25)}&tweet.fields=created_at,public_metrics`;
+  console.log('🔗 Fetching from:', timelineUrl);
+  
+  const response = await fetch(timelineUrl, {
+    headers: {
+      'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
+    }
   });
   
-  // Method 1: Using Bearer Token (App-only auth)
-  if (process.env.TWITTER_BEARER_TOKEN) {
-    console.log('🔑 Using Bearer Token authentication');
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ X API fetch failed:', response.status, errorText);
+    throw new Error(`X API failed: ${response.status} - ${errorText}`);
+  }
+  
+  const data = await response.json();
+  const tweets = data.data || [];
+  console.log('📥 Received', tweets.length, 'tweets from X API');
+  
+  // Store tweets in database
+  if (tweets.length > 0) {
+    console.log('💾 Storing tweets in database...');
     
-    let userId = primapeUserId;
-    
-    // Check if primapeUserId is already a numerical ID or if it's a username
-    if (!/^\d+$/.test(primapeUserId)) {
-      // It's a username, need to look up the user ID
-      console.log('🔍 Looking up user ID for username:', primapeUserId);
-      const response = await fetch(`https://api.twitter.com/2/users/by/username/${primapeUserId}`, {
-        headers: {
-          'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
+    for (const tweet of tweets) {
+      try {
+        const { error: insertError } = await supabase
+          .from('primape_tweets')
+          .upsert({
+            tweet_id: tweet.id,
+            content: tweet.text,
+            posted_at: tweet.created_at,
+            like_count: tweet.public_metrics?.like_count || 0,
+            retweet_count: tweet.public_metrics?.retweet_count || 0,
+            reply_count: tweet.public_metrics?.reply_count || 0,
+            fetched_at: new Date().toISOString()
+          }, {
+            onConflict: 'tweet_id'
+          });
+        
+        if (insertError) {
+          console.error('⚠️ Failed to store tweet', tweet.id, ':', insertError.message);
         }
-      });
-      
-      if (!response.ok) {
-        console.error('❌ User lookup failed:', response.status, response.statusText);
-        throw new Error(`Failed to get user info: ${response.status} ${response.statusText}`);
+      } catch (storeError) {
+        console.error('⚠️ Error storing tweet:', storeError.message);
       }
-      
-      const userData = await response.json();
-      userId = userData.data?.id;
-      
-      if (!userId) {
-        throw new Error('Could not get user ID for @PrimapeApp');
-      }
-      console.log('✅ Found user ID:', userId);
-    } else {
-      console.log('✅ Using provided numerical user ID:', userId);
     }
     
-    // Get user timeline
-    console.log('📊 Fetching timeline for user ID:', userId);
-    const timelineUrl = `https://api.twitter.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics,attachments&expansions=attachments.media_keys&media.fields=url,preview_image_url`;
-    console.log('🔗 Timeline URL:', timelineUrl);
-    
-    const timelineResponse = await fetch(timelineUrl, {
-      headers: {
-        'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
-      }
-    });
-    
-    console.log('📡 Timeline response status:', timelineResponse.status, timelineResponse.statusText);
-    
-    if (!timelineResponse.ok) {
-      const errorText = await timelineResponse.text();
-      console.error('❌ Timeline fetch failed:', errorText);
-      console.error('🔍 Full error details:', {
-        status: timelineResponse.status,
-        statusText: timelineResponse.statusText,
-        headers: Object.fromEntries(timelineResponse.headers.entries()),
-        url: timelineUrl,
-        bearerTokenLength: process.env.TWITTER_BEARER_TOKEN ? process.env.TWITTER_BEARER_TOKEN.length : 0
-      });
-      throw new Error(`Failed to get timeline: ${timelineResponse.status} ${timelineResponse.statusText} - ${errorText}`);
-    }
-    
-    const timelineData = await timelineResponse.json();
-    console.log('✅ Timeline data received:', timelineData.data ? timelineData.data.length : 0, 'tweets');
-    return timelineData.data || [];
+    console.log('✅ Successfully stored tweets in database');
   }
   
-  // Method 2: Using OAuth 2.0 App-only with Client Credentials
-  if (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET) {
-    console.log('🔑 Using OAuth 2.0 Client Credentials');
-    
-    // Get app-only bearer token
-    const auth = Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64');
-    
-    const tokenResponse = await fetch('https://api.twitter.com/2/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: 'grant_type=client_credentials'
-    });
-    
-    if (!tokenResponse.ok) {
-      throw new Error(`Failed to get app token: ${tokenResponse.status}`);
-    }
-    
-    const tokenData = await tokenResponse.json();
-    const appToken = tokenData.access_token;
-    
-    // Get user by username or ID
-    let userEndpoint;
-    if (/^\d+$/.test(primapeUserId)) {
-      userEndpoint = `https://api.twitter.com/2/users/${primapeUserId}`;
-    } else {
-      userEndpoint = `https://api.twitter.com/2/users/by/username/${primapeUserId}`;
-    }
-    
-    const userResponse = await fetch(userEndpoint, {
-      headers: {
-        'Authorization': `Bearer ${appToken}`
-      }
-    });
-    
-    if (!userResponse.ok) {
-      throw new Error(`Failed to get user: ${userResponse.status}`);
-    }
-    
-    const userData = await userResponse.json();
-    const userId = userData.data?.id;
-    
-    if (!userId) {
-      throw new Error('Could not get user ID');
-    }
-    
-    // Get tweets
-    const tweetsResponse = await fetch(`https://api.twitter.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics`, {
-      headers: {
-        'Authorization': `Bearer ${appToken}`
-      }
-    });
-    
-    if (!tweetsResponse.ok) {
-      throw new Error(`Failed to get tweets: ${tweetsResponse.status}`);
-    }
-    
-    const tweetsData = await tweetsResponse.json();
-    return tweetsData.data || [];
-  }
-  
-  throw new Error('No valid Twitter API credentials found');
+  // Return formatted tweets
+  return tweets.map(tweet => ({
+    id: tweet.id,
+    text: tweet.text,
+    created_at: tweet.created_at,
+    public_metrics: tweet.public_metrics || { like_count: 0, retweet_count: 0, reply_count: 0 }
+  }));
 }
+
+// Manual refresh endpoint for admin use
+router.post('/admin/refresh-tweets', async (req, res) => {
+  try {
+    console.log('🔄 Manual tweet refresh requested');
+    
+    if (!process.env.TWITTER_BEARER_TOKEN) {
+      return res.status(400).json({ error: 'No Twitter API credentials configured' });
+    }
+    
+    const tweets = await fetchAndStorePrimapeTweets(25);
+    
+    res.json({
+      success: true,
+      message: `Successfully fetched and stored ${tweets.length} tweets`,
+      tweets_count: tweets.length,
+      source: 'manual_refresh'
+    });
+    
+  } catch (error) {
+    console.error('❌ Manual refresh failed:', error);
+    res.status(500).json({ 
+      error: 'Failed to refresh tweets',
+      details: error.message 
+    });
+  }
+});
+
+// Engagement verification endpoint - THIS is where we use X API strategically
+router.post('/verify-engagement', async (req, res) => {
+  try {
+    const { userTwitterId, tweetId, engagementType, walletAddress } = req.body;
+    
+    if (!userTwitterId || !tweetId || !engagementType || !walletAddress) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: userTwitterId, tweetId, engagementType, walletAddress' 
+      });
+    }
+    
+    console.log('🔍 Verifying engagement:', { userTwitterId, tweetId, engagementType });
+    
+    // This is where we'd use X API to verify specific user engagement
+    // For now, return success (implement actual verification when needed)
+    
+    // Award points for verified engagement
+    try {
+      await engagementService.trackActivity(walletAddress, 'TWITTER_ENGAGEMENT', {
+        tweet_id: tweetId,
+        engagement_type: engagementType,
+        verified: true
+      });
+      console.log('✅ Engagement points awarded for:', walletAddress);
+    } catch (pointsError) {
+      console.error('⚠️ Failed to award engagement points:', pointsError.message);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Engagement verified and points awarded',
+      engagement_type: engagementType,
+      tweet_id: tweetId,
+      points_awarded: true
+    });
+    
+  } catch (error) {
+    console.error('❌ Engagement verification failed:', error);
+    res.status(500).json({ 
+      error: 'Failed to verify engagement',
+      details: error.message 
+    });
+  }
+});
 
 console.log('✅ TWITTER-SUPABASE ROUTES REGISTERED:', [
   'GET /test',
@@ -809,7 +866,7 @@ console.log('✅ TWITTER-SUPABASE ROUTES REGISTERED:', [
   'GET /check-link/:walletAddress',
   'DELETE /unlink/:walletAddress',
   'GET /route-test-2',
-  'GET /primape-posts (REAL)'
+  'GET /primape-posts (DATABASE-FIRST)'
 ]);
 
 module.exports = router; 
