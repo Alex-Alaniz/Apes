@@ -196,6 +196,12 @@ router.post('/auth/callback', async (req, res) => {
   }
 });
 
+// Quick test endpoint to check if we get past callback route
+router.get('/route-test-1', (req, res) => {
+  console.log('🔍 Route test 1 hit - past callback route');
+  res.json({ message: 'Route test 1 working' });
+});
+
 // Helper function to link Twitter account
 async function linkTwitterAccount(walletAddress, twitterId, username, followers = 0) {
   // Check if this Twitter account already exists
@@ -428,231 +434,58 @@ router.delete('/unlink/:walletAddress', async (req, res) => {
   }
 });
 
-// Get latest @PrimapeApp tweets
-router.get('/primape-posts', async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 10;
-    console.log('🐦 PRIMAPE-POSTS ENDPOINT HIT! Fetching @PrimapeApp posts, limit:', limit);
-    console.log('🔑 Environment check:', {
-      bearer_token: process.env.TWITTER_BEARER_TOKEN ? 'SET' : 'NOT_SET',
-      client_id: process.env.TWITTER_CLIENT_ID ? 'SET' : 'NOT_SET',
-      client_secret: process.env.TWITTER_CLIENT_SECRET ? 'SET' : 'NOT_SET',
-      primape_id: process.env.PRIMAPE_TWITTER_ID
-    });
-    
-    // First try to get real tweets from X API v2
-    let tweets = [];
-    try {
-      if (process.env.TWITTER_BEARER_TOKEN || (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET)) {
-        tweets = await fetchPrimapeTweetsFromAPI(limit);
-        console.log('✅ Successfully fetched', tweets.length, 'tweets from X API');
-      } else {
-        console.warn('⚠️ No Twitter API credentials found, using fallback');
-        throw new Error('No Twitter API credentials configured');
-      }
-    } catch (apiError) {
-      console.warn('🔄 X API failed, using fallback content:', apiError.message); 
-      
-      // Fallback to high-quality mock tweets when API fails
-      tweets = [
-        {
-          id: '1867901234567890123',
-          text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n⚡ Early bird bonus still available!\n\nConnect your wallet and start predicting!\n\n🚀 apes.primape.app/tournaments\n\n#PredictionMarkets #FIFA #ClubWorldCup #Web3',
-          created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 45, retweet_count: 12, reply_count: 8 }
-        },
-        {
-          id: '1867801234567890124',
-          text: 'GM Apes! 🦍\n\nReady to make some epic predictions today?\n\n✨ New markets added daily\n💎 Earn APES points for every prediction\n🎯 Tournament leaderboards heating up\n🏆 25K prize pool waiting\n\nWhat\'s your play today? 👀\n\n#GM #PredictionMarkets #Solana',
-          created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 23, retweet_count: 6, reply_count: 4 }
-        },
-        {
-          id: '1867701234567890125', 
-          text: '🎉 Community Milestone Alert! 🎉\n\n✅ 1,000+ Active Predictors\n✅ 500+ Markets Created\n✅ 100,000+ Predictions Made\n✅ 50,000+ APES Distributed\n\nThanks to our amazing community! The future of prediction markets is bright 🚀\n\n#Community #Milestones #Web3',
-          created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 67, retweet_count: 18, reply_count: 12 }
-        },
-        {
-          id: '1867601234567890126',
-          text: '🚨 Breaking: New Prediction Markets Going Live! 🚨\n\n🏈 NFL Playoffs\n🏀 NBA All-Star Weekend\n💰 Crypto Price Predictions\n🎬 Oscars 2025\n\nDon\'t miss out on the action! Join thousands of predictors earning APES tokens.\n\n#NFL #NBA #Crypto #Oscars',
-          created_at: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 34, retweet_count: 8, reply_count: 6 }
-        },
-        {
-          id: '1867501234567890127',
-          text: '💡 Pro Tip: Diversify your predictions! 💡\n\n📊 Spread risk across multiple markets\n🎯 Focus on areas you know well\n⏰ Early predictions often have better odds\n💰 Compound your APES earnings\n\nWhat\'s your prediction strategy? 🤔\n\n#ProTips #Strategy',
-          created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 28, retweet_count: 5, reply_count: 11 }
-        }
-      ].slice(0, limit);
-    }
-    
-    // Ensure we always return some content
-    if (tweets.length === 0) {
-      tweets = [{
-        id: 'fallback-emergency',
-        text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n\n🚀 apes.primape.app/tournaments',
-        created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-        public_metrics: { like_count: 45, retweet_count: 12, reply_count: 8 }
-      }];
-    }
-    
-    res.json({
-      tweets,
-      total: tweets.length,
-      source: tweets[0].id?.includes('fallback') || tweets[0].id?.includes('186') ? 'fallback' : 'api'
-    });
-    
-  } catch (error) {
-    console.error('❌ Error in primape-posts endpoint:', error);
-    
-    // Emergency fallback - always return something
-    const emergencyTweets = [{
-      id: 'emergency-1',
-      text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n\n🚀 apes.primape.app/tournaments',
-      created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-      public_metrics: { like_count: 45, retweet_count: 12, reply_count: 8 }
-    }];
-    
-    res.json({
-      tweets: emergencyTweets,
-      total: emergencyTweets.length,
-      source: 'emergency_fallback'
-    });
-  }
+// Quick test endpoint to check if we get past more routes
+router.get('/route-test-2', (req, res) => {
+  console.log('🔍 Route test 2 hit - before primape-posts');
+  res.json({ message: 'Route test 2 working' });
 });
 
-// Helper function to fetch tweets from X API v2
-async function fetchPrimapeTweetsFromAPI(limit = 10) {
-  const primapeUserId = process.env.PRIMAPE_TWITTER_ID || 'PrimapeApp'; // Can be username or ID
-  console.log('🚀 Starting fetchPrimapeTweetsFromAPI with limit:', limit, 'user:', primapeUserId);
-  
-  // Method 1: Using Bearer Token (App-only auth)
-  if (process.env.TWITTER_BEARER_TOKEN) {
-    console.log('🔑 Using Bearer Token authentication');
+// Get latest @PrimapeApp tweets - SIMPLIFIED VERSION FOR TESTING
+router.get('/primape-posts', async (req, res) => {
+  try {
+    console.log('🐦 PRIMAPE-POSTS ENDPOINT HIT! (Simplified version)');
+    const limit = parseInt(req.query.limit) || 10;
     
-    let userId = primapeUserId;
-    
-    // Check if primapeUserId is already a numerical ID or if it's a username
-    if (!/^\d+$/.test(primapeUserId)) {
-      // It's a username, need to look up the user ID
-      console.log('🔍 Looking up user ID for username:', primapeUserId);
-      const response = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}`, {
-        headers: {
-          'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
-        }
-      });
-      
-      if (!response.ok) {
-        console.error('❌ User lookup failed:', response.status, response.statusText);
-        throw new Error(`Failed to get user info: ${response.status} ${response.statusText}`);
-      }
-      
-      const userData = await response.json();
-      userId = userData.data?.id;
-      
-      if (!userId) {
-        throw new Error('Could not get user ID for @PrimapeApp');
-      }
-      console.log('✅ Found user ID:', userId);
-    } else {
-      console.log('✅ Using provided numerical user ID:', userId);
-    }
-    
-    // Get user timeline
-    console.log('📊 Fetching timeline for user ID:', userId);
-    const timelineUrl = `https://api.x.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics,attachments&expansions=attachments.media_keys&media.fields=url,preview_image_url`;
-    console.log('🔗 Timeline URL:', timelineUrl);
-    
-    const timelineResponse = await fetch(timelineUrl, {
-      headers: {
-        'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
-      }
-    });
-    
-    console.log('📡 Timeline response status:', timelineResponse.status, timelineResponse.statusText);
-    
-    if (!timelineResponse.ok) {
-      const errorText = await timelineResponse.text();
-      console.error('❌ Timeline fetch failed:', errorText);
-      throw new Error(`Failed to get timeline: ${timelineResponse.status} ${timelineResponse.statusText}`);
-    }
-    
-    const timelineData = await timelineResponse.json();
-    console.log('✅ Timeline data received:', timelineData.data ? timelineData.data.length : 0, 'tweets');
-    return timelineData.data || [];
-  }
-  
-  // Method 2: Using OAuth 2.0 App-only with Client Credentials
-  if (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET) {
-    console.log('🔑 Using OAuth 2.0 Client Credentials');
-    
-    // Get app-only bearer token
-    const auth = Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64');
-    
-    const tokenResponse = await fetch('https://api.x.com/2/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
+    // For now, just return fallback content to test route registration
+    const tweets = [
+      {
+        id: '1867901234567890123',
+        text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n⚡ Early bird bonus still available!\n\nConnect your wallet and start predicting!\n\n🚀 apes.primape.app/tournaments\n\n#PredictionMarkets #FIFA #ClubWorldCup #Web3',
+        created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        public_metrics: { like_count: 45, retweet_count: 12, reply_count: 8 }
       },
-      body: 'grant_type=client_credentials'
-    });
-    
-    if (!tokenResponse.ok) {
-      throw new Error(`Failed to get app token: ${tokenResponse.status}`);
-    }
-    
-    const tokenData = await tokenResponse.json();
-    const appToken = tokenData.access_token;
-    
-    // Get user by username
-    const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}`, {
-      headers: {
-        'Authorization': `Bearer ${appToken}`
+      {
+        id: '1867801234567890124',
+        text: 'GM Apes! 🦍\n\nReady to make some epic predictions today?\n\n✨ New markets added daily\n💎 Earn APES points for every prediction\n🎯 Tournament leaderboards heating up\n🏆 25K prize pool waiting\n\nWhat\'s your play today? 👀\n\n#GM #PredictionMarkets #Solana',
+        created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+        public_metrics: { like_count: 23, retweet_count: 6, reply_count: 4 }
       }
-    });
+    ].slice(0, limit);
     
-    if (!userResponse.ok) {
-      throw new Error(`Failed to get user: ${userResponse.status}`);
-    }
-    
-    const userData = await userResponse.json();
-    const userId = userData.data?.id;
-    
-    if (!userId) {
-      throw new Error('Could not get user ID');
-    }
-    
-    // Get tweets
-    const tweetsResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics`, {
-      headers: {
-        'Authorization': `Bearer ${appToken}`
-      }
-    });
-    
-    if (!tweetsResponse.ok) {
-      throw new Error(`Failed to get tweets: ${tweetsResponse.status}`);
-    }
-    
-    const tweetsData = await tweetsResponse.json();
-    return tweetsData.data || [];
-  }
-  
-  throw new Error('No valid Twitter API credentials found');
-}
+         console.log('✅ Returning', tweets.length, 'test tweets');
+     res.json({
+       tweets,
+       total: tweets.length,
+       source: 'simplified_test_version'
+     });
+   } catch (error) {
+     console.error('❌ Error in simplified primape-posts:', error);
+     res.status(500).json({ error: 'Failed to fetch tweets' });
+   }
+});
 
 console.log('✅ TWITTER-SUPABASE ROUTES REGISTERED:', [
   'GET /test',
   'POST /auth/link', 
   'POST /auth/callback',
+  'GET /route-test-1',
   'POST /auth/debug-link',
   'GET /twitter-by-wallet/:walletAddress',
   'GET /linked-wallets/:twitterId',
   'GET /check-link/:walletAddress',
   'DELETE /unlink/:walletAddress',
-  'GET /primape-posts'
+  'GET /route-test-2',
+  'GET /primape-posts (SIMPLIFIED)'
 ]);
 
 module.exports = router; 
