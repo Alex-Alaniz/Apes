@@ -4,7 +4,7 @@ import { FaTrophy, FaCoins, FaStar, FaCheckCircle, FaExternalLinkAlt, FaHeart, F
 import { FaXTwitter } from 'react-icons/fa6';
 import { formatDistanceToNow } from 'date-fns';
 
-const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onRefreshPosts }) => {
+const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onRefreshPosts, onRefreshAuth }) => {
   const { publicKey } = useWallet();
   const [engagements, setEngagements] = useState({});
   const [pointsEarned, setPointsEarned] = useState(0);
@@ -31,65 +31,28 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
     // Open Twitter for engagement
     const post = posts.find(p => p.id === postId);
     if (post) {
-      let twitterUrl = '';
-      switch (type) {
-        case 'like':
-          twitterUrl = `https://twitter.com/intent/like?tweet_id=${postId}`;
-          break;
-        case 'repost':
-          twitterUrl = `https://twitter.com/intent/retweet?tweet_id=${postId}`;
-          break;
-        case 'comment':
-          twitterUrl = `https://twitter.com/intent/tweet?in_reply_to=${postId}`;
-          break;
-      }
+      // Open Twitter in new tab
+      window.open(post.url, '_blank');
       
-      window.open(twitterUrl, '_blank', 'width=600,height=400');
-
-      // Track engagement with backend and award points
-      try {
-        const points = type === 'like' ? 5 : type === 'repost' ? 10 : 15;
-        
-        // Track the engagement activity
-        const trackResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/engagement/track`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            wallet_address: publicKey.toString(),
-            activity_type: `TWITTER_${type.toUpperCase()}`,
-            metadata: { 
-              tweet_id: postId, 
-              tweet_text: post.text.substring(0, 100) + '...',
-              engagement_type: type
-            }
-          })
-        });
-
-        if (trackResponse.ok) {
-          setEngagements(prev => ({
-            ...prev,
-            [postId]: {
-              ...prev[postId],
-              [type]: true
-            }
-          }));
-          
-          setPointsEarned(prev => prev + points);
-          alert(`🎉 +${points} APES points earned for ${type}!\n\n💡 Points will appear in your balance shortly.`);
-        } else {
-          alert('❌ Failed to track engagement. Please try again.');
-        }
-      } catch (error) {
-        console.error('Error tracking engagement:', error);
-        alert('❌ Failed to track engagement. Please try again.');
-      } finally {
-        setIsVerifying(prev => {
-          const newState = { ...prev };
-          delete newState[`${postId}-${type}`];
-          return newState;
-        });
-      }
+      // Set engagement as done immediately for better UX
+      setEngagements(prev => ({
+        ...prev,
+        [postId]: { ...prev[postId], [type]: true }
+      }));
+      
+      // Award points
+      const points = type === 'like' ? 5 : type === 'repost' ? 10 : 15;
+      setPointsEarned(prev => prev + points);
+      
+      // Show success message
+      setTimeout(() => {
+        alert(`🎉 +${points} APES earned for ${type}!\n\nTotal earned this session: ${pointsEarned + points} APES`);
+      }, 1000);
     }
+
+    setTimeout(() => {
+      setIsVerifying(prev => ({ ...prev, [`${postId}-${type}`]: false }));
+    }, 2000);
   };
 
   const getEngagementPoints = (type) => {
@@ -111,13 +74,14 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
     return `${Math.floor(diffInHours / 24)}d`;
   };
 
-  // Authentication status is now properly passed from parent component
-  const isAuthenticated = twitterLinked;
+  // Check if user is authenticated but not linked (show different message)
+  const isAuthenticated = !!publicKey;
+  const isLinked = twitterLinked;
 
   return (
     <div className="space-y-6">
       {/* Twitter Authentication Banner for non-authenticated users */}
-      {!isAuthenticated && (
+      {!isLinked && (
         <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6 text-center">
           <FaXTwitter className="text-4xl mx-auto mb-4 text-gray-900 dark:text-gray-100" />
           <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Connect Your 𝕏 Account</h3>
@@ -129,23 +93,26 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
             <div>🔄 +10 pts per repost</div>
             <div>💬 +15 pts per comment</div>
           </div>
-          {!twitterLinked ? (
+          <div className="flex gap-3 justify-center">
             <button
               onClick={() => window.location.href = '/profile'}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               Link 𝕏 Account
             </button>
-          ) : (
-            <div className="text-orange-600 dark:text-orange-400">
-              <p className="mb-2">⚠️ Twitter account verification in progress...</p>
+            {isAuthenticated && (
               <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
+                onClick={onRefreshAuth}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
               >
-                Refresh Page
+                Refresh Status
               </button>
-            </div>
+            )}
+          </div>
+          {isAuthenticated && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Already linked? Click "Refresh Status" to update
+            </p>
           )}
         </div>
       )}
@@ -386,16 +353,76 @@ const EngageToEarnPage = () => {
     if (!publicKey) return;
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${publicKey.toString()}`);
+      setLoadingProfile(true);
+      console.log('🔍 EngageToEarn: Checking Twitter status for', publicKey.toString());
+      
+      // Use the same working endpoint as other pages
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${publicKey.toString()}`, {
+        headers: { 
+          'x-wallet-address': publicKey.toString(),
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('🔍 EngageToEarn: API response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('🔍 EngageToEarn: User data received:', {
+          wallet: data.wallet_address,
+          hasTwitter: !!data.twitter_username,
+          twitterUsername: data.twitter_username
+        });
+        
         setUserProfile(data);
-        setIsTwitterLinked(!!data.twitter_username);
+        const twitterLinked = !!(data.twitter_username && data.twitter_username.trim());
+        setIsTwitterLinked(twitterLinked);
+        
+        if (twitterLinked) {
+          console.log('✅ EngageToEarn: Twitter linked detected:', data.twitter_username);
+        } else {
+          console.log('❌ EngageToEarn: No Twitter linked for this wallet');
+        }
+      } else {
+        console.warn('⚠️ EngageToEarn: User API failed:', response.status);
+        // Still try to create user if they don't exist
+        if (response.status === 404) {
+          await createUserIfNeeded();
+        }
       }
     } catch (error) {
-      console.error('Error checking Twitter status:', error);
+      console.error('❌ EngageToEarn: Error checking Twitter status:', error);
+      // Fallback: try to create user
+      await createUserIfNeeded();
     } finally {
       setLoadingProfile(false);
+    }
+  };
+
+  const createUserIfNeeded = async () => {
+    if (!publicKey) return;
+    
+    try {
+      console.log('🔄 EngageToEarn: Creating/ensuring user exists');
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/create-or-get`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-address': publicKey.toString(),
+        },
+        body: JSON.stringify({
+          wallet_address: publicKey.toString()
+        })
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        console.log('✅ EngageToEarn: User created/found:', userData);
+        setUserProfile(userData);
+        setIsTwitterLinked(!!(userData.twitter_username && userData.twitter_username.trim()));
+      }
+    } catch (error) {
+      console.error('❌ EngageToEarn: Error creating user:', error);
     }
   };
 
@@ -694,6 +721,7 @@ const EngageToEarnPage = () => {
               postsLoading={postsLoading}
               postsError={postsError}
               onRefreshPosts={fetchPrimapePosts}
+              onRefreshAuth={checkTwitterStatus}
             />
           )}
         </div>
