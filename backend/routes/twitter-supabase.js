@@ -18,6 +18,21 @@ function generatePKCE() {
   };
 }
 
+// Simple test endpoint to verify routes are loading
+router.get('/test', (req, res) => {
+  console.log('🔍 Twitter routes test endpoint hit');
+  res.json({
+    message: 'Twitter routes are working!',
+    timestamp: new Date().toISOString(),
+    env_check: {
+      has_bearer_token: !!process.env.TWITTER_BEARER_TOKEN,
+      has_client_id: !!process.env.TWITTER_CLIENT_ID,
+      has_client_secret: !!process.env.TWITTER_CLIENT_SECRET,
+      primape_twitter_id: process.env.PRIMAPE_TWITTER_ID
+    }
+  });
+});
+
 // Generate Twitter OAuth 2.0 link (with PKCE)
 router.post('/auth/link', async (req, res) => {
   try {
@@ -409,7 +424,13 @@ router.delete('/unlink/:walletAddress', async (req, res) => {
 router.get('/primape-posts', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
-    console.log('🐦 Fetching @PrimapeApp posts, limit:', limit);
+    console.log('🐦 PRIMAPE-POSTS ENDPOINT HIT! Fetching @PrimapeApp posts, limit:', limit);
+    console.log('🔑 Environment check:', {
+      bearer_token: process.env.TWITTER_BEARER_TOKEN ? 'SET' : 'NOT_SET',
+      client_id: process.env.TWITTER_CLIENT_ID ? 'SET' : 'NOT_SET',
+      client_secret: process.env.TWITTER_CLIENT_SECRET ? 'SET' : 'NOT_SET',
+      primape_id: process.env.PRIMAPE_TWITTER_ID
+    });
     
     // First try to get real tweets from X API v2
     let tweets = [];
@@ -497,39 +518,61 @@ router.get('/primape-posts', async (req, res) => {
 // Helper function to fetch tweets from X API v2
 async function fetchPrimapeTweetsFromAPI(limit = 10) {
   const primapeUserId = process.env.PRIMAPE_TWITTER_ID || 'PrimapeApp'; // Can be username or ID
+  console.log('🚀 Starting fetchPrimapeTweetsFromAPI with limit:', limit, 'user:', primapeUserId);
   
   // Method 1: Using Bearer Token (App-only auth)
   if (process.env.TWITTER_BEARER_TOKEN) {
     console.log('🔑 Using Bearer Token authentication');
-    const response = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
+    
+    let userId = primapeUserId;
+    
+    // Check if primapeUserId is already a numerical ID or if it's a username
+    if (!/^\d+$/.test(primapeUserId)) {
+      // It's a username, need to look up the user ID
+      console.log('🔍 Looking up user ID for username:', primapeUserId);
+      const response = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('❌ User lookup failed:', response.status, response.statusText);
+        throw new Error(`Failed to get user info: ${response.status} ${response.statusText}`);
       }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to get user info: ${response.status} ${response.statusText}`);
-    }
-    
-    const userData = await response.json();
-    const userId = userData.data?.id;
-    
-    if (!userId) {
-      throw new Error('Could not get user ID for @PrimapeApp');
+      
+      const userData = await response.json();
+      userId = userData.data?.id;
+      
+      if (!userId) {
+        throw new Error('Could not get user ID for @PrimapeApp');
+      }
+      console.log('✅ Found user ID:', userId);
+    } else {
+      console.log('✅ Using provided numerical user ID:', userId);
     }
     
     // Get user timeline
-    const timelineResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics,attachments&expansions=attachments.media_keys&media.fields=url,preview_image_url`, {
+    console.log('📊 Fetching timeline for user ID:', userId);
+    const timelineUrl = `https://api.x.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics,attachments&expansions=attachments.media_keys&media.fields=url,preview_image_url`;
+    console.log('🔗 Timeline URL:', timelineUrl);
+    
+    const timelineResponse = await fetch(timelineUrl, {
       headers: {
         'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
       }
     });
     
+    console.log('📡 Timeline response status:', timelineResponse.status, timelineResponse.statusText);
+    
     if (!timelineResponse.ok) {
+      const errorText = await timelineResponse.text();
+      console.error('❌ Timeline fetch failed:', errorText);
       throw new Error(`Failed to get timeline: ${timelineResponse.status} ${timelineResponse.statusText}`);
     }
     
     const timelineData = await timelineResponse.json();
+    console.log('✅ Timeline data received:', timelineData.data ? timelineData.data.length : 0, 'tweets');
     return timelineData.data || [];
   }
   
