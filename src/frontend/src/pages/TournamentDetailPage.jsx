@@ -23,8 +23,6 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
-  Clock,
-  Zap,
   Gift
 } from 'lucide-react';
 
