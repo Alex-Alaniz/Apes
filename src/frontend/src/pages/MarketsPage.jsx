@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useNavigate } from 'react-router-dom';
 import MarketList from '../components/MarketList';
+import SportFilter from '../components/SportFilter';
 import PredictionModal from '../components/PredictionModal';
 import ClaimRewardModal from '../components/ClaimRewardModal';
 import Toast from '../components/Toast';
@@ -20,6 +21,14 @@ const MarketsPage = () => {
   const [selectedClaimData, setSelectedClaimData] = useState(null);
   const [claimModalOpen, setClaimModalOpen] = useState(false);
   const [userPositions, setUserPositions] = useState({});
+  // Enhanced filtering state
+  const [sportFilters, setSportFilters] = useState({
+    sport: 'all',
+    league: 'all',
+    tournamentType: 'all',
+    status: 'all',
+    search: ''
+  });
   const { wallet, publicKey, connected, signTransaction, signAllTransactions } = useWallet();
   const scrollPositionRef = useRef(0);
   const navigate = useNavigate();
@@ -259,19 +268,54 @@ const MarketsPage = () => {
   // Combine active and resolved markets for filtering
   const allMarkets = [...markets, ...resolvedMarkets];
   
+  // Enhanced filtering with SportFilter only
   const filteredMarkets = allMarkets.filter(market => {
-    if (filter === 'all') return true;
-    if (filter === 'active') return market.status === 'Active' || market.status === 'active';
-    if (filter === 'resolved') return market.status === 'Resolved' || market.status === 'resolved';
-    if (filter === 'my-bets' && publicKey) {
-      // This would need to check user's predictions
-      return false; // Implement later
+    // Search filter
+    if (sportFilters.search) {
+      const searchTerm = sportFilters.search.toLowerCase();
+      if (!market.question?.toLowerCase().includes(searchTerm) &&
+          !market.description?.toLowerCase().includes(searchTerm) &&
+          !market.category?.toLowerCase().includes(searchTerm)) {
+        return false;
+      }
     }
+
+    // Sport category filter
+    if (sportFilters.sport !== 'all') {
+      const marketCategory = market.category?.toLowerCase() || 'other';
+      if (sportFilters.sport === 'football' && marketCategory !== 'sports') return false;
+      if (sportFilters.sport === 'basketball' && marketCategory !== 'sports') return false;
+      if (sportFilters.sport === 'american_football' && marketCategory !== 'sports') return false;
+      if (sportFilters.sport === 'crypto' && marketCategory !== 'crypto') return false;
+      if (sportFilters.sport === 'politics' && marketCategory !== 'politics') return false;
+      if (sportFilters.sport === 'entertainment' && marketCategory !== 'entertainment') return false;
+      if (sportFilters.sport === 'other' && ['sports', 'crypto', 'politics', 'entertainment'].includes(marketCategory)) return false;
+    }
+
+    // Status filter from SportFilter
+    if (sportFilters.status !== 'all') {
+      const marketStatus = market.status?.toLowerCase();
+      if (sportFilters.status === 'active' && marketStatus !== 'active') return false;
+      if (sportFilters.status === 'resolved' && marketStatus !== 'resolved') return false;
+      if (sportFilters.status === 'upcoming' && marketStatus !== 'upcoming') return false;
+    }
+
+    // Tournament type filter
+    if (sportFilters.tournamentType !== 'all') {
+      const tournamentType = market.tournament_type || 'league';
+      if (tournamentType !== sportFilters.tournamentType) return false;
+    }
+
     return true;
   });
 
   const activeCount = allMarkets.filter(m => m.status === 'Active' || m.status === 'active').length;
   const resolvedCount = allMarkets.filter(m => m.status === 'Resolved' || m.status === 'resolved').length;
+
+  // Handler for SportFilter changes
+  const handleSportFilterChange = (newFilters) => {
+    setSportFilters(newFilters);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -295,49 +339,13 @@ const MarketsPage = () => {
           </button>
         </div>
 
-        <div className="flex gap-2 mb-6 flex-wrap">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-              filter === 'all' 
-                ? 'bg-purple-600 text-white' 
-                : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            All Markets ({filteredMarkets.length})
-          </button>
-          <button
-            onClick={() => setFilter('active')}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-              filter === 'active' 
-                ? 'bg-purple-600 text-white' 
-                : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            Active ({activeCount})
-          </button>
-          <button
-            onClick={() => setFilter('resolved')}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-              filter === 'resolved' 
-                ? 'bg-purple-600 text-white' 
-                : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            Resolved ({resolvedCount})
-          </button>
-          {publicKey && (
-            <button
-              onClick={() => setFilter('my-bets')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                filter === 'my-bets' 
-                  ? 'bg-purple-600 text-white' 
-                  : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              My Bets
-            </button>
-          )}
+        {/* Enhanced Sports and Tournament Filtering */}
+        <div className="mb-6">
+          <SportFilter 
+            markets={allMarkets}
+            onFilterChange={handleSportFilterChange}
+            selectedFilters={sportFilters}
+          />
         </div>
 
         {loading ? (

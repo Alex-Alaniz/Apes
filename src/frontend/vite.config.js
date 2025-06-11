@@ -29,7 +29,8 @@ export default defineConfig({
   },
   define: {
     global: 'globalThis',
-    'process.env': {}
+    'process.env': {},
+    'import.meta.env.VITE_API_URL': '"http://localhost:5001"'
   },
   resolve: {
     alias: {
@@ -46,14 +47,14 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: [
+      'buffer',
       '@coral-xyz/anchor',
       '@solana/wallet-adapter-react',
       '@solana/wallet-adapter-react-ui',
       '@solana/wallet-adapter-phantom',
       '@solana/wallet-adapter-solflare',
       '@solana/web3.js',
-      '@solana/spl-token',
-      'buffer'
+      '@solana/spl-token'
     ],
     esbuildOptions: {
       target: 'esnext'

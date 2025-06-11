@@ -1,14 +1,13 @@
+// Import minimal Buffer polyfill first
+import './polyfills.js';
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom';
-import * as buffer from 'buffer';
 import App from './App';
 import './index.css';
 
-// Make Buffer available globally
-if (typeof window !== 'undefined') {
-  window.Buffer = buffer.Buffer;
-}
+// Buffer polyfill loaded from ./polyfills.js
 
 // Error boundary to catch rendering errors
 class ErrorBoundary extends React.Component {

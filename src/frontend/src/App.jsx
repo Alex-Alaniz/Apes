@@ -12,10 +12,13 @@ import HomePage from './pages/HomePage';
 import MarketsPage from './pages/MarketsPage';
 import MarketDetailPage from './pages/MarketDetailPage';
 import CreateMarketPage from './pages/CreateMarketPage';
+import TournamentsPage from './pages/TournamentsPage';
+import TournamentDetailPage from './pages/TournamentDetailPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import AdminPage from './pages/AdminPage';
 import AdminMarketAssetsPage from './pages/AdminMarketAssetsPage';
 import AdminMarketDeploymentPage from './pages/AdminMarketDeploymentPage';
+import AdminTournamentPage from './pages/AdminTournamentPage';
 import EngageToEarnPage from './pages/EngageToEarnPage';
 import TwitterCallback from './pages/TwitterCallback';
 import ProfilePage from './pages/ProfilePage';
@@ -68,12 +71,15 @@ function App() {
                   <Route path="/markets" element={<MarketsPage />} />
                   <Route path="/markets/:marketId" element={<MarketDetailPage />} />
                   <Route path="/create-market" element={<CreateMarketPage />} />
+                  <Route path="/tournaments" element={<TournamentsPage />} />
+                  <Route path="/tournaments/:tournamentId" element={<TournamentDetailPage />} />
                   <Route path="/leaderboard" element={<LeaderboardPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/profile/:walletAddress" element={<PublicProfilePage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/assets" element={<AdminMarketAssetsPage />} />
                   <Route path="/admin/deploy-markets" element={<AdminMarketDeploymentPage />} />
+                  <Route path="/admin/tournament" element={<AdminTournamentPage />} />
                   <Route path="/engage-to-earn" element={<EngageToEarnPage />} />
                   <Route path="/auth/twitter/callback" element={<TwitterCallback />} />
                 </Routes>

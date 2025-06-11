@@ -311,7 +311,7 @@ const AdminPage = () => {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-4 mb-6">
+        <div className="flex gap-4 mb-6 flex-wrap">
           <button
             onClick={() => navigate('/create-market')}
             className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-lg hover:opacity-90"
@@ -323,6 +323,12 @@ const AdminPage = () => {
             className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold rounded-lg hover:opacity-90"
           >
             Deploy from Polymarket
+          </button>
+          <button
+            onClick={() => navigate('/admin/tournament')}
+            className="px-6 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold rounded-lg hover:opacity-90"
+          >
+            🏆 Club World Cup 2025
           </button>
           <button
             onClick={() => navigate('/admin/assets')}

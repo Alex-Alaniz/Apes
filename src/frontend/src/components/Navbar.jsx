@@ -38,6 +38,9 @@ const Navbar = () => {
             <Link to="/markets" className={`${isActive('/markets')} transition-colors`}>
               Markets
             </Link>
+            <Link to="/tournaments" className={`${isActive('/tournaments')} transition-colors`}>
+              Tournaments
+            </Link>
             <Link to="/leaderboard" className={`${isActive('/leaderboard')} transition-colors`}>
               Leaderboard
             </Link>
@@ -70,6 +73,9 @@ const Navbar = () => {
           <div className="flex flex-wrap gap-4">
             <Link to="/markets" className={`${isActive('/markets')} transition-colors`}>
               Markets
+            </Link>
+            <Link to="/tournaments" className={`${isActive('/tournaments')} transition-colors`}>
+              Tournaments
             </Link>
             <Link to="/leaderboard" className={`${isActive('/leaderboard')} transition-colors`}>
               Leaderboard

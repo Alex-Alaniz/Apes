@@ -1,0 +1,57 @@
+match_number,group,home_team,away_team,venue,datetime_local,timezone,datetime_utc
+1,A,Al Ahly,Inter Miami,"Hard Rock,Miami",2025-06-14 20:00:00,America/New_York,2025-06-15 00:00:00+00:00
+2,C,Bayern Munich,Auckland City,"TQL, Cincinnati",2025-06-15 12:00:00,America/New_York,2025-06-15 16:00:00+00:00
+3,B,Paris Saint-Germain,Atletico Madrid,"Rose Bowl, LA",2025-06-15 15:00:00,America/Los_Angeles,2025-06-15 22:00:00+00:00
+4,A,Palmeiras,Porto,"MetLife, NJ",2025-06-15 18:00:00,America/New_York,2025-06-15 22:00:00+00:00
+5,B,Botafogo,Seattle Sounders,"Lumen, Seattle",2025-06-15 22:00:00,America/Los_Angeles,2025-06-16 05:00:00+00:00
+6,D,Chelsea,Los Angeles,"Mercedes-Benz, Atl",2025-06-16 15:00:00,America/New_York,2025-06-16 19:00:00+00:00
+7,C,Boca Juniors,Benfica,"Hard Rock,Miami",2025-06-16 18:00:00,America/New_York,2025-06-16 22:00:00+00:00
+8,D,Flamengo,Espérance Sportive de Tunis,"Lincoln Financial, Phi",2025-06-16 21:00:00,America/New_York,2025-06-17 01:00:00+00:00
+9,F,Fluminense,Borussia Dortmund,"MetLife, NJ",2025-06-17 12:00:00,America/New_York,2025-06-17 16:00:00+00:00
+10,E,River Plate,Urawa Red Diamonds,"Lumen, Seattle",2025-06-17 15:00:00,America/Los_Angeles,2025-06-17 22:00:00+00:00
+11,F,Ulsan HD,Mamelodi Sundowns,"Inter&Co, Orl",2025-06-17 18:00:00,America/New_York,2025-06-17 22:00:00+00:00
+12,E,Monterrey,Internazionale,"Rose Bowl, LA",2025-06-17 21:00:00,America/Los_Angeles,2025-06-18 04:00:00+00:00
+13,G,Manchester City,Wydad AC,"Lincoln Financial, Phi",2025-06-18 12:00:00,America/New_York,2025-06-18 16:00:00+00:00
+14,H,Real Madrid,Al Hilal,"Hard Rock,Miami",2025-06-18 15:00:00,America/New_York,2025-06-18 19:00:00+00:00
+15,H,Pachuca,Salzburg,"TQL, Cincinnati",2025-06-18 18:00:00,America/New_York,2025-06-18 22:00:00+00:00
+16,G,Al Ain,Juventus,"Audi, Washington",2025-06-18 21:00:00,America/New_York,2025-06-19 01:00:00+00:00
+17,A,Palmeiras,Al Ahly,"MetLife, NJ",2025-06-19 12:00:00,America/New_York,2025-06-19 16:00:00+00:00
+18,A,Inter Miami,Porto,"Mercedes-Benz, Atl",2025-06-19 15:00:00,America/New_York,2025-06-19 19:00:00+00:00
+19,B,Seattle Sounders,Atletico Madrid,"Lumen, Seattle",2025-06-19 18:00:00,America/Los_Angeles,2025-06-20 01:00:00+00:00
+20,B,Paris Saint-Germain,Botafogo,"Rose Bowl, LA",2025-06-19 21:00:00,America/Los_Angeles,2025-06-20 04:00:00+00:00
+21,C,Benfica,Auckland City,"Inter&Co, Orl",2025-06-20 12:00:00,America/New_York,2025-06-20 16:00:00+00:00
+22,D,Flamengo,Chelsea,"Lincoln Financial, Phi",2025-06-20 14:00:00,America/New_York,2025-06-20 18:00:00+00:00
+23,D,Los Angeles,Espérance Sportive de Tunis,"Geodis Park, Nashville",2025-06-20 18:00:00,America/Chicago,2025-06-20 23:00:00+00:00
+24,C,Bayern Munich,Boca Juniors,"Hard Rock,Miami",2025-06-20 21:00:00,America/New_York,2025-06-21 01:00:00+00:00
+25,F,Mamelodi Sundowns,Borussia Dortmund,"TQL, Cincinnati",2025-06-21 12:00:00,America/New_York,2025-06-21 16:00:00+00:00
+26,E,Internazionale,Urawa Red Diamonds,"Lumen, Seattle",2025-06-21 15:00:00,America/Los_Angeles,2025-06-21 22:00:00+00:00
+27,F,Fluminense,Ulsan HD,"MetLife, NJ",2025-06-21 18:00:00,America/New_York,2025-06-21 22:00:00+00:00
+28,E,River Plate,Monterrey,"Rose Bowl, LA",2025-06-21 21:00:00,America/Los_Angeles,2025-06-22 04:00:00+00:00
+29,G,Juventus,Wydad AC,"Lincoln Financial, Phi",2025-06-22 12:00:00,America/New_York,2025-06-22 16:00:00+00:00
+30,H,Real Madrid,Pachuca,"Bank of America, Cha",2025-06-22 15:00:00,America/New_York,2025-06-22 19:00:00+00:00
+31,H,Salzburg,Al Hilal,"Audi, Washington",2025-06-22 18:00:00,America/New_York,2025-06-22 22:00:00+00:00
+32,G,Manchester City,Al Ain,"Mercedes-Benz, Atl",2025-06-22 21:00:00,America/New_York,2025-06-23 01:00:00+00:00
+33,B,Seattle Sounders,Paris Saint-Germain,"Lumen, Seattle",2025-06-23 15:00:00,America/Los_Angeles,2025-06-23 22:00:00+00:00
+34,B,Atletico Madrid,Botafogo,"Rose Bowl, LA",2025-06-23 15:00:00,America/Los_Angeles,2025-06-23 22:00:00+00:00
+35,A,Inter Miami,Palmeiras,"Hard Rock,Miami",2025-06-23 21:00:00,America/New_York,2025-06-24 01:00:00+00:00
+36,A,Porto,Al Ahly,"MetLife, NJ",2025-06-23 21:00:00,America/New_York,2025-06-24 01:00:00+00:00
+37,C,Auckland City,Boca Juniors,"Geodis Park, Nashville",2025-06-24 15:00:00,America/Chicago,2025-06-24 20:00:00+00:00
+38,C,Benfica,Bayern Munich,"Bank of America, Cha",2025-06-24 15:00:00,America/New_York,2025-06-24 19:00:00+00:00
+39,D,Los Angeles,Flamengo,"Camping World, Orl",2025-06-24 21:00:00,America/New_York,2025-06-25 01:00:00+00:00
+40,D,Espérance Sportive de Tunis,Chelsea,"Lincoln Financial, Phi",2025-06-24 21:00:00,America/New_York,2025-06-25 01:00:00+00:00
+41,F,Borussia Dortmund,Ulsan HD,"TQL, Cincinnati",2025-06-25 15:00:00,America/New_York,2025-06-25 19:00:00+00:00
+42,F,Mamelodi Sundowns,Fluminense,"Hard Rock,Miami",2025-06-25 15:00:00,America/New_York,2025-06-25 19:00:00+00:00
+43,E,Internazionale,River Plate,"Lumen, Seattle",2025-06-25 21:00:00,America/Los_Angeles,2025-06-26 04:00:00+00:00
+44,E,Urawa Red Diamonds,Monterrey,"Rose Bowl, LA",2025-06-25 21:00:00,America/Los_Angeles,2025-06-26 04:00:00+00:00
+45,G,Juventus,Manchester City,"Camping World, Orl",2025-06-26 15:00:00,America/New_York,2025-06-26 19:00:00+00:00
+46,G,Wydad AC,Al Ain,"Audi, Washington",2025-06-26 15:00:00,America/New_York,2025-06-26 19:00:00+00:00
+47,H,Al Hilal,Pachuca,"Geodis Park, Nashville",2025-06-26 21:00:00,America/Chicago,2025-06-27 02:00:00+00:00
+48,H,Salzburg,Real Madrid,"Lincoln Financial, Phi",2025-06-26 21:00:00,America/New_York,2025-06-27 01:00:00+00:00
+49,,Group A Winner,Group B Runner Up,"Lincoln Financial, Phi",2025-06-28 12:00:00,America/New_York,2025-06-28 16:00:00+00:00
+50,,Match 50 Winner,,,2025-06-28 16:00:00,,
+51,,Match 51 Winner,,,2025-06-29 12:00:00,,
+52,,Group D Winner,Group C Runner Up,"Hard Rock,Miami",2025-06-29 16:00:00,America/New_York,2025-06-29 20:00:00+00:00
+53,,Group E Winner,Group F Runner Up,"Bank of America, Cha",2025-06-30 15:00:00,America/New_York,2025-06-30 19:00:00+00:00
+54,,Match 54 Winner,,,2025-06-30 21:00:00,,
+55,,Match 56 Winner,,,2025-07-01 15:00:00,,
+56,,Group F Winner,Group E Runner Up,"Mercedes-Benz, Atl",2025-07-01 21:00:00,America/New_York,2025-07-02 01:00:00+00:00
