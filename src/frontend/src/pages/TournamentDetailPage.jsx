@@ -399,7 +399,7 @@ const ClubWorldCupMatches = () => {
 };
 
 // Tournament Leaderboard Component
-const TournamentLeaderboard = ({ tournamentId }) => {
+const TournamentLeaderboard = ({ tournamentId, participantCount, onJoinSuccess }) => {
   const { publicKey } = useWallet();
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -486,18 +486,17 @@ const TournamentLeaderboard = ({ tournamentId }) => {
           console.error('Error awarding join points:', pointsError);
         }
         
-        // Force refresh all tournament data
-        await loadTournamentData(); // This will update participant count
+        // Refresh local data
         loadLeaderboard(); // Refresh leaderboard
         checkUserStatus(); // Refresh user stats
         
+        // Call parent callback to refresh tournament data
+        if (onJoinSuccess) {
+          onJoinSuccess();
+        }
+        
         // Show success message with rewards
         alert(`🎉 Successfully joined tournament!\n💰 Earned ${totalPointsEarned} APES points\n🏆 Good luck in the competition!\n\n📊 Participant count will update shortly.`);
-        
-        // Force a page refresh after 2 seconds to ensure all data is updated
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
       }
     } catch (error) {
       console.error('Error joining tournament:', error);
@@ -647,7 +646,7 @@ const TournamentLeaderboard = ({ tournamentId }) => {
           </div>
           <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded-lg p-3">
             <div className="font-bold mb-1">3️⃣ Win Prizes</div>
-            <div>Top performers share the {tournamentId === 'club-world-cup-2025' ? '25,000' : '10,000'} APES prize pool based on accuracy</div>
+            <div>Top performers share the massive prize pool: {tournamentId === 'club-world-cup-2025' ? '25,000 APES + 2.5 SOL' : '10,000 APES + 1.0 SOL'} based on accuracy</div>
           </div>
         </div>
         <div className="mt-4 p-3 bg-yellow-200 dark:bg-yellow-800/50 rounded-lg">
@@ -671,6 +670,8 @@ const TournamentDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [participantCount, setParticipantCount] = useState(0);
   const [recentJoiners, setRecentJoiners] = useState([]);
+  const [participating, setParticipating] = useState(false);
+  const [joining, setJoining] = useState(false);
   
   // Check if user is admin
   const isAdmin = publicKey && isWalletAuthorized(publicKey.toString());
@@ -713,7 +714,10 @@ const TournamentDetailPage = () => {
         startDate: '2025-06-14',
         endDate: '2025-07-13',
         totalMarkets: 63,
-        prizePool: 25000, // Enhanced prize pool for FOMO
+        prizePool: {
+          apes: 25000,
+          sol: 2.5 // Enhanced with SOL prizes
+        },
         participants: participantCount,
         maxParticipants: 1000, // Create scarcity
         type: 'football',
@@ -729,7 +733,10 @@ const TournamentDetailPage = () => {
         startDate: '2025-06-05',
         endDate: '2025-06-22',
         totalMarkets: 7, // Up to 7 games in best of 7 series
-        prizePool: 10000,
+        prizePool: {
+          apes: 10000,
+          sol: 1.0
+        },
         participants: participantCount,
         maxParticipants: 500,
         type: 'basketball',
@@ -740,6 +747,87 @@ const TournamentDetailPage = () => {
     
     setLoading(false);
   };
+
+  // Check if user is participating in tournament
+  const checkUserParticipation = async () => {
+    if (!publicKey || !tournament) return;
+    
+    try {
+      const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournament.id}/status/${publicKey.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setParticipating(data.participating);
+      }
+    } catch (error) {
+      console.error('Error checking user participation:', error);
+    }
+  };
+
+  // Shared join tournament function
+  const handleJoinTournament = async () => {
+    if (!publicKey || !tournament || joining) return;
+
+    setJoining(true);
+    try {
+      const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournament.id}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userAddress: publicKey.toString() })
+      });
+
+      if (response.ok) {
+        setParticipating(true);
+        
+        // Award engagement points for joining
+        let totalPointsEarned = 50; // Base join reward
+        try {
+          await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              wallet_address: publicKey.toString(),
+              activity_type: 'TOURNAMENT_JOIN',
+              metadata: { tournamentId: tournament.id, tournament_name: tournament.name }
+            })
+          });
+          
+          // Early bird bonus for first 100 participants
+          if (participantCount < 100) {
+            await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                wallet_address: publicKey.toString(),
+                activity_type: 'EARLY_BIRD_BONUS',
+                metadata: { tournamentId: tournament.id, reason: 'First 100 participants' }
+              })
+            });
+            totalPointsEarned = 150; // 50 + 100 bonus
+          }
+        } catch (pointsError) {
+          console.error('Error awarding join points:', pointsError);
+        }
+        
+        // Refresh tournament data
+        await loadTournamentData();
+        
+        // Show success message with rewards
+        alert(`🎉 Successfully joined tournament!\n💰 Earned ${totalPointsEarned} APES points\n🏆 Good luck in the competition!`);
+      }
+    } catch (error) {
+      console.error('Error joining tournament:', error);
+      alert('❌ Failed to join tournament. Please try again.');
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  // Check participation when tournament data loads
+  useEffect(() => {
+    if (tournament && publicKey) {
+      checkUserParticipation();
+    }
+  }, [tournament, publicKey]);
 
   const addNBAGame = async (gameNumber) => {
     try {
@@ -837,10 +925,13 @@ const TournamentDetailPage = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center border-2 border-yellow-200 dark:border-yellow-800">
             <Trophy className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {tournament.prizePool.toLocaleString()}
+            <div className="text-xl font-bold text-gray-900 dark:text-white">
+              {tournament.prizePool.apes.toLocaleString()} APES
             </div>
-            <div className="text-gray-600 dark:text-gray-400 text-sm">Prize Pool (APES)</div>
+            <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
+              + {tournament.prizePool.sol} SOL
+            </div>
+            <div className="text-gray-600 dark:text-gray-400 text-sm">Total Prize Pool</div>
             <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">🔥 Enhanced Pool</div>
           </div>
           
@@ -898,15 +989,15 @@ const TournamentDetailPage = () => {
               <div className="flex items-center justify-center gap-4 text-sm text-gray-500 dark:text-gray-400">
                 <span>💰 {tournament.joinReward} APES for joining</span>
                 <span>🎯 {tournament.earlyBirdBonus} bonus points if first 100</span>
-                <span>🏆 Prize pool: {tournament.prizePool.toLocaleString()} APES</span>
+                <span>🏆 Prize pool: {tournament.prizePool.apes.toLocaleString()} APES + {tournament.prizePool.sol} SOL</span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Countdown Timer & Urgency */}
+        {/* Countdown Timer & Join Tournament */}
         <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-6 mb-8 border border-purple-200 dark:border-purple-700">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
             <div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
                 <Clock className="w-6 h-6 text-purple-500" />
@@ -916,6 +1007,51 @@ const TournamentDetailPage = () => {
                 targetDate={tournament.startDate} 
                 label="⚽ FIFA Club World Cup 2025"
               />
+            </div>
+            
+            {/* Join Tournament Section */}
+            <div className="text-center">
+              {connected && publicKey ? (
+                participating ? (
+                  <div className="bg-green-100 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+                    <div className="text-green-800 dark:text-green-200 font-bold mb-2">
+                      ✅ You're In!
+                    </div>
+                    <div className="text-sm text-green-700 dark:text-green-300">
+                      Good luck in the tournament!
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <button
+                      onClick={handleJoinTournament}
+                      disabled={joining}
+                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {joining ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          Joining...
+                        </div>
+                      ) : (
+                        '🚀 Join Tournament'
+                      )}
+                    </button>
+                    <div className="text-xs text-purple-700 dark:text-purple-300">
+                      💰 {tournament.joinReward} APES instantly + {tournament.earlyBirdBonus} bonus if first 100
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div className="bg-blue-100 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                  <div className="text-blue-800 dark:text-blue-200 font-bold mb-2">
+                    🔗 Connect Wallet
+                  </div>
+                  <div className="text-sm text-blue-700 dark:text-blue-300">
+                    Connect to join the tournament
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="text-center lg:text-right">
@@ -950,7 +1086,7 @@ const TournamentDetailPage = () => {
         {recentJoiners.length > 0 && (
           <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-4 mb-8 border border-green-200 dark:border-green-700">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1">
                 <h4 className="font-bold text-green-800 dark:text-green-200 mb-1">🔥 Recent Joiners</h4>
                 <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-300">
                   {recentJoiners.map((joiner, index) => (
@@ -961,9 +1097,20 @@ const TournamentDetailPage = () => {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-sm text-green-600 dark:text-green-400 font-medium">
-                  Join now to compete!
-                </div>
+                {connected && publicKey && !participating && (
+                  <button
+                    onClick={handleJoinTournament}
+                    disabled={joining}
+                    className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
+                  >
+                    {joining ? 'Joining...' : 'Join Now'}
+                  </button>
+                )}
+                {!connected && (
+                  <div className="text-sm text-green-600 dark:text-green-400 font-medium">
+                    Connect wallet to join!
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1576,7 +1723,11 @@ const TournamentDetailPage = () => {
         )}
 
         {activeTab === 'leaderboard' && (
-          <TournamentLeaderboard tournamentId={tournament.id} />
+          <TournamentLeaderboard 
+            tournamentId={tournament.id} 
+            participantCount={participantCount}
+            onJoinSuccess={loadTournamentData}
+          />
         )}
       </div>
     </div>
