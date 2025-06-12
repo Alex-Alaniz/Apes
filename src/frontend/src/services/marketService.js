@@ -2211,12 +2211,22 @@ class MarketService {
   // SIMPLIFIED: Fetch all markets with optional resolved markets - no complex fallbacks
   async fetchMarkets(includeResolved = false) {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets${includeResolved ? '?include_resolved=true' : ''}`, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+      const url = `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets${includeResolved ? '?include_resolved=true' : ''}`;
+      
+      console.log(`🌐 Making API request to: ${url}`);
+      
+      const response = await fetch(url, {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'max-age=30' // Allow 30 second cache
-        }
+        },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         // Handle rate limiting gracefully
@@ -2224,7 +2234,12 @@ class MarketService {
           console.warn('⚠️ Rate limit exceeded - returning empty array');
           return [];
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+        
+        console.error(`❌ API request failed: ${response.status} ${response.statusText}`);
+        console.error(`❌ Response URL: ${response.url}`);
+        console.error(`❌ Response type: ${response.type}`);
+        
+        throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`);
       }
       
       const markets = await response.json();
@@ -2233,11 +2248,25 @@ class MarketService {
       
       return markets;
     } catch (error) {
+      if (error.name === 'AbortError') {
+        console.error('❌ Request timeout after 15 seconds');
+      } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        console.error('❌ Network error - could not connect to backend API');
+        console.error('❌ Possible causes:');
+        console.error('  - Backend server is down');
+        console.error('  - Network connectivity issues');
+        console.error('  - CORS issues');
+        console.error('  - SSL/HTTPS certificate problems');
+        console.error('  - Firewall blocking the request');
+      } else {
+        console.error('❌ Unexpected error fetching markets:', error);
+      }
+      
       console.error('Error fetching markets:', error);
       
-      // Don't throw on rate limit errors, just return empty array
-      if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
-        console.warn('⚠️ Rate limited - returning empty array');
+      // Don't throw on rate limit errors or network errors, just return empty array
+      if (error.message?.includes('Rate limit') || error.message?.includes('429') || error.name === 'AbortError') {
+        console.warn('⚠️ Request failed - returning empty array');
         return [];
       }
       
@@ -2363,6 +2392,81 @@ class MarketService {
   fetchMarketsWithLiveData() - DEPRECATED: Use fetchMarketsSimple()
   fetchMarketsWithResolutionSync() - DEPRECATED: Use manual sync buttons
   */
+
+  // DEBUG METHOD: Test API connectivity
+  async testApiConnection() {
+    const results = {
+      timestamp: new Date().toISOString(),
+      tests: []
+    };
+
+    // Test 1: Basic health check
+    try {
+      const healthUrl = `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/health`;
+      console.log('🔍 Testing health endpoint:', healthUrl);
+      
+      const healthResponse = await fetch(healthUrl, { 
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      results.tests.push({
+        name: 'Health Check',
+        url: healthUrl,
+        status: healthResponse.status,
+        success: healthResponse.ok,
+        data: healthResponse.ok ? await healthResponse.json() : null
+      });
+    } catch (error) {
+      results.tests.push({
+        name: 'Health Check',
+        url: `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/health`,
+        success: false,
+        error: error.message
+      });
+    }
+
+    // Test 2: Markets endpoint
+    try {
+      const marketsUrl = `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets`;
+      console.log('🔍 Testing markets endpoint:', marketsUrl);
+      
+      const marketsResponse = await fetch(marketsUrl, { 
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const marketsData = marketsResponse.ok ? await marketsResponse.json() : null;
+      
+      results.tests.push({
+        name: 'Markets API',
+        url: marketsUrl,
+        status: marketsResponse.status,
+        success: marketsResponse.ok,
+        marketCount: Array.isArray(marketsData) ? marketsData.length : 0,
+        data: marketsData
+      });
+    } catch (error) {
+      results.tests.push({
+        name: 'Markets API',
+        url: `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets`,
+        success: false,
+        error: error.message
+      });
+    }
+
+    // Test 3: Environment info
+    results.environment = {
+      VITE_API_URL: import.meta.env.VITE_API_URL,
+      fallbackUrl: 'https://apes-production.up.railway.app',
+      userAgent: navigator.userAgent,
+      origin: window.location.origin,
+      protocol: window.location.protocol
+    };
+
+    console.log('🔍 API Connection Test Results:', results);
+    return results;
+  }
 
 }
 
