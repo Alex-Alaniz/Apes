@@ -4,8 +4,19 @@ import { FaTrophy, FaCoins, FaStar, FaCheckCircle, FaExternalLinkAlt, FaHeart, F
 import { FaXTwitter } from 'react-icons/fa6';
 import { formatDistanceToNow } from 'date-fns';
 
-const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onRefreshPosts, onRefreshAuth, onLoadMorePosts, refreshCache }) => {
-  const { publicKey } = useWallet();
+const TwitterEngagement = ({ 
+  twitterLinked, 
+  posts, 
+  postsLoading, 
+  postsError, 
+  onRefreshPosts, 
+  onRefreshAuth, 
+  onLoadMorePosts, 
+  refreshCache,
+  isAdmin = false,
+  publicKey
+}) => {
+  const { publicKey: walletPublicKey } = useWallet();
   const [engagements, setEngagements] = useState({});
   const [pointsEarned, setPointsEarned] = useState(0);
   const [isVerifying, setIsVerifying] = useState({});
@@ -13,13 +24,13 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
 
   // Poll for validation status
   useEffect(() => {
-    if (!publicKey || !twitterLinked) return;
+    if (!walletPublicKey || !twitterLinked) return;
 
     const pollValidations = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/validation-status/${publicKey.toString()}`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/validation-status/${walletPublicKey.toString()}`, {
           headers: {
-            'x-wallet-address': publicKey.toString(),
+            'x-wallet-address': walletPublicKey.toString(),
           }
         });
 
@@ -68,79 +79,75 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
     pollValidations(); // Initial poll
 
     return () => clearInterval(interval);
-  }, [publicKey, twitterLinked, engagements]);
+  }, [walletPublicKey, twitterLinked, engagements]);
 
   const handleEngagement = async (postId, type) => {
-    if (!publicKey) {
+    if (!walletPublicKey) {
       alert('Please connect your wallet first!');
       return;
     }
 
+    // Don't proceed if user hasn't linked Twitter
     if (!twitterLinked) {
-      alert('🔗 Please link your 𝕏 account first!\n\nGo to Profile → Link 𝕏 Account to start earning points.');
-      return;
-    }
-
-    // Check if already engaged or pending
-    const validationKey = `${postId}-${type}`;
-    if (engagements[postId]?.[type] || pendingValidations[validationKey]?.status === 'pending') {
-      return;
-    }
-
-    setIsVerifying(prev => ({ ...prev, [`${postId}-${type}`]: true }));
-
-    // Open Twitter for engagement
-    const post = posts.find(p => p.id === postId);
-    if (post) {
-      // Open Twitter in new tab
-      window.open(post.url, '_blank');
-      
-      try {
-        // Queue validation instead of awarding points immediately
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/queue-engagement-check`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-wallet-address': publicKey.toString(),
-          },
-          body: JSON.stringify({
-            tweet_id: postId,
-            engagement_type: type,
-            tweet_url: post.url
-          })
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          
-          // Update pending validations
-          setPendingValidations(prev => ({
-            ...prev,
-            [validationKey]: {
-              tweet_id: postId,
-              engagement_type: type,
-              status: 'pending',
-              created_at: new Date().toISOString()
-            }
-          }));
-
-          // Show success message
-          const points = type === 'like' ? 5 : type === 'repost' ? 10 : 15;
-          setTimeout(() => {
-            alert(`🔄 ${type} queued for validation!\n\nWe'll check your ${type} in a few seconds and award ${points} APES if verified.`);
-          }, 1000);
-        } else {
-          throw new Error('Failed to queue validation');
-        }
-      } catch (error) {
-        console.error('Error queuing validation:', error);
-        alert('❌ Failed to queue validation. Please try again.');
+      if (confirm(`You need to link your 𝕏 account to earn points. Go to Profile now?`)) {
+        window.location.href = '/profile';
       }
+      return;
     }
 
-    setTimeout(() => {
-      setIsVerifying(prev => ({ ...prev, [`${postId}-${type}`]: false }));
-    }, 2000);
+    setEngagements(prev => ({
+      ...prev,
+      [postId]: {
+        ...prev[postId],
+        [type]: { status: 'pending', timestamp: Date.now() }
+      }
+    }));
+
+    try {
+      // Call the queue endpoint which handles validation asynchronously
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/queue-engagement-check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-address': walletPublicKey.toString(),
+        },
+        body: JSON.stringify({
+          tweet_id: postId,
+          engagement_type: type,
+          tweet_url: `https://twitter.com/PrimapeApp/status/${postId}`
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Engagement queued:', result);
+        
+        // Update to validating status
+        setEngagements(prev => ({
+          ...prev,
+          [postId]: {
+            ...prev[postId],
+            [type]: { status: 'validating', timestamp: Date.now() }
+          }
+        }));
+
+        // Open Twitter to the specific post for user to engage
+        const tweetUrl = `https://twitter.com/PrimapeApp/status/${postId}`;
+        window.open(tweetUrl, '_blank');
+        
+      } else {
+        throw new Error('Failed to queue engagement check');
+      }
+    } catch (error) {
+      console.error('❌ Error queuing engagement:', error);
+      setEngagements(prev => ({
+        ...prev,
+        [postId]: {
+          ...prev[postId],
+          [type]: { status: 'error', timestamp: Date.now() }
+        }
+      }));
+    }
   };
 
   const getEngagementPoints = (type) => {
@@ -215,7 +222,7 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
   };
 
   // Check if user is authenticated but not linked (show different message)
-  const isAuthenticated = !!publicKey;
+  const isAuthenticated = !!walletPublicKey;
   const isLinked = twitterLinked;
 
   const renderEngagementButton = (tweet, engagementType) => {
@@ -446,7 +453,7 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
                 >
                   Check Cache
                 </button>
-                {publicKey && (
+                {walletPublicKey && (
                   <button
                     onClick={refreshCache}
                     disabled={postsLoading}
@@ -1137,6 +1144,8 @@ const EngageToEarnPage = () => {
               onRefreshAuth={checkTwitterStatus}
               onLoadMorePosts={loadMorePosts}
               refreshCache={refreshCache}
+              isAdmin={isAdmin}
+              publicKey={publicKey}
             />
           )}
         </div>
