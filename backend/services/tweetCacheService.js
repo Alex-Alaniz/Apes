@@ -98,18 +98,23 @@ class TweetCacheService {
 
   async fetchTweetsFromAPI() {
     try {
-      const primapeUserId = process.env.PRIMAPE_TWITTER_ID || 'PrimapeApp';
+      // Use username instead of user ID for the /users/by/username endpoint
+      const primapeUsername = 'PrimapeApp'; // Always use the actual username
+      const primapeUserId = process.env.PRIMAPE_TWITTER_ID; // Keep ID for direct API calls if needed
+      
+      console.log(`🔍 Fetching tweets for @${primapeUsername}`);
+      
       let tweets = [];
 
       // Method 1: Using Bearer Token
       if (process.env.TWITTER_BEARER_TOKEN) {
         console.log('🔑 Using Bearer Token for scheduled fetch');
-        tweets = await this.fetchWithBearerToken(primapeUserId);
+        tweets = await this.fetchWithBearerToken(primapeUsername);
       }
       // Method 2: Using OAuth 2.0 Client Credentials  
       else if (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET) {
         console.log('🔑 Using OAuth 2.0 Client Credentials for scheduled fetch');
-        tweets = await this.fetchWithClientCredentials(primapeUserId);
+        tweets = await this.fetchWithClientCredentials(primapeUsername);
       } else {
         throw new Error('No Twitter API credentials configured');
       }
@@ -121,10 +126,12 @@ class TweetCacheService {
     }
   }
 
-  async fetchWithBearerToken(primapeUserId) {
+  async fetchWithBearerToken(primapeUsername) {
     try {
       // Get user info and profile picture with better error handling
-      const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}?user.fields=profile_image_url,public_metrics,verified,description`, {
+      console.log(`🔍 Looking up Twitter user: @${primapeUsername}`);
+      
+      const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUsername}?user.fields=profile_image_url,public_metrics,verified,description`, {
         headers: {
           'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
         }
@@ -236,95 +243,119 @@ class TweetCacheService {
     }
   }
 
-  async fetchWithClientCredentials(primapeUserId) {
-    // Get app-only bearer token
-    const auth = Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64');
+  async fetchWithClientCredentials(primapeUsername) {
+    try {
+      // Get app-only bearer token
+      const auth = Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64');
 
-    const tokenResponse = await fetch('https://api.x.com/2/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: 'grant_type=client_credentials'
-    });
+      const tokenResponse = await fetch('https://api.x.com/2/oauth2/token', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'grant_type=client_credentials'
+      });
 
-    if (!tokenResponse.ok) {
-      throw new Error(`Failed to get app token: ${tokenResponse.status}`);
-    }
-
-    const tokenData = await tokenResponse.json();
-    const appToken = tokenData.access_token;
-
-    // Use the same logic as bearer token method but with app token
-    const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}?user.fields=profile_image_url,public_metrics,verified,description`, {
-      headers: {
-        'Authorization': `Bearer ${appToken}`
+      if (!tokenResponse.ok) {
+        throw new Error(`Failed to get app token: ${tokenResponse.status}`);
       }
-    });
 
-    if (!userResponse.ok) {
-      throw new Error(`Failed to get user: ${userResponse.status}`);
-    }
+      const tokenData = await tokenResponse.json();
+      const appToken = tokenData.access_token;
 
-    const userData = await userResponse.json();
-    const userId = userData.data?.id;
-    const profileImageUrl = userData.data?.profile_image_url;
-    const isVerified = userData.data?.verified;
-
-    if (!userId) {
-      throw new Error('Could not get user ID');
-    }
-
-    const tweetsResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=50&tweet.fields=created_at,public_metrics,attachments&expansions=attachments.media_keys&media.fields=url,preview_image_url,type,width,height`, {
-      headers: {
-        'Authorization': `Bearer ${appToken}`
-      }
-    });
-
-    if (!tweetsResponse.ok) {
-      throw new Error(`Failed to get tweets: ${tweetsResponse.status}`);
-    }
-
-    const tweetsData = await tweetsResponse.json();
-    const tweets = tweetsData.data || [];
-
-    // Same filtering logic as bearer token method
-    const originalTweets = tweets.filter(tweet => {
-      if (tweet.text.trim().startsWith('@')) return false;
-      if (tweet.referenced_tweets?.some(ref => ref.type === 'retweeted')) return false;
+      console.log(`🔍 Looking up Twitter user: @${primapeUsername} (using client credentials)`);
       
-      const tweetDate = new Date(tweet.created_at);
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      if (tweetDate < oneDayAgo) return false;
+      // Use the same logic as bearer token method but with app token
+      const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUsername}?user.fields=profile_image_url,public_metrics,verified,description`, {
+        headers: {
+          'Authorization': `Bearer ${appToken}`
+        }
+      });
 
-      return true;
-    });
-
-    return originalTweets.map(tweet => {
-      const mediaUrls = [];
-      if (tweet.attachments && tweetsData.includes?.media) {
-        tweet.attachments.media_keys?.forEach(key => {
-          const media = tweetsData.includes.media.find(m => m.media_key === key);
-          if (media) {
-            mediaUrls.push({
-              url: media.url || media.preview_image_url,
-              type: media.type,
-              width: media.width,
-              height: media.height
-            });
-          }
-        });
+      if (!userResponse.ok) {
+        const errorText = await userResponse.text();
+        console.error(`❌ Twitter API user fetch failed (${userResponse.status}):`, errorText);
+        return [];
       }
 
-      return {
-        ...tweet,
-        profile_image_url: profileImageUrl?.replace('_normal', '_400x400') || profileImageUrl,
-        author_verified: isVerified,
-        media_urls: mediaUrls,
-        engagement_stats: tweet.public_metrics || { like_count: 0, retweet_count: 0, reply_count: 0 }
-      };
-    });
+      const userData = await userResponse.json();
+      
+      if (!userData.data) {
+        console.error('❌ No user data returned from Twitter API');
+        return [];
+      }
+      
+      const userId = userData.data?.id;
+      const profileImageUrl = userData.data?.profile_image_url;
+      const isVerified = userData.data?.verified;
+
+      if (!userId) {
+        console.error('❌ Could not get user ID for @PrimapeApp');
+        return [];
+      }
+
+      console.log(`✅ Found Twitter user: ${userData.data.username} (ID: ${userId})`);
+
+      const tweetsResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=50&tweet.fields=created_at,public_metrics,attachments&expansions=attachments.media_keys&media.fields=url,preview_image_url,type,width,height`, {
+        headers: {
+          'Authorization': `Bearer ${appToken}`
+        }
+      });
+
+      if (!tweetsResponse.ok) {
+        const errorText = await tweetsResponse.text();
+        console.error(`❌ Twitter timeline fetch failed (${tweetsResponse.status}):`, errorText);
+        return [];
+      }
+
+      const tweetsData = await tweetsResponse.json();
+      const tweets = tweetsData.data || [];
+
+      console.log(`📥 Fetched ${tweets.length} raw tweets from Twitter API`);
+
+      // Same filtering logic as bearer token method
+      const originalTweets = tweets.filter(tweet => {
+        if (tweet.text.trim().startsWith('@')) return false;
+        if (tweet.referenced_tweets?.some(ref => ref.type === 'retweeted')) return false;
+        
+        const tweetDate = new Date(tweet.created_at);
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        if (tweetDate < oneDayAgo) return false;
+
+        return true;
+      });
+
+      console.log(`✅ Filtered to ${originalTweets.length} original tweets from last 24h`);
+
+      return originalTweets.map(tweet => {
+        const mediaUrls = [];
+        if (tweet.attachments && tweetsData.includes?.media) {
+          tweet.attachments.media_keys?.forEach(key => {
+            const media = tweetsData.includes.media.find(m => m.media_key === key);
+            if (media) {
+              mediaUrls.push({
+                url: media.url || media.preview_image_url,
+                type: media.type,
+                width: media.width,
+                height: media.height
+              });
+            }
+          });
+        }
+
+        return {
+          ...tweet,
+          profile_image_url: profileImageUrl?.replace('_normal', '_400x400') || profileImageUrl,
+          author_verified: isVerified,
+          media_urls: mediaUrls,
+          engagement_stats: tweet.public_metrics || { like_count: 0, retweet_count: 0, reply_count: 0 }
+        };
+      });
+    } catch (error) {
+      console.error('❌ Error in fetchWithClientCredentials:', error.message);
+      return [];
+    }
   }
 
   async cacheTweets(tweets) {
