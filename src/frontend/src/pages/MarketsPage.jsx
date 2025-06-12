@@ -10,6 +10,7 @@ import marketService from '../services/marketService';
 import blockchainMarketsService from '../services/blockchainMarketsService';
 
 const MarketsPage = () => {
+  // 🚀 DEPLOYMENT TRIGGER: Force frontend update - Fixed backend API timeouts (June 12, 2025)
   const [markets, setMarkets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
