@@ -334,19 +334,6 @@ const MarketsPage = () => {
           </div>
           
           <div className="flex gap-3">
-            {/* Temporary Debug Button */}
-            <button
-              onClick={async () => {
-                console.log('🔍 Running API connectivity test...');
-                const results = await marketService.testApiConnection();
-                alert(`API Test Results:\n\n${JSON.stringify(results, null, 2)}`);
-              }}
-              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm transition-all"
-              title="Debug API Connection Issues"
-            >
-              🔍 Debug API
-            </button>
-            
             <button
               onClick={() => navigate('/create-market')}
               className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-all"
