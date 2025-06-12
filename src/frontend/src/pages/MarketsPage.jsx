@@ -10,7 +10,8 @@ import marketService from '../services/marketService';
 import blockchainMarketsService from '../services/blockchainMarketsService';
 
 const MarketsPage = () => {
-  // 🚀 DEPLOYMENT TRIGGER: Force frontend update - Fixed backend API timeouts (June 12, 2025)
+  // �� DEPLOYMENT TRIGGER v2: Force Vercel auto-deployment - June 12, 2025 @ 1:45 PM
+  // Backend optimization complete: 23 active markets ready, testing auto-deploy from master
   const [markets, setMarkets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');

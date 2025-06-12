@@ -2210,6 +2210,7 @@ class MarketService {
 
   // SIMPLIFIED: Fetch all markets with optional resolved markets - no complex fallbacks
   async fetchMarkets(includeResolved = false) {
+    // 🔄 DEPLOYMENT VERIFICATION: This includes timeout fixes and enhanced error handling (June 12, 2025)
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
