@@ -3,9 +3,16 @@ const db = require('../config/database');
 
 class TweetCacheService {
   constructor() {
+    // Prevent multiple instances
+    if (global.tweetCacheServiceStarted) {
+      console.log('⚠️ Tweet cache service already running, skipping duplicate start');
+      return;
+    }
+    
     this.isRunning = false;
     this.lastFetchTime = null;
     this.startScheduledFetching();
+    global.tweetCacheServiceStarted = true;
   }
 
   // Start the scheduled tweet fetching (every 2 hours)
@@ -115,81 +122,118 @@ class TweetCacheService {
   }
 
   async fetchWithBearerToken(primapeUserId) {
-    // Get user info and profile picture
-    const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}?user.fields=profile_image_url,public_metrics,verified,description`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
+    try {
+      // Get user info and profile picture with better error handling
+      const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}?user.fields=profile_image_url,public_metrics,verified,description`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
+        }
+      });
+
+      if (!userResponse.ok) {
+        const errorText = await userResponse.text();
+        console.error(`❌ Twitter API user fetch failed (${userResponse.status}):`, errorText);
+        
+        // If it's a rate limit, that's not a critical error
+        if (userResponse.status === 429) {
+          console.log('⏰ Twitter API rate limited, will try again next cycle');
+          return [];
+        }
+        
+        // If it's 400, might be invalid credentials or username
+        if (userResponse.status === 400) {
+          console.error('🔑 Twitter API returned 400 - check credentials and username');
+          console.error('💡 Verify TWITTER_BEARER_TOKEN is valid and @PrimapeApp exists');
+          return [];
+        }
+        
+        throw new Error(`Failed to get user info: ${userResponse.status} - ${errorText}`);
       }
-    });
 
-    if (!userResponse.ok) {
-      throw new Error(`Failed to get user info: ${userResponse.status}`);
-    }
-
-    const userData = await userResponse.json();
-    const userId = userData.data?.id;
-    const profileImageUrl = userData.data?.profile_image_url;
-    const isVerified = userData.data?.verified;
-
-    if (!userId) {
-      throw new Error('Could not get user ID for @PrimapeApp');
-    }
-
-    // Get recent tweets (last 50 to ensure we get enough after filtering)
-    const timelineResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=50&tweet.fields=created_at,public_metrics,attachments,referenced_tweets,context_annotations,entities&expansions=attachments.media_keys,referenced_tweets.id,author_id&media.fields=url,preview_image_url,type,width,height&user.fields=profile_image_url,verified`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
-      }
-    });
-
-    if (!timelineResponse.ok) {
-      throw new Error(`Failed to get timeline: ${timelineResponse.status}`);
-    }
-
-    const timelineData = await timelineResponse.json();
-    const tweets = timelineData.data || [];
-
-    // Filter for original tweets only (no replies or retweets)
-    const originalTweets = tweets.filter(tweet => {
-      // Exclude replies (tweets that start with @username)
-      if (tweet.text.trim().startsWith('@')) return false;
+      const userData = await userResponse.json();
       
-      // Exclude retweets
-      if (tweet.referenced_tweets?.some(ref => ref.type === 'retweeted')) return false;
+      if (!userData.data) {
+        console.error('❌ No user data returned from Twitter API');
+        console.error('💡 Check if username @PrimapeApp is correct');
+        return [];
+      }
       
-      // Only include tweets from the last 24 hours to keep content fresh
-      const tweetDate = new Date(tweet.created_at);
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      if (tweetDate < oneDayAgo) return false;
+      const userId = userData.data?.id;
+      const profileImageUrl = userData.data?.profile_image_url;
+      const isVerified = userData.data?.verified;
 
-      return true;
-    });
-
-    // Enhance tweets with profile data and media
-    return originalTweets.map(tweet => {
-      const mediaUrls = [];
-      if (tweet.attachments && timelineData.includes?.media) {
-        tweet.attachments.media_keys?.forEach(key => {
-          const media = timelineData.includes.media.find(m => m.media_key === key);
-          if (media) {
-            mediaUrls.push({
-              url: media.url || media.preview_image_url,
-              type: media.type,
-              width: media.width,
-              height: media.height
-            });
-          }
-        });
+      if (!userId) {
+        console.error('❌ Could not get user ID for @PrimapeApp');
+        return [];
       }
 
-      return {
-        ...tweet,
-        profile_image_url: profileImageUrl?.replace('_normal', '_400x400') || profileImageUrl,
-        author_verified: isVerified,
-        media_urls: mediaUrls,
-        engagement_stats: tweet.public_metrics || { like_count: 0, retweet_count: 0, reply_count: 0 }
-      };
-    });
+      console.log(`✅ Found Twitter user: ${userData.data.username} (ID: ${userId})`);
+
+      // Get recent tweets (last 50 to ensure we get enough after filtering)
+      const timelineResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=50&tweet.fields=created_at,public_metrics,attachments,referenced_tweets,context_annotations,entities&expansions=attachments.media_keys,referenced_tweets.id,author_id&media.fields=url,preview_image_url,type,width,height&user.fields=profile_image_url,verified`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
+        }
+      });
+
+      if (!timelineResponse.ok) {
+        const errorText = await timelineResponse.text();
+        console.error(`❌ Twitter timeline fetch failed (${timelineResponse.status}):`, errorText);
+        return [];
+      }
+
+      const timelineData = await timelineResponse.json();
+      const tweets = timelineData.data || [];
+
+      console.log(`📥 Fetched ${tweets.length} raw tweets from Twitter API`);
+
+      // Filter for original tweets only (no replies or retweets)
+      const originalTweets = tweets.filter(tweet => {
+        // Exclude replies (tweets that start with @username)
+        if (tweet.text.trim().startsWith('@')) return false;
+        
+        // Exclude retweets
+        if (tweet.referenced_tweets?.some(ref => ref.type === 'retweeted')) return false;
+        
+        // Only include tweets from the last 24 hours to keep content fresh
+        const tweetDate = new Date(tweet.created_at);
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        if (tweetDate < oneDayAgo) return false;
+
+        return true;
+      });
+
+      console.log(`✅ Filtered to ${originalTweets.length} original tweets from last 24h`);
+
+      // Enhance tweets with profile data and media
+      return originalTweets.map(tweet => {
+        const mediaUrls = [];
+        if (tweet.attachments && timelineData.includes?.media) {
+          tweet.attachments.media_keys?.forEach(key => {
+            const media = timelineData.includes.media.find(m => m.media_key === key);
+            if (media) {
+              mediaUrls.push({
+                url: media.url || media.preview_image_url,
+                type: media.type,
+                width: media.width,
+                height: media.height
+              });
+            }
+          });
+        }
+
+        return {
+          ...tweet,
+          profile_image_url: profileImageUrl?.replace('_normal', '_400x400') || profileImageUrl,
+          author_verified: isVerified,
+          media_urls: mediaUrls,
+          engagement_stats: tweet.public_metrics || { like_count: 0, retweet_count: 0, reply_count: 0 }
+        };
+      });
+    } catch (error) {
+      console.error('❌ Error in fetchWithBearerToken:', error.message);
+      return [];
+    }
   }
 
   async fetchWithClientCredentials(primapeUserId) {

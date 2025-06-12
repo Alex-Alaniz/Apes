@@ -44,12 +44,39 @@ app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
-  });
+app.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    const dbStart = Date.now();
+    await pool.query('SELECT 1');
+    const dbTime = Date.now() - dbStart;
+    
+    const healthStatus = {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      uptime: process.uptime(),
+      database: {
+        connected: true,
+        responseTime: `${dbTime}ms`
+      },
+      services: {
+        tweetCache: !!global.tweetCacheServiceStarted,
+        syncService: !!global.syncServiceStarted
+      },
+      version: '1.0.0'
+    };
+    
+    res.status(200).json(healthStatus);
+  } catch (error) {
+    console.error('❌ Health check failed:', error);
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: error.message,
+      environment: process.env.NODE_ENV || 'development'
+    });
+  }
 });
 
 // Basic route
@@ -83,25 +110,40 @@ async function startServer() {
     const tweetCacheService = require('./services/tweetCacheService');
     console.log('✅ Tweet cache service initialized');
 
-    // Start blockchain sync service
+    // Start blockchain sync service ONLY ONCE
     try {
       const syncService = require('./services/syncService');
-      syncService.startSync();
-      console.log('✅ Blockchain sync service started');
+      // Add a guard to prevent multiple sync instances
+      if (!global.syncServiceStarted) {
+        syncService.startSync();
+        global.syncServiceStarted = true;
+        console.log('✅ Blockchain sync service started');
+      } else {
+        console.log('⚠️ Sync service already running, skipping duplicate start');
+      }
     } catch (syncError) {
       console.log('⚠️ Blockchain sync service not available:', syncError.message);
     }
 
     // Start the server
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📊 Health check: http://localhost:${PORT}/health`);
+      
+      // Fix health check URL for Railway production
+      const healthUrl = process.env.NODE_ENV === 'production' 
+        ? `https://apes-production.up.railway.app/health`
+        : `http://localhost:${PORT}/health`;
+      
+      console.log(`📊 Health check: ${healthUrl}`);
       console.log(`🐦 Tweet cache: Scheduled every 2 hours`);
-      console.log(`💾 Cache status: http://localhost:${PORT}/api/twitter/cache-status`);
+      console.log(`💾 Cache status: https://apes-production.up.railway.app/api/twitter/cache-status`);
       console.log('📊 Environment:', process.env.NODE_ENV);
       console.log('💾 Supabase URL set:', !!process.env.POSTGRES_URL);
       console.log('🌐 CORS Origins:', corsOptions.origin);
     });
+
+    // Set server timeout to prevent hanging
+    server.timeout = 30000; // 30 seconds
 
   } catch (error) {
     console.error('❌ Failed to start server:', error);

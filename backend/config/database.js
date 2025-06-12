@@ -90,12 +90,19 @@ if (connectionString === process.env.POSTGRES_URL) {
 
 const pool = new Pool(databaseConfig);
 
-// Enhanced connection monitoring
+// Enhanced connection monitoring with reduced spam
+let connectionCount = 0;
 pool.on('connect', (client) => {
-  console.log('✅ Database pool: new client connected to', 
-    connectionString === process.env.POSTGRES_URL ? 'Supabase' : 
-    connectionString === process.env.DATABASE_URL ? 'Neon' : 'Database'
-  );
+  connectionCount++;
+  // Only log first 3 connections to reduce spam
+  if (connectionCount <= 3) {
+    console.log('✅ Database pool: new client connected to', 
+      connectionString === process.env.POSTGRES_URL ? 'Supabase' : 
+      connectionString === process.env.DATABASE_URL ? 'Neon' : 'Database'
+    );
+  } else if (connectionCount === 4) {
+    console.log('ℹ️ Database pool: additional connections established (suppressing further logs)');
+  }
 });
 
 pool.on('error', (err, client) => {
