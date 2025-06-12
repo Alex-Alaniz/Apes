@@ -466,12 +466,8 @@ class MarketService {
       
       try {
         console.log('🔗 Fetching from backend API...');
-        const response = await fetch(`${backendUrl}/api/markets`, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'max-age=30' // Allow 30 second cache to reduce requests
-          }
-        });
+        // SIMPLIFIED: Use same simple fetch pattern as working methods
+        const response = await fetch(`${backendUrl}/api/markets`);
         
         if (response.ok) {
           const backendMarkets = await response.json();
@@ -1357,14 +1353,8 @@ class MarketService {
       
       const backendUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       
-      // Use simpler cache control to prevent rate limiting
-      const response = await fetch(`${backendUrl}/api/predictions/user/${userAddress}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-wallet-address': userAddress,
-          'Cache-Control': 'max-age=30' // Allow 30 second cache
-        }
-      });
+      // SIMPLIFIED: Use same simple fetch pattern as working methods
+      const response = await fetch(`${backendUrl}/api/predictions/user/${userAddress}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -2212,22 +2202,12 @@ class MarketService {
   async fetchMarkets(includeResolved = false) {
     // 🔄 DEPLOYMENT VERIFICATION: This includes timeout fixes and enhanced error handling (June 12, 2025)
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-
       const url = `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets${includeResolved ? '?include_resolved=true' : ''}`;
       
       console.log(`🌐 Making API request to: ${url}`);
       
-      const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'max-age=30' // Allow 30 second cache
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
+      // SIMPLIFIED: Use same pattern as working fetchResolvedMarkets()
+      const response = await fetch(url);
       
       if (!response.ok) {
         // Handle rate limiting gracefully
@@ -2237,9 +2217,6 @@ class MarketService {
         }
         
         console.error(`❌ API request failed: ${response.status} ${response.statusText}`);
-        console.error(`❌ Response URL: ${response.url}`);
-        console.error(`❌ Response type: ${response.type}`);
-        
         throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`);
       }
       
@@ -2249,24 +2226,10 @@ class MarketService {
       
       return markets;
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.error('❌ Request timeout after 15 seconds');
-      } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        console.error('❌ Network error - could not connect to backend API');
-        console.error('❌ Possible causes:');
-        console.error('  - Backend server is down');
-        console.error('  - Network connectivity issues');
-        console.error('  - CORS issues');
-        console.error('  - SSL/HTTPS certificate problems');
-        console.error('  - Firewall blocking the request');
-      } else {
-        console.error('❌ Unexpected error fetching markets:', error);
-      }
+      console.error('❌ Error fetching markets:', error);
       
-      console.error('Error fetching markets:', error);
-      
-      // Don't throw on rate limit errors or network errors, just return empty array
-      if (error.message?.includes('Rate limit') || error.message?.includes('429') || error.name === 'AbortError') {
+      // Don't throw on rate limit errors, just return empty array
+      if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
         console.warn('⚠️ Request failed - returning empty array');
         return [];
       }
