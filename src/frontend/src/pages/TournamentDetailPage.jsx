@@ -677,16 +677,13 @@ const TournamentDetailPage = () => {
   const isAdmin = publicKey && isWalletAuthorized(publicKey.toString());
 
   useEffect(() => {
-    // Initialize tournament data with 0 participants first
-    updateTournamentData(0);
-    // Then load the actual data
     loadTournamentData();
   }, [tournamentId]);
 
-  // Function to update tournament data with current participant count
-  const updateTournamentData = (currentParticipantCount) => {
+  // Function to create tournament object with current participant count
+  const createTournamentObject = (currentParticipantCount) => {
     if (tournamentId === 'club-world-cup-2025') {
-      setTournament({
+      return {
         id: 'club-world-cup-2025',
         name: 'FIFA Club World Cup 2025',
         description: 'The ultimate club football championship featuring 32 teams from around the world',
@@ -703,9 +700,9 @@ const TournamentDetailPage = () => {
         type: 'football',
         earlyBirdBonus: 100, // Points for early joiners
         joinReward: 50 // Base points for joining
-      });
+      };
     } else if (tournamentId === 'nba-finals-2025') {
-      setTournament({
+      return {
         id: 'nba-finals-2025',
         name: 'NBA Finals 2025',
         description: 'The championship series of the National Basketball Association - Oklahoma City Thunder vs Indiana Pacers',
@@ -722,8 +719,9 @@ const TournamentDetailPage = () => {
         type: 'basketball',
         earlyBirdBonus: 50,
         joinReward: 25
-      });
+      };
     }
+    return null;
   };
 
   const loadTournamentData = async () => {
@@ -746,6 +744,7 @@ const TournamentDetailPage = () => {
           finalCount: newParticipantCount
         });
         
+        // Set participant count first
         setParticipantCount(newParticipantCount);
         
         // Get recent joiners (last 3)
@@ -759,19 +758,30 @@ const TournamentDetailPage = () => {
         setRecentJoiners(recentJoiners);
         
         console.log('👥 Recent joiners updated:', recentJoiners.length);
+        console.log('🎯 About to update tournament with participant count:', newParticipantCount);
         
-        // Update tournament data with fresh participant count
-        updateTournamentData(newParticipantCount);
+        // Create tournament object directly with the correct participant count
+        const tournamentData = createTournamentObject(newParticipantCount);
+        if (tournamentData) {
+          setTournament(tournamentData);
+          console.log('✅ Tournament updated with', tournamentData.participants, 'participants');
+        }
+        
       } else {
         console.error('❌ Failed to load tournament data:', response.status, response.statusText);
+        // Create tournament with 0 participants as fallback
+        const fallbackTournament = createTournamentObject(0);
+        if (fallbackTournament) {
+          setTournament(fallbackTournament);
+        }
       }
     } catch (error) {
       console.error('❌ Error loading tournament data:', error);
-    }
-    
-    // Initialize tournament data with current participant count if not already set
-    if (!tournament) {
-      updateTournamentData(participantCount);
+      // Create tournament with 0 participants as fallback
+      const fallbackTournament = createTournamentObject(0);
+      if (fallbackTournament) {
+        setTournament(fallbackTournament);
+      }
     }
     
     setLoading(false);
