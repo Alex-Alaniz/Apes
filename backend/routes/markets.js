@@ -50,6 +50,12 @@ router.get('/', async (req, res) => {
       return res.json([]);
     }
     
+    // Check if blockchain resolution checking is requested
+    const shouldCheckBlockchain = req.query.check_blockchain === 'true' || 
+                                  req.query.include_resolved === 'true';
+    
+    console.log(`📊 Processing ${result.length} markets${shouldCheckBlockchain ? ' with blockchain resolution checking' : ' (blockchain checks skipped for performance)'}`);
+    
     // Transform the data to include calculated fields and real-time blockchain resolution status
     const markets = await Promise.all(result.map(async (market) => {
       // Calculate option percentages
@@ -63,22 +69,33 @@ router.get('/', async (req, res) => {
         market.options.forEach(() => optionPercentages.push(50));
       }
 
-      // 🔴 NEW: Check blockchain resolution status in real-time
+      // 🔴 OPTIMIZED: Make blockchain resolution checking optional and non-blocking
       let blockchainResolution = null;
-      try {
-        blockchainResolution = await liveMarketSync.syncMarketResolutionStatus(market.market_address);
-        
-        if (blockchainResolution && blockchainResolution.success && blockchainResolution.wasResolved) {
-          console.log(`🏆 Market ${market.market_address} is RESOLVED on blockchain:`, {
-            winner: blockchainResolution.winningOption,
-            question: market.question?.substring(0, 50)
-          });
-        } else if (blockchainResolution && blockchainResolution.skipReason) {
-          // Handle graceful skips (not on blockchain, missing config, etc.)
-          // Don't log these as warnings since they're expected for database-only markets
+      
+      // Only check blockchain resolution for specific cases, not all markets
+      if (shouldCheckBlockchain) {
+        try {
+          // Add timeout to prevent hanging
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Blockchain check timeout')), 3000)
+          );
+          
+          blockchainResolution = await Promise.race([
+            liveMarketSync.syncMarketResolutionStatus(market.market_address),
+            timeoutPromise
+          ]);
+          
+          if (blockchainResolution && blockchainResolution.success && blockchainResolution.wasResolved) {
+            console.log(`🏆 Market ${market.market_address} is RESOLVED on blockchain:`, {
+              winner: blockchainResolution.winningOption,
+              question: market.question?.substring(0, 50)
+            });
+          }
+        } catch (blockchainError) {
+          // Silently skip blockchain check on error/timeout
+          console.log(`⚠️ Skipping blockchain check for ${market.market_address}: ${blockchainError.message}`);
+          blockchainResolution = null;
         }
-      } catch (blockchainError) {
-        console.warn(`⚠️ Could not check blockchain status for ${market.market_address}:`, blockchainError.message);
       }
 
       // Use blockchain data if available, otherwise use database data
@@ -167,11 +184,12 @@ router.get('/', async (req, res) => {
         polyId: market.poly_id,
         apechainMarketId: market.apechain_market_id,
         
-        // 🔴 NEW: Add blockchain resolution indicators
+        // 🔴 OPTIMIZED: Add blockchain resolution indicators (only when checked)
         isBlockchainResolved: blockchainResolution?.wasResolved || false,
         blockchainStatus: blockchainResolution?.newStatus || actualStatus,
         dataSource: blockchainResolution?.wasResolved ? 'live_blockchain_resolution' : 'database',
-        lastResolutionCheck: new Date().toISOString()
+        lastResolutionCheck: shouldCheckBlockchain ? new Date().toISOString() : null,
+        blockchainCheckSkipped: !shouldCheckBlockchain
       };
 
       // Log first market for debugging
@@ -198,8 +216,8 @@ router.get('/', async (req, res) => {
     const activeMarkets = markets.filter(market => market.status === 'Active' || market.status === 'active');
     const resolvedMarkets = markets.filter(market => market.status === 'Resolved' || market.status === 'resolved');
     
-    console.log(`📊 Market breakdown: ${activeMarkets.length} active, ${resolvedMarkets.length} resolved (after blockchain check)`);
-    console.log(`✅ Processed ${markets.length} markets with real-time blockchain resolution checking`);
+    console.log(`📊 Market breakdown: ${activeMarkets.length} active, ${resolvedMarkets.length} resolved`);
+    console.log(`✅ Processed ${markets.length} markets${shouldCheckBlockchain ? ' with blockchain resolution checking' : ' (blockchain checks skipped for performance)'}`);
 
     // Return only active markets for the main endpoint (or include resolved based on query param)
     const includeResolved = req.query.include_resolved === 'true';
