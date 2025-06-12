@@ -169,9 +169,49 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
     
     if (engagements[postId]?.[type]) return 'completed';
     if (validation?.status === 'pending') return 'pending';
+    if (validation?.status === 'validated') return 'completed';
     if (validation?.status === 'failed') return 'failed';
+    if (validation?.status === 'not_linked') return 'not_linked';
+    if (validation?.status === 'auth_expired') return 'auth_expired';
     if (validation?.status === 'error') return 'error';
     return 'none';
+  };
+
+  const getValidationMessage = (status, type) => {
+    const baseIcon = type === 'like' ? FaHeart : type === 'repost' ? FaRetweet : FaComment;
+    
+    switch (status) {
+      case 'pending':
+        return { icon: FaClock, text: 'Validating...', color: 'text-orange-600 bg-orange-50 dark:bg-orange-900/20' };
+      case 'completed':
+        return { icon: FaCheckCircle, text: 'Done', color: type === 'like' ? 'text-red-600 bg-red-50 dark:bg-red-900/20' : type === 'repost' ? 'text-green-600 bg-green-50 dark:bg-green-900/20' : 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' };
+      case 'failed':
+        return { icon: baseIcon, text: 'Try Again', color: 'text-gray-400 bg-gray-50 dark:bg-gray-800' };
+      case 'not_linked':
+        return { icon: FaXTwitter, text: 'Link 𝕏', color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' };
+      case 'auth_expired':
+        return { icon: FaXTwitter, text: 'Re-link 𝕏', color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20' };
+      case 'error':
+        return { icon: baseIcon, text: 'Try Again', color: 'text-gray-400 bg-gray-50 dark:bg-gray-800' };
+      default:
+        return { icon: baseIcon, text: `+${getEngagementPoints(type)}`, color: 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800' };
+    }
+  };
+
+  const handleValidationClick = (postId, type, status) => {
+    if (status === 'not_linked' || status === 'auth_expired') {
+      // Redirect to profile to link Twitter account
+      if (confirm(`You need to link your 𝕏 account to earn points. Go to Profile now?`)) {
+        window.location.href = '/profile';
+      }
+      return;
+    }
+    
+    if (status === 'failed' || status === 'error') {
+      // Allow retry
+      handleEngagement(postId, type);
+      return;
+    }
   };
 
   // Check if user is authenticated but not linked (show different message)
@@ -225,6 +265,29 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
             <span className="font-bold text-green-800 dark:text-green-200">
               +{pointsEarned} APES points earned from 𝕏 engagement!
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Twitter Link Info Banner for authenticated but not linked users */}
+      {isAuthenticated && !isLinked && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <FaXTwitter className="text-2xl text-blue-600 dark:text-blue-400" />
+            <div className="flex-1">
+              <p className="text-blue-800 dark:text-blue-200 font-medium">
+                🔗 Link your 𝕏 account to validate engagement and earn points
+              </p>
+              <p className="text-blue-600 dark:text-blue-400 text-sm mt-1">
+                Your likes, reposts, and comments will be verified automatically once you link your account
+              </p>
+            </div>
+            <button
+              onClick={() => window.location.href = '/profile'}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              Link Now
+            </button>
           </div>
         </div>
       )}
@@ -381,28 +444,27 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
                     <div className="flex items-center justify-between max-w-md">
                       {['like', 'repost', 'comment'].map(type => {
                         const status = getValidationStatus(post.id, type);
-                        const Icon = type === 'like' ? FaHeart : type === 'repost' ? FaRetweet : FaComment;
-                        const points = getEngagementPoints(type);
+                        const { icon: Icon, text, color } = getValidationMessage(status, type);
                         
                         return (
                           <button
                             key={type}
-                            onClick={() => isAuthenticated ? handleEngagement(post.id, type) : alert('🔗 Please link your 𝕏 account first!')}
-                            disabled={!isAuthenticated || status === 'completed' || status === 'pending' || isVerifying[`${post.id}-${type}`]}
+                            onClick={() => {
+                              if (!isAuthenticated) {
+                                alert('🔗 Please link your 𝕏 account first!');
+                                return;
+                              }
+                              if (status === 'none') {
+                                handleEngagement(post.id, type);
+                              } else {
+                                handleValidationClick(post.id, type, status);
+                              }
+                            }}
+                            disabled={status === 'completed' || status === 'pending' || isVerifying[`${post.id}-${type}`]}
                             className={`flex items-center space-x-2 px-3 py-2 rounded-full transition-all text-sm font-medium group ${
                               !isAuthenticated
                                 ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                : status === 'completed'
-                                ? type === 'like' 
-                                  ? 'text-red-600 bg-red-50 dark:bg-red-900/20' 
-                                  : type === 'repost'
-                                  ? 'text-green-600 bg-green-50 dark:bg-green-900/20'
-                                  : 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
-                                : status === 'pending'
-                                ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/20'
-                                : status === 'failed'
-                                ? 'text-gray-400 bg-gray-50 dark:bg-gray-800'
-                                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                : color
                             }`}
                           >
                             <Icon className={`${status === 'completed' && type === 'like' ? 'fill-current' : ''}`} />
@@ -410,20 +472,8 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
                               <span>Link 𝕏</span>
                             ) : isVerifying[`${post.id}-${type}`] ? (
                               <span>Opening...</span>
-                            ) : status === 'completed' ? (
-                              <span className="flex items-center space-x-1">
-                                <FaCheckCircle className="text-green-500" />
-                                <span>Done</span>
-                              </span>
-                            ) : status === 'pending' ? (
-                              <span className="flex items-center space-x-1">
-                                <FaClock />
-                                <span>Validating...</span>
-                              </span>
-                            ) : status === 'failed' ? (
-                              <span>Try Again</span>
                             ) : (
-                              <span>+{points}</span>
+                              <span>{text}</span>
                             )}
                           </button>
                         );

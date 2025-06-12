@@ -309,6 +309,24 @@ router.post('/queue-engagement-check', async (req, res) => {
       setTimeout(async () => {
         try {
           console.log(`🔄 Validating queued ${engagement_type} for tweet ${tweet_id}`);
+          
+          // First check if user has linked Twitter account
+          const twitterAccount = await require('../config/database').query(
+            'SELECT twitter_id FROM wallet_twitter_links WHERE wallet_address = $1',
+            [userAddress]
+          );
+
+          if (twitterAccount.rows.length === 0) {
+            console.log(`⚠️ User ${userAddress} has not linked Twitter account`);
+            await require('../config/database').query(
+              `UPDATE pending_twitter_validations 
+               SET status = 'failed', validated_at = NOW(), points_awarded = 0
+               WHERE user_address = $1 AND tweet_id = $2 AND engagement_type = $3`,
+              [userAddress, tweet_id, engagement_type]
+            );
+            return;
+          }
+
           const validationResult = await twitterService.validateEngagement(userAddress, tweet_id, engagement_type);
           
           // Update pending validation status
@@ -325,16 +343,29 @@ router.post('/queue-engagement-check', async (req, res) => {
             ]
           );
 
-          console.log(`✅ Validation complete: ${validationResult.valid ? 'Valid' : 'Invalid'}, Points: ${validationResult.points_awarded || 0}`);
+          if (validationResult.valid && validationResult.points_awarded > 0) {
+            console.log(`✅ Validation successful: ${validationResult.points_awarded} points awarded`);
+          } else {
+            console.log(`❌ Validation failed: User did not ${engagement_type} the tweet`);
+          }
+
         } catch (validationError) {
-          console.error('❌ Async validation failed:', validationError);
+          console.error('❌ Async validation failed:', validationError.message);
           
-          // Update status to error
+          // Determine error type for better user feedback
+          let errorStatus = 'error';
+          if (validationError.message.includes('not linked') || validationError.message.includes('not properly linked')) {
+            errorStatus = 'not_linked';
+          } else if (validationError.message.includes('expired') || validationError.message.includes('authentication')) {
+            errorStatus = 'auth_expired';
+          }
+          
+          // Update status with error type
           await require('../config/database').query(
             `UPDATE pending_twitter_validations 
-             SET status = 'error', validated_at = NOW()
-             WHERE user_address = $1 AND tweet_id = $2 AND engagement_type = $3`,
-            [userAddress, tweet_id, engagement_type]
+             SET status = $1, validated_at = NOW(), points_awarded = 0
+             WHERE user_address = $2 AND tweet_id = $3 AND engagement_type = $4`,
+            [errorStatus, userAddress, tweet_id, engagement_type]
           );
         }
       }, 15000); // Wait 15 seconds before validation

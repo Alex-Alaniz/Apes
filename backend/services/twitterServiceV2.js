@@ -265,7 +265,7 @@ class TwitterServiceV2 {
     if (twitterIdOrWalletAddress.length === 44) {
       const twitter = await this.getTwitterByWallet(twitterIdOrWalletAddress);
       if (!twitter) {
-        throw new Error('No Twitter account linked to this wallet');
+        throw new Error('Twitter account not linked. Please link your Twitter account first.');
       }
       twitterId = twitter.twitter_id;
     }
@@ -276,18 +276,29 @@ class TwitterServiceV2 {
     );
 
     if (result.rows.length === 0) {
-      throw new Error('No Twitter tokens found');
+      throw new Error('Twitter account not properly linked. Please re-link your Twitter account.');
     }
 
     const { access_token, refresh_token, expires_at } = result.rows[0];
     
     // Decrypt tokens
-    const accessToken = decrypt(access_token);
-    const refreshToken = decrypt(refresh_token);
+    let accessToken, refreshToken;
+    try {
+      accessToken = decrypt(access_token);
+      refreshToken = decrypt(refresh_token);
+    } catch (decryptError) {
+      console.error('Token decryption failed:', decryptError);
+      throw new Error('Twitter authentication expired. Please re-link your Twitter account.');
+    }
 
     // Check if token needs refresh
     if (new Date() >= new Date(expires_at)) {
-      return this.refreshUserToken(twitterId, refreshToken);
+      try {
+        return await this.refreshUserToken(twitterId, refreshToken);
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
+        throw new Error('Twitter authentication expired. Please re-link your Twitter account.');
+      }
     }
 
     return new TwitterApi(accessToken);
