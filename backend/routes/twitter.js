@@ -83,60 +83,77 @@ router.get('/primape-posts', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
     const offset = parseInt(req.query.offset) || 0;
-    console.log('🐦 Fetching @PrimapeApp posts, limit:', limit, 'offset:', offset);
+    console.log('🐦 Fetching @PrimapeApp posts from cache, limit:', limit, 'offset:', offset);
     
-    // First try to get real tweets from X API v2
-    let tweets = [];
-    let source = 'api';
-    
+    // Always serve from database cache to avoid rate limits
     try {
-      if (process.env.TWITTER_BEARER_TOKEN || (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET)) {
-        tweets = await fetchPrimapeTweetsFromAPI(limit, offset);
-        console.log('✅ Successfully fetched', tweets.length, 'tweets from X API');
-        source = 'api';
-      } else {
-        console.warn('⚠️ No Twitter API credentials found');
-        throw new Error('No Twitter API credentials configured');
-      }
-    } catch (apiError) {
-      console.warn('🔄 X API failed:', apiError.message); 
+      const cachedResult = await require('../config/database').query(
+        `SELECT 
+           tweet_id as id, 
+           content as text, 
+           created_at, 
+           engagement_stats, 
+           media_urls,
+           profile_image_url,
+           author_verified,
+           updated_at as last_updated
+         FROM primape_tweets 
+         WHERE updated_at > NOW() - INTERVAL '48 hours'
+         ORDER BY created_at DESC 
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
       
-      // Try to get cached tweets from database if API fails
-      try {
-        const cachedResult = await require('../config/database').query(
-          `SELECT tweet_id as id, content as text, created_at, engagement_stats as public_metrics, media_urls
-           FROM primape_tweets 
-           ORDER BY created_at DESC 
-           LIMIT $1 OFFSET $2`,
-          [limit, offset]
+      if (cachedResult.rows.length > 0) {
+        const tweets = cachedResult.rows.map(row => ({
+          id: row.id,
+          text: row.text,
+          created_at: row.created_at,
+          public_metrics: typeof row.engagement_stats === 'string' ? JSON.parse(row.engagement_stats) : row.engagement_stats,
+          engagement_stats: typeof row.engagement_stats === 'string' ? JSON.parse(row.engagement_stats) : row.engagement_stats,
+          media_urls: typeof row.media_urls === 'string' ? JSON.parse(row.media_urls) : row.media_urls,
+          profile_image_url: row.profile_image_url || 'https://pbs.twimg.com/profile_images/default_profile_normal.png',
+          author_verified: row.author_verified || false,
+          last_cached: row.last_updated
+        }));
+        
+        console.log(`✅ Serving ${tweets.length} cached tweets from database`);
+        
+        // Get cache status for additional info
+        const cacheStatus = await require('../config/database').query(
+          `SELECT last_successful_fetch, next_scheduled_fetch, tweets_fetched 
+           FROM tweet_cache_status 
+           ORDER BY id DESC LIMIT 1`
         );
         
-        if (cachedResult.rows.length > 0) {
-          tweets = cachedResult.rows.map(row => ({
-            id: row.id,
-            text: row.text,
-            created_at: row.created_at,
-            public_metrics: typeof row.public_metrics === 'string' ? JSON.parse(row.public_metrics) : row.public_metrics,
-            media_urls: typeof row.media_urls === 'string' ? JSON.parse(row.media_urls) : row.media_urls,
-            profile_image_url: 'https://pbs.twimg.com/profile_images/1234567890/primape_normal.jpg' // Placeholder for actual profile
-          }));
-          source = 'database_cache';
-          console.log('✅ Using cached tweets from database');
-        } else {
-          throw new Error('No cached tweets available');
-        }
-      } catch (dbError) {
-        console.error('❌ Database cache also failed:', dbError.message);
-        // Return empty array instead of fake tweets
-        tweets = [];
-        source = 'no_data';
+        res.json({
+          tweets,
+          total: tweets.length,
+          source: 'database_cache',
+          offset: offset,
+          limit: limit,
+          cache_info: {
+            last_update: cacheStatus.rows[0]?.last_successful_fetch,
+            next_scheduled: cacheStatus.rows[0]?.next_scheduled_fetch,
+            cached_count: cacheStatus.rows[0]?.tweets_fetched
+          }
+        });
+        return;
+      } else {
+        console.log('⚠️ No cached tweets found in database');
       }
+    } catch (dbError) {
+      console.error('❌ Database cache query failed:', dbError.message);
     }
     
+    // If no cached tweets available, return empty with helpful message
+    console.log('📭 No tweets available in cache, waiting for next scheduled fetch');
+    
     res.json({
-      tweets,
-      total: tweets.length,
-      source: source,
+      tweets: [],
+      total: 0,
+      source: 'cache_empty',
+      message: 'Tweets are cached every 2-3 hours. Please check back soon!',
       offset: offset,
       limit: limit
     });
@@ -144,202 +161,85 @@ router.get('/primape-posts', async (req, res) => {
   } catch (error) {
     console.error('❌ Error in primape-posts endpoint:', error);
     
-    // Return empty response instead of fake tweets
     res.json({
       tweets: [],
       total: 0,
       source: 'error',
-      error: error.message
+      error: error.message,
+      message: 'Unable to load tweets. Our system will retry automatically.'
     });
   }
 });
 
-// Helper function to fetch tweets from X API v2 with rich content
-async function fetchPrimapeTweetsFromAPI(limit = 10, offset = 0) {
-  const primapeUserId = process.env.PRIMAPE_TWITTER_ID || 'PrimapeApp';
-  
-  // Method 1: Using Bearer Token (App-only auth)
-  if (process.env.TWITTER_BEARER_TOKEN) {
-    console.log('🔑 Using Bearer Token authentication');
+// Add cache status endpoint for monitoring
+router.get('/cache-status', async (req, res) => {
+  try {
+    // Get cache analytics
+    const analytics = await require('../config/database').query(
+      'SELECT * FROM tweet_cache_analytics'
+    );
     
-    // Get user info first to get profile picture
-    const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}?user.fields=profile_image_url,public_metrics,verified,description`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
+    // Get cache status
+    const status = await require('../config/database').query(
+      `SELECT * FROM tweet_cache_status ORDER BY id DESC LIMIT 1`
+    );
+    
+    // Get recent tweets summary
+    const recentTweets = await require('../config/database').query(
+      `SELECT tweet_id, created_at, last_updated 
+       FROM primape_tweets 
+       ORDER BY last_updated DESC 
+       LIMIT 5`
+    );
+    
+    res.json({
+      analytics: analytics.rows[0] || {},
+      status: status.rows[0] || {},
+      recent_tweets: recentTweets.rows,
+      cache_health: {
+        has_recent_data: analytics.rows[0]?.recent_tweets > 0,
+        needs_refresh: !status.rows[0]?.last_successful_fetch || 
+                      new Date(status.rows[0].last_successful_fetch) < new Date(Date.now() - 4 * 60 * 60 * 1000),
+        api_rate_limited: status.rows[0]?.api_rate_limited || false
       }
     });
     
-    if (!userResponse.ok) {
-      throw new Error(`Failed to get user info: ${userResponse.status} ${userResponse.statusText}`);
-    }
-    
-    const userData = await userResponse.json();
-    const userId = userData.data?.id;
-    const profileImageUrl = userData.data?.profile_image_url;
-    const isVerified = userData.data?.verified;
-    const publicMetrics = userData.data?.public_metrics;
-    
-    if (!userId) {
-      throw new Error('Could not get user ID for @PrimapeApp');
-    }
-    
-    // Get user timeline with rich content
-    const timelineResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics,attachments,referenced_tweets,context_annotations,entities&expansions=attachments.media_keys,referenced_tweets.id,author_id&media.fields=url,preview_image_url,type,width,height&user.fields=profile_image_url,verified`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
-      }
-    });
-    
-    if (!timelineResponse.ok) {
-      throw new Error(`Failed to get timeline: ${timelineResponse.status} ${timelineResponse.statusText}`);
-    }
-    
-    const timelineData = await timelineResponse.json();
-    const tweets = timelineData.data || [];
-    
-    // Enhance tweets with profile data and media
-    const enhancedTweets = tweets.map((tweet, index) => {
-      // Skip tweets based on offset
-      if (index < offset) return null;
-      
-      const mediaUrls = [];
-      if (tweet.attachments && timelineData.includes?.media) {
-        tweet.attachments.media_keys?.forEach(key => {
-          const media = timelineData.includes.media.find(m => m.media_key === key);
-          if (media) {
-            mediaUrls.push({
-              url: media.url || media.preview_image_url,
-              type: media.type,
-              width: media.width,
-              height: media.height
-            });
-          }
-        });
-      }
-      
-      return {
-        ...tweet,
-        profile_image_url: profileImageUrl?.replace('_normal', '_400x400') || profileImageUrl, // Get higher res
-        author_verified: isVerified,
-        author_metrics: publicMetrics,
-        media_urls: mediaUrls,
-        // Convert engagement stats to expected format
-        engagement_stats: tweet.public_metrics || { like_count: 0, retweet_count: 0, reply_count: 0 }
-      };
-    }).filter(tweet => tweet !== null);
-    
-    // Cache tweets in database
-    for (const tweet of enhancedTweets) {
-      try {
-        await require('../config/database').query(
-          `INSERT INTO primape_tweets (tweet_id, content, media_urls, created_at, engagement_stats)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (tweet_id) DO UPDATE
-           SET content = $2, engagement_stats = $5, last_updated = NOW()`,
-          [
-            tweet.id,
-            tweet.text,
-            JSON.stringify(tweet.media_urls),
-            tweet.created_at,
-            JSON.stringify(tweet.engagement_stats)
-          ]
-        );
-      } catch (dbError) {
-        console.warn('Failed to cache tweet:', dbError.message);
-      }
-    }
-    
-    return enhancedTweets;
+  } catch (error) {
+    console.error('❌ Error getting cache status:', error);
+    res.status(500).json({ error: 'Failed to get cache status' });
   }
-  
-  // Method 2: Using OAuth 2.0 Client Credentials (similar enhancement)
-  if (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET) {
-    console.log('🔑 Using OAuth 2.0 Client Credentials');
+});
+
+// Manual cache refresh endpoint (for admin use)
+router.post('/refresh-cache', async (req, res) => {
+  try {
+    const userAddress = req.headers['x-wallet-address'];
     
-    // Get app-only bearer token
-    const auth = Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64');
-    
-    const tokenResponse = await fetch('https://api.x.com/2/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: 'grant_type=client_credentials'
-    });
-    
-    if (!tokenResponse.ok) {
-      throw new Error(`Failed to get app token: ${tokenResponse.status}`);
+    // In production, you might want to restrict this to admin users
+    if (!userAddress) {
+      return res.status(401).json({ error: 'Authentication required' });
     }
     
-    const tokenData = await tokenResponse.json();
-    const appToken = tokenData.access_token;
+    console.log('🔄 Manual cache refresh requested by:', userAddress);
     
-    // Get user with profile data
-    const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}?user.fields=profile_image_url,public_metrics,verified,description`, {
-      headers: {
-        'Authorization': `Bearer ${appToken}`
-      }
+    // Import and trigger the cache service
+    const tweetCacheService = require('../services/tweetCacheService');
+    
+    // Force a fetch (don't wait for scheduled time)
+    tweetCacheService.forceFetch();
+    
+    res.json({
+      success: true,
+      message: 'Cache refresh initiated. Check back in a few minutes.',
+      triggered_by: userAddress,
+      triggered_at: new Date()
     });
     
-    if (!userResponse.ok) {
-      throw new Error(`Failed to get user: ${userResponse.status}`);
-    }
-    
-    const userData = await userResponse.json();
-    const userId = userData.data?.id;
-    const profileImageUrl = userData.data?.profile_image_url;
-    const isVerified = userData.data?.verified;
-    
-    if (!userId) {
-      throw new Error('Could not get user ID');
-    }
-    
-    // Get tweets with rich content
-    const tweetsResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics,attachments&expansions=attachments.media_keys&media.fields=url,preview_image_url,type,width,height`, {
-      headers: {
-        'Authorization': `Bearer ${appToken}`
-      }
-    });
-    
-    if (!tweetsResponse.ok) {
-      throw new Error(`Failed to get tweets: ${tweetsResponse.status}`);
-    }
-    
-    const tweetsData = await tweetsResponse.json();
-    const tweets = tweetsData.data || [];
-    
-    // Enhance and filter tweets based on offset
-    const enhancedTweets = tweets.slice(offset, offset + limit).map(tweet => {
-      const mediaUrls = [];
-      if (tweet.attachments && tweetsData.includes?.media) {
-        tweet.attachments.media_keys?.forEach(key => {
-          const media = tweetsData.includes.media.find(m => m.media_key === key);
-          if (media) {
-            mediaUrls.push({
-              url: media.url || media.preview_image_url,
-              type: media.type,
-              width: media.width,
-              height: media.height
-            });
-          }
-        });
-      }
-      
-      return {
-        ...tweet,
-        profile_image_url: profileImageUrl?.replace('_normal', '_400x400') || profileImageUrl,
-        author_verified: isVerified,
-        media_urls: mediaUrls,
-        engagement_stats: tweet.public_metrics || { like_count: 0, retweet_count: 0, reply_count: 0 }
-      };
-    });
-    
-    return enhancedTweets;
+  } catch (error) {
+    console.error('❌ Error refreshing cache:', error);
+    res.status(500).json({ error: 'Failed to refresh cache' });
   }
-  
-  throw new Error('No valid Twitter API credentials found');
-}
+});
 
 // Validate engagement on a tweet
 router.post('/validate-engagement', async (req, res) => {

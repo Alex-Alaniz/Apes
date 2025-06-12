@@ -2,43 +2,62 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const pool = require('./config/database');
-const userRoutes = require('./routes/users-supabase');
-const leaderboardRoutes = require('./routes/leaderboard');
-const predictionRoutes = require('./routes/predictions');
-const marketRoutes = require('./routes/markets');
-const adminRoutes = require('./routes/admin');
-const engagementRoutes = require('./routes/engagement');
-const twitterRoutes = require('./routes/twitter-supabase');
-const setupRoutes = require('./routes/setup');
-const tournamentRoutes = require('./routes/tournaments');
-const syncService = require('./services/syncService');
+const { testConnection } = require('./config/database');
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
+// Enhanced CORS configuration
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:5173', 
+    'https://apes-primape-app.vercel.app',
+    'https://apes.primape.app',
+    process.env.CORS_ORIGIN
+  ].filter(Boolean),
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-wallet-address'],
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Routes
+const userRoutes = require('./routes/users');
+const predictionRoutes = require('./routes/predictions');
+const marketRoutes = require('./routes/markets');
+const engagementRoutes = require('./routes/engagement');
+const twitterRoutes = require('./routes/twitter');
+const tournamentRoutes = require('./routes/tournaments');
+
+app.use('/api/users', userRoutes);
+app.use('/api/predictions', predictionRoutes);
+app.use('/api/markets', marketRoutes);
+app.use('/api/engagement', engagementRoutes);
+app.use('/api/twitter', twitterRoutes);
+app.use('/api/tournaments', tournamentRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
-// Routes
-app.use('/api/users', userRoutes);
-app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/predictions', predictionRoutes);
-app.use('/api/markets', marketRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/engagement', engagementRoutes);
-console.log('🐦 Loading Twitter routes from twitter-supabase.js...');
-app.use('/api/twitter', twitterRoutes);
-console.log('✅ Twitter routes loaded and mounted at /api/twitter');
-app.use('/api/setup', setupRoutes);
-app.use('/api/tournaments', tournamentRoutes);
+// Basic route
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'PRIMAPE Prediction Market API', 
+    version: '1.0.0',
+    docs: '/api/docs' 
+  });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -49,50 +68,55 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(PORT, async () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log('📊 Environment:', process.env.NODE_ENV);
-  console.log('💾 Supabase URL set:', !!process.env.POSTGRES_URL);
-  console.log('💾 Neon URL set:', !!process.env.DATABASE_URL);
-  console.log('🌐 CORS Origin:', process.env.CORS_ORIGIN);
-  
-  // Test main database connection (Supabase)
+// Initialize services and start server
+async function startServer() {
   try {
-    await pool.testConnection();
-    console.log('✅ Main database (Supabase) connection established successfully');
-    
+    // Test database connection
+    console.log('🔄 Testing database connection...');
+    await testConnection();
+    console.log('✅ Database connected successfully');
+
+    // Initialize tweet cache service
+    console.log('🔄 Initializing tweet cache service...');
+    const tweetCacheService = require('./services/tweetCacheService');
+    console.log('✅ Tweet cache service initialized');
+
     // Start blockchain sync service
-    syncService.startSync();
-  } catch (error) {
-    console.error('❌ Main database (Supabase) connection failed after retries:', error.message);
-    console.error('🔧 Environment check:', {
-      POSTGRES_URL: process.env.POSTGRES_URL ? 'Set (Supabase)' : 'Not set',
-      DATABASE_URL: process.env.DATABASE_URL ? 'Set (Neon)' : 'Not set',
-      POSTGRES_HOST: process.env.POSTGRES_HOST || 'Not set',
-      POSTGRES_USER: process.env.POSTGRES_USER || 'Not set',
-      POSTGRES_DATABASE: process.env.POSTGRES_DATABASE || 'Not set',
-      NODE_ENV: process.env.NODE_ENV
-    });
-    console.log('⚠️ Server will continue without main database connection');
-    // Don't exit - let server run for debugging
-  }
-  
-  // Test secondary database connection (Neon - for Polymarket)
-  if (process.env.DATABASE_URL) {
     try {
-      const { testNeonConnection } = require('./config/neon-database');
-      await testNeonConnection();
-      console.log('✅ Secondary database (Neon) available for Polymarket data');
-    } catch (error) {
-      console.log('ℹ️ Secondary database (Neon) not available - Polymarket features may be limited');
+      const syncService = require('./services/syncService');
+      syncService.startSync();
+      console.log('✅ Blockchain sync service started');
+    } catch (syncError) {
+      console.log('⚠️ Blockchain sync service not available:', syncError.message);
     }
+
+    // Start the server
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📊 Health check: http://localhost:${PORT}/health`);
+      console.log(`🐦 Tweet cache: Scheduled every 2 hours`);
+      console.log(`💾 Cache status: http://localhost:${PORT}/api/twitter/cache-status`);
+      console.log('📊 Environment:', process.env.NODE_ENV);
+      console.log('💾 Supabase URL set:', !!process.env.POSTGRES_URL);
+      console.log('🌐 CORS Origins:', corsOptions.origin);
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
   }
-});
+}
+
+// Start the server
+startServer();
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM signal received: closing HTTP server');
-  await pool.end();
+process.on('SIGINT', () => {
+  console.log('🔄 Shutting down gracefully...');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('🔄 Shutting down gracefully...');
   process.exit(0);
 }); 

@@ -4,7 +4,7 @@ import { FaTrophy, FaCoins, FaStar, FaCheckCircle, FaExternalLinkAlt, FaHeart, F
 import { FaXTwitter } from 'react-icons/fa6';
 import { formatDistanceToNow } from 'date-fns';
 
-const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onRefreshPosts, onRefreshAuth, onLoadMorePosts }) => {
+const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onRefreshPosts, onRefreshAuth, onLoadMorePosts, refreshCache }) => {
   const { publicKey } = useWallet();
   const [engagements, setEngagements] = useState({});
   const [pointsEarned, setPointsEarned] = useState(0);
@@ -249,6 +249,16 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
             >
               {postsLoading ? 'Loading...' : 'Refresh'}
             </button>
+            {publicKey && (
+              <button
+                onClick={refreshCache}
+                disabled={postsLoading}
+                className="text-green-600 dark:text-green-400 hover:underline text-sm flex items-center gap-1"
+                title="Manually trigger tweet cache refresh"
+              >
+                🔄 Force Update
+              </button>
+            )}
             <a
               href="https://twitter.com/PrimapeApp"
               target="_blank"
@@ -266,16 +276,32 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
             <span className="ml-2 text-gray-600 dark:text-gray-400">Loading posts...</span>
           </div>
         ) : postsError ? (
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-6 text-center">
-            <FaXTwitter className="text-2xl mx-auto mb-2 text-amber-600 dark:text-amber-400" />
-            <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">Connection Issue</h4>
-            <p className="text-amber-700 dark:text-amber-300 mb-4 text-sm">{postsError}</p>
-            <button
-              onClick={onRefreshPosts}
-              className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
-            >
-              Try Again
-            </button>
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6 text-center">
+            <FaXTwitter className="text-2xl mx-auto mb-2 text-blue-600 dark:text-blue-400" />
+            <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">Tweet Cache Status</h4>
+            <p className="text-blue-700 dark:text-blue-300 mb-4 text-sm">{postsError}</p>
+            <div className="space-y-2">
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                📡 Tweets are automatically cached every 2-3 hours to avoid API rate limits
+              </p>
+              <div className="flex gap-2 justify-center">
+                <button
+                  onClick={onRefreshPosts}
+                  className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                >
+                  Check Cache
+                </button>
+                {publicKey && (
+                  <button
+                    onClick={refreshCache}
+                    disabled={postsLoading}
+                    className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm disabled:opacity-50"
+                  >
+                    Force Refresh
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         ) : posts.length === 0 ? (
           <div className="text-center py-12">
@@ -421,9 +447,12 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
         </div>
         )}
 
-        {/* Load More Posts Button - Only show if we have real tweets */}
+        {/* Load More Posts Button - Only show if we have cached tweets */}
         {posts.length > 0 && posts[0].profile_image_url && (
           <div className="mt-6 text-center">
+            <div className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+              📅 Cached tweets from the last 48 hours • Updated every 2-3 hours
+            </div>
             <button
               onClick={onLoadMorePosts}
               disabled={postsLoading}
@@ -437,7 +466,7 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
               ) : (
                 <>
                   <FaXTwitter />
-                  Load More Posts
+                  Load More Cached Posts
                 </>
               )}
             </button>
@@ -566,7 +595,7 @@ const EngageToEarnPage = () => {
       setPostsLoading(true);
       setPostsError(null);
       
-      console.log('🐦 Fetching @PrimapeApp posts from API...');
+      console.log('🐦 Fetching @PrimapeApp posts from cache...');
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/primape-posts?limit=5`);
       
       if (!response.ok) {
@@ -578,50 +607,60 @@ const EngageToEarnPage = () => {
       console.log('🐦 Fetched posts data:', data);
       console.log('🔍 API source:', data.source);
       
-      // Only accept real data or cached data
-      const isRealData = data.source === 'api' || data.source === 'database_cache';
-      
-      if (!isRealData || data.tweets.length === 0) {
-        console.warn('⚠️ No real tweets available. Source:', data.source);
-        setPostsError('No tweets available. Please check back later when the API is working.');
+      // Handle different cache states
+      if (data.source === 'database_cache' && data.tweets.length > 0) {
+        // Transform cached tweets to expected format
+        const transformedPosts = data.tweets.map(tweet => ({
+          id: tweet.id,
+          text: tweet.text,
+          created_at: tweet.created_at,
+          author_username: 'PrimapeApp',
+          url: `https://twitter.com/PrimapeApp/status/${tweet.id}`,
+          profile_image_url: tweet.profile_image_url,
+          author_verified: tweet.author_verified,
+          media_urls: tweet.media_urls,
+          engagement_stats: tweet.engagement_stats || { 
+            like_count: 0, 
+            retweet_count: 0, 
+            reply_count: 0 
+          },
+          last_cached: tweet.last_cached
+        }));
+        
+        setPosts(transformedPosts);
+        setPostsError(null);
+        console.log('✅ Cached tweets loaded successfully!', transformedPosts.length, 'tweets');
+      } 
+      else if (data.source === 'cache_empty') {
+        console.log('📭 No tweets in cache, waiting for next scheduled fetch');
+        setPostsError(
+          `Tweets are automatically fetched every 2-3 hours. ${
+            data.cache_info?.next_scheduled 
+              ? `Next update: ${new Date(data.cache_info.next_scheduled).toLocaleTimeString()}`
+              : 'Check back soon!'
+          }`
+        );
         setPosts([]);
-        return;
       }
-      
-      // Transform API response to match the expected format
-      const transformedPosts = data.tweets.map(tweet => ({
-        id: tweet.id,
-        text: tweet.text,
-        created_at: tweet.created_at,
-        author_username: 'PrimapeApp',
-        url: `https://twitter.com/PrimapeApp/status/${tweet.id}`,
-        profile_image_url: tweet.profile_image_url,
-        author_verified: tweet.author_verified,
-        media_urls: tweet.media_urls,
-        engagement_stats: tweet.engagement_stats || tweet.public_metrics || { 
-          like_count: 0, 
-          retweet_count: 0, 
-          reply_count: 0 
-        }
-      }));
-      
-      setPosts(transformedPosts);
-      setPostsError(null);
-      console.log('✅ Real @PrimapeApp tweets loaded successfully!');
+      else {
+        console.log('⚠️ Unexpected response:', data);
+        setPostsError('Unable to load tweets. Our system will retry automatically every 2-3 hours.');
+        setPosts([]);
+      }
       
     } catch (error) {
       console.error('❌ Error fetching @PrimapeApp posts:', error);
-      setPostsError('Failed to load tweets. Please try refreshing.');
-      setPosts([]); // No fallback tweets - keep empty
+      setPostsError('Connection issue. Tweets are cached every 2-3 hours - please try refreshing.');
+      setPosts([]);
     } finally {
       setPostsLoading(false);
     }
   };
 
   const loadMorePosts = async () => {
-    // Only allow loading more if we have real tweets
+    // Only allow loading more if we have cached tweets
     if (posts.length === 0 || !posts[0].profile_image_url) {
-      console.log('❌ Cannot load more - no real tweets available');
+      console.log('❌ Cannot load more - no cached tweets available');
       return;
     }
 
@@ -629,7 +668,7 @@ const EngageToEarnPage = () => {
       setPostsLoading(true);
       const newOffset = postsOffset + 10;
       
-      console.log('🔄 Loading more posts with offset:', newOffset);
+      console.log('🔄 Loading more cached posts with offset:', newOffset);
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/primape-posts?limit=10&offset=${newOffset}`);
       
       if (!response.ok) {
@@ -639,9 +678,9 @@ const EngageToEarnPage = () => {
       
       const data = await response.json();
       
-      // Only accept real data
-      if (data.source !== 'api' && data.source !== 'database_cache') {
-        console.log('❌ Load more failed - no real data available');
+      // Only accept cached data
+      if (data.source !== 'database_cache') {
+        console.log('❌ Load more failed - no cached data available');
         return;
       }
       
@@ -654,24 +693,62 @@ const EngageToEarnPage = () => {
         profile_image_url: tweet.profile_image_url,
         author_verified: tweet.author_verified,
         media_urls: tweet.media_urls,
-        engagement_stats: tweet.engagement_stats || tweet.public_metrics || { 
+        engagement_stats: tweet.engagement_stats || { 
           like_count: 0, 
           retweet_count: 0, 
           reply_count: 0 
         }
       }));
       
-      // Only append if we got new real posts
+      // Only append if we got new cached posts
       if (newPosts.length > 0 && newPosts[0].profile_image_url) {
         setPosts(prev => [...prev, ...newPosts]);
         setPostsOffset(newOffset);
-        console.log(`✅ Loaded ${newPosts.length} more real posts`);
+        console.log(`✅ Loaded ${newPosts.length} more cached posts`);
       } else {
-        console.log('📭 No more real posts available');
+        console.log('📭 No more cached posts available');
       }
       
     } catch (error) {
       console.error('❌ Error loading more posts:', error);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  // Add manual refresh function for cache
+  const refreshCache = async () => {
+    if (!publicKey) {
+      alert('Please connect your wallet first!');
+      return;
+    }
+
+    try {
+      setPostsLoading(true);
+      console.log('🔄 Requesting manual cache refresh...');
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/refresh-cache`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-address': publicKey.toString(),
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert('🔄 Cache refresh initiated! New tweets will appear in a few minutes.');
+        
+        // Wait a bit and then refresh the page data
+        setTimeout(() => {
+          fetchPrimapePosts();
+        }, 3000);
+      } else {
+        throw new Error('Failed to refresh cache');
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing cache:', error);
+      alert('❌ Failed to refresh cache. Please try again later.');
     } finally {
       setPostsLoading(false);
     }
@@ -904,6 +981,7 @@ const EngageToEarnPage = () => {
               onRefreshPosts={fetchPrimapePosts}
               onRefreshAuth={checkTwitterStatus}
               onLoadMorePosts={loadMorePosts}
+              refreshCache={refreshCache}
             />
           )}
         </div>
