@@ -68,7 +68,11 @@ const AdminPage = () => {
       // Add cache busting for admin refresh to force fresh data
       const cacheBuster = Date.now();
       
-      const response = await fetch(`${apiUrl}/api/admin/markets?t=${cacheBuster}`);
+      const response = await fetch(`${apiUrl}/api/admin/markets?t=${cacheBuster}`, {
+        headers: {
+          'X-Wallet-Address': publicKey.toString()
+        }
+      });
       
       if (!response.ok) {
         // Handle rate limiting gracefully
@@ -165,7 +169,10 @@ const AdminPage = () => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${apiUrl}/api/admin/sync-market-resolution/${marketPubkey}`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'X-Wallet-Address': publicKey.toString()
+        }
       });
       
       if (!response.ok) {
@@ -210,7 +217,10 @@ const AdminPage = () => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const response = await fetch(`${apiUrl}/api/markets/force-sync`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'X-Wallet-Address': publicKey.toString()
+        }
       });
       
       if (!response.ok) {
