@@ -33,6 +33,7 @@ const marketRoutes = require('./routes/markets');
 const engagementRoutes = require('./routes/engagement');
 const twitterRoutes = require('./routes/twitter');
 const tournamentRoutes = require('./routes/tournaments');
+const leaderboardRoutes = require('./routes/leaderboard');
 
 app.use('/api/users', userRoutes);
 app.use('/api/predictions', predictionRoutes);
@@ -40,6 +41,7 @@ app.use('/api/markets', marketRoutes);
 app.use('/api/engagement', engagementRoutes);
 app.use('/api/twitter', twitterRoutes);
 app.use('/api/tournaments', tournamentRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

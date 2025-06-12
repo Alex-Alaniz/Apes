@@ -665,141 +665,73 @@ router.get('/test-predictions', async (req, res) => {
   }
 });
 
-// Direct predictions data endpoint (bypassing JOIN issues)
+// Get predictions-data (lightweight endpoint for frontend)
 router.get('/predictions-data', async (req, res) => {
   try {
-    console.log('🧪 DIRECT: Fetching predictions data without complex JOINs...');
+    console.log('📊 Getting predictions data...');
     
-    // Get predictions data grouped by user_address
-    const predictionsQuery = `
+    // Simple query that joins users with their basic prediction stats
+    const query = `
+      WITH user_stats AS (
+        SELECT 
+          u.wallet_address,
+          u.username,
+          u.twitter_username,
+          COUNT(DISTINCT p.id) as total_predictions,
+          COALESCE(u.total_invested, 0) as total_invested,
+          COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END) as winning_predictions,
+          COALESCE(SUM(CASE 
+            WHEN p.claimed = true THEN (p.payout - p.amount)
+            WHEN p.claimed = false AND m.status = 'Resolved' AND m.resolved_option != p.option_index THEN -p.amount
+            ELSE 0 
+          END), 0) as total_profit,
+          CASE 
+            WHEN COUNT(DISTINCT p.id) > 0 
+            THEN (COUNT(DISTINCT CASE WHEN p.claimed = true THEN p.id END)::DECIMAL / COUNT(DISTINCT p.id)) * 100
+            ELSE 0 
+          END as win_rate,
+          COALESCE(MAX(pb.total_points), 0) as engagement_points,
+          COALESCE(MAX(pb.available_points), 0) as available_points,
+          CASE WHEN COUNT(DISTINCT p.id) > 0 THEN true ELSE false END as airdrop_eligible,
+          CASE 
+            WHEN COUNT(DISTINCT p.id) >= 10 THEN 'active'
+            WHEN COUNT(DISTINCT p.id) > 0 THEN 'new'
+            ELSE 'tourist'
+          END as activity_status
+        FROM users u
+        LEFT JOIN predictions p ON TRIM(u.wallet_address) = TRIM(p.user_address)
+        LEFT JOIN markets m ON TRIM(p.market_address) = TRIM(m.market_address)
+        LEFT JOIN point_balances pb ON TRIM(u.wallet_address) = TRIM(pb.user_address)
+        GROUP BY u.wallet_address, u.username, u.twitter_username, u.total_invested
+        HAVING COUNT(DISTINCT p.id) > 0 OR COALESCE(MAX(pb.total_points), 0) > 0
+      )
       SELECT 
-        user_address as wallet_address,
-        COUNT(*) as total_predictions,
-        SUM(amount) as total_invested,
-        COUNT(CASE WHEN claimed = true THEN 1 END) as winning_predictions,
-        SUM(CASE 
-          WHEN claimed = true AND payout > 0 THEN (payout - amount)
-          ELSE 0 
-        END) as total_profit
-      FROM predictions 
-      GROUP BY user_address
-      ORDER BY total_invested DESC
+        *,
+        ROW_NUMBER() OVER (ORDER BY total_profit DESC) as position,
+        CASE 
+          WHEN total_predictions >= 50 AND win_rate >= 70 THEN 'Master'
+          WHEN total_predictions >= 30 AND win_rate >= 60 THEN 'Expert'
+          WHEN total_predictions >= 20 AND win_rate >= 50 THEN 'Advanced'
+          WHEN total_predictions >= 10 THEN 'Intermediate'
+          ELSE 'Beginner'
+        END as rank
+      FROM user_stats
+      ORDER BY total_profit DESC
+      LIMIT 100
     `;
+
+    const result = await db.query(query);
     
-    const predictionsResult = await db.query(predictionsQuery);
-    console.log(`🧪 Found ${predictionsResult.rows.length} users with predictions`);
+    console.log(`📊 Found ${result.rows.length} users with predictions data`);
     
-    // Get engagement points data
-    const engagementQuery = `
-      SELECT 
-        user_address as wallet_address,
-        total_points as engagement_points,
-        available_points
-      FROM point_balances
-    `;
-    
-    const engagementResult = await db.query(engagementQuery);
-    console.log(`🧪 Found ${engagementResult.rows.length} users with engagement points`);
-    
-    // Get user info (usernames, etc.)
-    const usersQuery = `
-      SELECT 
-        wallet_address,
-        username,
-        twitter_username,
-        created_at
-      FROM users
-    `;
-    
-    const usersResult = await db.query(usersQuery);
-    console.log(`🧪 Found ${usersResult.rows.length} total users`);
-    
-    // Merge all data manually
-    const userMap = new Map();
-    
-    // Add users first
-    usersResult.rows.forEach(user => {
-      userMap.set(user.wallet_address, {
-        wallet_address: user.wallet_address,
-        username: user.username,
-        twitter_username: user.twitter_username,
-        connected_at: user.created_at,
-        total_predictions: 0,
-        total_invested: 0,
-        winning_predictions: 0,
-        total_profit: 0,
-        win_rate: 0,
-        engagement_points: 0,
-        available_points: 0,
-        airdrop_eligible: false,
-        activity_status: 'new'
-      });
+    res.json({
+      leaderboard: result.rows.map(user => convertToNumbers(user)),
+      total_users: result.rows.length,
+      source: 'predictions_data'
     });
-    
-    // Add predictions data
-    predictionsResult.rows.forEach(pred => {
-      if (userMap.has(pred.wallet_address)) {
-        const user = userMap.get(pred.wallet_address);
-        user.total_predictions = parseInt(pred.total_predictions) || 0;
-        user.total_invested = parseFloat(pred.total_invested) || 0;
-        user.winning_predictions = parseInt(pred.winning_predictions) || 0;
-        user.total_profit = parseFloat(pred.total_profit) || 0;
-        user.win_rate = user.total_predictions > 0 ? (user.winning_predictions / user.total_predictions) * 100 : 0;
-        user.airdrop_eligible = user.total_predictions > 0;
-        user.activity_status = 'active';
-      } else {
-        // User exists in predictions but not in users table - create entry
-        const newUser = {
-          wallet_address: pred.wallet_address,
-          username: null,
-          twitter_username: null,
-          connected_at: new Date().toISOString(),
-          total_predictions: parseInt(pred.total_predictions) || 0,
-          total_invested: parseFloat(pred.total_invested) || 0,
-          winning_predictions: parseInt(pred.winning_predictions) || 0,
-          total_profit: parseFloat(pred.total_profit) || 0,
-          win_rate: 0,
-          engagement_points: 0,
-          available_points: 0,
-          airdrop_eligible: true,
-          activity_status: 'active'
-        };
-        newUser.win_rate = newUser.total_predictions > 0 ? (newUser.winning_predictions / newUser.total_predictions) * 100 : 0;
-        userMap.set(pred.wallet_address, newUser);
-      }
-    });
-    
-    // Add engagement data
-    engagementResult.rows.forEach(eng => {
-      if (userMap.has(eng.wallet_address)) {
-        const user = userMap.get(eng.wallet_address);
-        user.engagement_points = parseInt(eng.engagement_points) || 0;
-        user.available_points = parseInt(eng.available_points) || 0;
-        if (user.activity_status === 'new' && user.engagement_points > 0) {
-          user.activity_status = 'active';
-        }
-      }
-    });
-    
-    // Convert to array and sort by total invested
-    const leaderboard = Array.from(userMap.values())
-      .filter(user => user.total_invested > 0 || user.engagement_points > 0)
-      .sort((a, b) => b.total_invested - a.total_invested)
-      .map((user, index) => ({
-        ...user,
-        position: index + 1,
-        rank: calculateRank(user.total_predictions, user.win_rate)
-      }));
-    
-    console.log(`🧪 Generated leaderboard with ${leaderboard.length} active users`);
-    if (leaderboard.length > 0) {
-      console.log(`🧪 Top user: ${leaderboard[0].wallet_address.substring(0, 8)}... - ${leaderboard[0].total_invested} APES`);
-    }
-    
-    res.json({ leaderboard });
   } catch (error) {
-    console.error('🧪 DIRECT ERROR:', error);
-    res.status(500).json({ error: 'Failed to fetch predictions data' });
+    console.error('📊 Predictions data error:', error);
+    res.status(500).json({ error: 'Failed to get predictions data', details: error.message });
   }
 });
 
