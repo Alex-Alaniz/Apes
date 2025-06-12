@@ -646,7 +646,7 @@ const TournamentLeaderboard = ({ tournamentId, participantCount, onJoinSuccess }
           </div>
           <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded-lg p-3">
             <div className="font-bold mb-1">3️⃣ Win Prizes</div>
-            <div>Top performers share the massive prize pool: {tournamentId === 'club-world-cup-2025' ? '25,000 APES + 2.5 SOL' : '10,000 APES + 1.0 SOL'} based on accuracy</div>
+            <div>Top performers share the massive prize pool: {tournamentId === 'club-world-cup-2025' ? '1,000,000 APES + 3 SOL' : '500,000 APES + 1.5 SOL'} based on accuracy</div>
           </div>
         </div>
         <div className="mt-4 p-3 bg-yellow-200 dark:bg-yellow-800/50 rounded-lg">
@@ -683,12 +683,24 @@ const TournamentDetailPage = () => {
   const loadTournamentData = async () => {
     setLoading(true);
     
-    // Load tournament participant count
+    // Load tournament participant count with cache busting
     try {
-      const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournamentId}/leaderboard`);
+      const cacheBuster = Date.now();
+      const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournamentId}/leaderboard?t=${cacheBuster}`);
+      
+      console.log('🔍 Loading tournament data for:', tournamentId, 'Response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
-        setParticipantCount(data.totalParticipants || 0);
+        const newParticipantCount = data.totalParticipants || data.leaderboard?.length || 0;
+        
+        console.log('📊 Tournament data loaded:', {
+          totalParticipants: data.totalParticipants,
+          leaderboardLength: data.leaderboard?.length,
+          finalCount: newParticipantCount
+        });
+        
+        setParticipantCount(newParticipantCount);
         
         // Get recent joiners (last 3)
         const recentJoiners = (data.leaderboard || [])
@@ -699,9 +711,13 @@ const TournamentDetailPage = () => {
             joinedAt: user.joined_at
           }));
         setRecentJoiners(recentJoiners);
+        
+        console.log('👥 Recent joiners updated:', recentJoiners.length);
+      } else {
+        console.error('❌ Failed to load tournament data:', response.status, response.statusText);
       }
     } catch (error) {
-      console.error('Error loading tournament data:', error);
+      console.error('❌ Error loading tournament data:', error);
     }
     
     // Mock tournament data based on ID
@@ -715,8 +731,8 @@ const TournamentDetailPage = () => {
         endDate: '2025-07-13',
         totalMarkets: 63,
         prizePool: {
-          apes: 25000,
-          sol: 2.5 // Enhanced with SOL prizes
+          apes: 1000000,
+          sol: 3 // Enhanced massive prize pool
         },
         participants: participantCount,
         maxParticipants: 1000, // Create scarcity
@@ -734,8 +750,8 @@ const TournamentDetailPage = () => {
         endDate: '2025-06-22',
         totalMarkets: 7, // Up to 7 games in best of 7 series
         prizePool: {
-          apes: 10000,
-          sol: 1.0
+          apes: 500000,
+          sol: 1.5
         },
         participants: participantCount,
         maxParticipants: 500,
@@ -776,43 +792,123 @@ const TournamentDetailPage = () => {
       });
 
       if (response.ok) {
+        const joinData = await response.json();
         setParticipating(true);
         
-        // Award engagement points for joining
+        // Award engagement points for joining with better error handling
         let totalPointsEarned = 50; // Base join reward
+        let pointsAwarded = false;
+        
+        console.log('🎯 Awarding tournament join points for wallet:', publicKey.toString());
+        
         try {
-          await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
+          // Award base tournament join points
+          const basePointsResponse = await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'x-wallet-address': publicKey.toString()
+            },
             body: JSON.stringify({
-              wallet_address: publicKey.toString(),
               activity_type: 'TOURNAMENT_JOIN',
-              metadata: { tournamentId: tournament.id, tournament_name: tournament.name }
+              metadata: { 
+                tournamentId: tournament.id, 
+                tournament_name: tournament.name,
+                points: 50
+              }
             })
           });
           
+          if (basePointsResponse.ok) {
+            const basePointsResult = await basePointsResponse.json();
+            console.log('✅ Base tournament points awarded:', basePointsResult);
+            pointsAwarded = true;
+          } else {
+            const errorText = await basePointsResponse.text();
+            console.error('❌ Failed to award base points:', basePointsResponse.status, errorText);
+          }
+          
           // Early bird bonus for first 100 participants
           if (participantCount < 100) {
-            await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
+            const bonusResponse = await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'x-wallet-address': publicKey.toString()
+              },
               body: JSON.stringify({
-                wallet_address: publicKey.toString(),
                 activity_type: 'EARLY_BIRD_BONUS',
-                metadata: { tournamentId: tournament.id, reason: 'First 100 participants' }
+                metadata: { 
+                  tournamentId: tournament.id, 
+                  reason: 'First 100 participants',
+                  points: 100
+                }
               })
             });
-            totalPointsEarned = 150; // 50 + 100 bonus
+            
+            if (bonusResponse.ok) {
+              const bonusResult = await bonusResponse.json();
+              console.log('✅ Early bird bonus awarded:', bonusResult);
+              totalPointsEarned = 150; // 50 + 100 bonus
+            } else {
+              const errorText = await bonusResponse.text();
+              console.error('❌ Failed to award early bird bonus:', bonusResponse.status, errorText);
+            }
           }
         } catch (pointsError) {
-          console.error('Error awarding join points:', pointsError);
+          console.error('❌ Error awarding join points:', pointsError);
         }
         
-        // Refresh tournament data
+        // Force refresh tournament data multiple times to ensure count updates
+        console.log('🔄 Refreshing tournament data...');
         await loadTournamentData();
         
+        // Wait a moment and refresh again to ensure database updates are reflected
+        setTimeout(async () => {
+          await loadTournamentData();
+          console.log('🔄 Second refresh completed');
+        }, 2000);
+        
+        // Additional debugging - test the API endpoints directly
+        setTimeout(async () => {
+          try {
+            console.log('🧪 Testing tournament API endpoints...');
+            
+            // Test leaderboard endpoint
+            const testResponse = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournament.id}/leaderboard`);
+            if (testResponse.ok) {
+              const testData = await testResponse.json();
+              console.log('🧪 Direct API test result:', {
+                endpoint: '/leaderboard',
+                totalParticipants: testData.totalParticipants,
+                leaderboardLength: testData.leaderboard?.length,
+                recentParticipants: testData.leaderboard?.slice(0, 3)
+              });
+            } else {
+              console.error('🧪 API test failed:', testResponse.status, testResponse.statusText);
+            }
+            
+            // Test user status endpoint
+            const statusResponse = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournament.id}/status/${publicKey.toString()}`);
+            if (statusResponse.ok) {
+              const statusData = await statusResponse.json();
+              console.log('🧪 User status test:', statusData);
+            } else {
+              console.error('🧪 Status API test failed:', statusResponse.status);
+            }
+          } catch (testError) {
+            console.error('🧪 API testing failed:', testError);
+          }
+        }, 3000);
+        
         // Show success message with rewards
-        alert(`🎉 Successfully joined tournament!\n💰 Earned ${totalPointsEarned} APES points\n🏆 Good luck in the competition!`);
+        const pointsMessage = pointsAwarded 
+          ? `💰 Earned ${totalPointsEarned} APES points` 
+          : `💰 ${totalPointsEarned} APES points pending (may take a moment to appear)`;
+          
+        alert(`🎉 Successfully joined tournament!\n${pointsMessage}\n🏆 Good luck in the competition!\n\n📊 Participant count will update shortly.`);
       }
     } catch (error) {
       console.error('Error joining tournament:', error);
