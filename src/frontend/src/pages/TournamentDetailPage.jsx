@@ -677,8 +677,54 @@ const TournamentDetailPage = () => {
   const isAdmin = publicKey && isWalletAuthorized(publicKey.toString());
 
   useEffect(() => {
+    // Initialize tournament data with 0 participants first
+    updateTournamentData(0);
+    // Then load the actual data
     loadTournamentData();
   }, [tournamentId]);
+
+  // Function to update tournament data with current participant count
+  const updateTournamentData = (currentParticipantCount) => {
+    if (tournamentId === 'club-world-cup-2025') {
+      setTournament({
+        id: 'club-world-cup-2025',
+        name: 'FIFA Club World Cup 2025',
+        description: 'The ultimate club football championship featuring 32 teams from around the world',
+        banner: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1893&q=80',
+        startDate: '2025-06-14',
+        endDate: '2025-07-13',
+        totalMarkets: 63,
+        prizePool: {
+          apes: 1000000,
+          sol: 3 // Enhanced massive prize pool
+        },
+        participants: currentParticipantCount,
+        maxParticipants: 1000, // Create scarcity
+        type: 'football',
+        earlyBirdBonus: 100, // Points for early joiners
+        joinReward: 50 // Base points for joining
+      });
+    } else if (tournamentId === 'nba-finals-2025') {
+      setTournament({
+        id: 'nba-finals-2025',
+        name: 'NBA Finals 2025',
+        description: 'The championship series of the National Basketball Association - Oklahoma City Thunder vs Indiana Pacers',
+        banner: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2059&q=80',
+        startDate: '2025-06-05',
+        endDate: '2025-06-22',
+        totalMarkets: 7, // Up to 7 games in best of 7 series
+        prizePool: {
+          apes: 500000,
+          sol: 1.5
+        },
+        participants: currentParticipantCount,
+        maxParticipants: 500,
+        type: 'basketball',
+        earlyBirdBonus: 50,
+        joinReward: 25
+      });
+    }
+  };
 
   const loadTournamentData = async () => {
     setLoading(true);
@@ -713,6 +759,9 @@ const TournamentDetailPage = () => {
         setRecentJoiners(recentJoiners);
         
         console.log('👥 Recent joiners updated:', recentJoiners.length);
+        
+        // Update tournament data with fresh participant count
+        updateTournamentData(newParticipantCount);
       } else {
         console.error('❌ Failed to load tournament data:', response.status, response.statusText);
       }
@@ -720,45 +769,9 @@ const TournamentDetailPage = () => {
       console.error('❌ Error loading tournament data:', error);
     }
     
-    // Mock tournament data based on ID
-    if (tournamentId === 'club-world-cup-2025') {
-      setTournament({
-        id: 'club-world-cup-2025',
-        name: 'FIFA Club World Cup 2025',
-        description: 'The ultimate club football championship featuring 32 teams from around the world',
-        banner: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1893&q=80',
-        startDate: '2025-06-14',
-        endDate: '2025-07-13',
-        totalMarkets: 63,
-        prizePool: {
-          apes: 1000000,
-          sol: 3 // Enhanced massive prize pool
-        },
-        participants: participantCount,
-        maxParticipants: 1000, // Create scarcity
-        type: 'football',
-        earlyBirdBonus: 100, // Points for early joiners
-        joinReward: 50 // Base points for joining
-      });
-    } else if (tournamentId === 'nba-finals-2025') {
-      setTournament({
-        id: 'nba-finals-2025',
-        name: 'NBA Finals 2025',
-        description: 'The championship series of the National Basketball Association - Oklahoma City Thunder vs Indiana Pacers',
-        banner: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2059&q=80',
-        startDate: '2025-06-05',
-        endDate: '2025-06-22',
-        totalMarkets: 7, // Up to 7 games in best of 7 series
-        prizePool: {
-          apes: 500000,
-          sol: 1.5
-        },
-        participants: participantCount,
-        maxParticipants: 500,
-        type: 'basketball',
-        earlyBirdBonus: 50,
-        joinReward: 25
-      });
+    // Initialize tournament data with current participant count if not already set
+    if (!tournament) {
+      updateTournamentData(participantCount);
     }
     
     setLoading(false);
@@ -868,8 +881,14 @@ const TournamentDetailPage = () => {
         // Wait a moment and refresh again to ensure database updates are reflected
         setTimeout(async () => {
           await loadTournamentData();
-          console.log('🔄 Second refresh completed');
+          console.log('🔄 Second refresh completed - should show updated participant count');
         }, 2000);
+        
+        // Third refresh to be absolutely sure
+        setTimeout(async () => {
+          await loadTournamentData();
+          console.log('🔄 Third refresh completed - final attempt to sync participant count');
+        }, 5000);
         
         // Additional debugging - test the API endpoints directly
         setTimeout(async () => {
