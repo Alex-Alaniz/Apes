@@ -82,117 +82,109 @@ router.get('/verify-follow', async (req, res) => {
 router.get('/primape-posts', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
-    console.log('🐦 Fetching @PrimapeApp posts, limit:', limit);
+    const offset = parseInt(req.query.offset) || 0;
+    console.log('🐦 Fetching @PrimapeApp posts, limit:', limit, 'offset:', offset);
     
     // First try to get real tweets from X API v2
     let tweets = [];
+    let source = 'api';
+    
     try {
       if (process.env.TWITTER_BEARER_TOKEN || (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET)) {
-        tweets = await fetchPrimapeTweetsFromAPI(limit);
+        tweets = await fetchPrimapeTweetsFromAPI(limit, offset);
         console.log('✅ Successfully fetched', tweets.length, 'tweets from X API');
+        source = 'api';
       } else {
-        console.warn('⚠️ No Twitter API credentials found, using fallback');
+        console.warn('⚠️ No Twitter API credentials found');
         throw new Error('No Twitter API credentials configured');
       }
     } catch (apiError) {
-      console.warn('🔄 X API failed, using fallback content:', apiError.message); 
+      console.warn('🔄 X API failed:', apiError.message); 
       
-      // Fallback to high-quality mock tweets when API fails
-      tweets = [
-        {
-          id: '1867901234567890123',
-          text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n⚡ Early bird bonus still available!\n\nConnect your wallet and start predicting!\n\n🚀 apes.primape.app/tournaments\n\n#PredictionMarkets #FIFA #ClubWorldCup #Web3',
-          created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 45, retweet_count: 12, reply_count: 8 }
-        },
-        {
-          id: '1867801234567890124',
-          text: 'GM Apes! 🦍\n\nReady to make some epic predictions today?\n\n✨ New markets added daily\n💎 Earn APES points for every prediction\n🎯 Tournament leaderboards heating up\n🏆 25K prize pool waiting\n\nWhat\'s your play today? 👀\n\n#GM #PredictionMarkets #Solana',
-          created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 23, retweet_count: 6, reply_count: 4 }
-        },
-        {
-          id: '1867701234567890125', 
-          text: '🎉 Community Milestone Alert! 🎉\n\n✅ 1,000+ Active Predictors\n✅ 500+ Markets Created\n✅ 100,000+ Predictions Made\n✅ 50,000+ APES Distributed\n\nThanks to our amazing community! The future of prediction markets is bright 🚀\n\n#Community #Milestones #Web3',
-          created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 67, retweet_count: 18, reply_count: 12 }
-        },
-        {
-          id: '1867601234567890126',
-          text: '🚨 Breaking: New Prediction Markets Going Live! 🚨\n\n🏈 NFL Playoffs\n🏀 NBA All-Star Weekend\n💰 Crypto Price Predictions\n🎬 Oscars 2025\n\nDon\'t miss out on the action! Join thousands of predictors earning APES tokens.\n\n#NFL #NBA #Crypto #Oscars',
-          created_at: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 34, retweet_count: 8, reply_count: 6 }
-        },
-        {
-          id: '1867501234567890127',
-          text: '💡 Pro Tip: Diversify your predictions! 💡\n\n📊 Spread risk across multiple markets\n🎯 Focus on areas you know well\n⏰ Early predictions often have better odds\n💰 Compound your APES earnings\n\nWhat\'s your prediction strategy? 🤔\n\n#ProTips #Strategy',
-          created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-          public_metrics: { like_count: 28, retweet_count: 5, reply_count: 11 }
+      // Try to get cached tweets from database if API fails
+      try {
+        const cachedResult = await require('../config/database').query(
+          `SELECT tweet_id as id, content as text, created_at, engagement_stats as public_metrics, media_urls
+           FROM primape_tweets 
+           ORDER BY created_at DESC 
+           LIMIT $1 OFFSET $2`,
+          [limit, offset]
+        );
+        
+        if (cachedResult.rows.length > 0) {
+          tweets = cachedResult.rows.map(row => ({
+            id: row.id,
+            text: row.text,
+            created_at: row.created_at,
+            public_metrics: typeof row.public_metrics === 'string' ? JSON.parse(row.public_metrics) : row.public_metrics,
+            media_urls: typeof row.media_urls === 'string' ? JSON.parse(row.media_urls) : row.media_urls,
+            profile_image_url: 'https://pbs.twimg.com/profile_images/1234567890/primape_normal.jpg' // Placeholder for actual profile
+          }));
+          source = 'database_cache';
+          console.log('✅ Using cached tweets from database');
+        } else {
+          throw new Error('No cached tweets available');
         }
-      ].slice(0, limit);
-    }
-    
-    // Ensure we always return some content
-    if (tweets.length === 0) {
-      tweets = [{
-        id: 'fallback-emergency',
-        text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n\n🚀 apes.primape.app/tournaments',
-        created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-        public_metrics: { like_count: 45, retweet_count: 12, reply_count: 8 }
-      }];
+      } catch (dbError) {
+        console.error('❌ Database cache also failed:', dbError.message);
+        // Return empty array instead of fake tweets
+        tweets = [];
+        source = 'no_data';
+      }
     }
     
     res.json({
       tweets,
       total: tweets.length,
-      source: tweets[0].id?.includes('fallback') || tweets[0].id?.includes('186') ? 'fallback' : 'api'
+      source: source,
+      offset: offset,
+      limit: limit
     });
     
   } catch (error) {
     console.error('❌ Error in primape-posts endpoint:', error);
     
-    // Emergency fallback - always return something
-    const emergencyTweets = [{
-      id: 'emergency-1',
-      text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n\n🚀 apes.primape.app/tournaments',
-      created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-      public_metrics: { like_count: 45, retweet_count: 12, reply_count: 8 }
-    }];
-    
+    // Return empty response instead of fake tweets
     res.json({
-      tweets: emergencyTweets,
-      total: emergencyTweets.length,
-      source: 'emergency_fallback'
+      tweets: [],
+      total: 0,
+      source: 'error',
+      error: error.message
     });
   }
 });
 
-// Helper function to fetch tweets from X API v2
-async function fetchPrimapeTweetsFromAPI(limit = 10) {
-  const primapeUserId = process.env.PRIMAPE_TWITTER_ID || 'PrimapeApp'; // Can be username or ID
+// Helper function to fetch tweets from X API v2 with rich content
+async function fetchPrimapeTweetsFromAPI(limit = 10, offset = 0) {
+  const primapeUserId = process.env.PRIMAPE_TWITTER_ID || 'PrimapeApp';
   
   // Method 1: Using Bearer Token (App-only auth)
   if (process.env.TWITTER_BEARER_TOKEN) {
     console.log('🔑 Using Bearer Token authentication');
-    const response = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}`, {
+    
+    // Get user info first to get profile picture
+    const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}?user.fields=profile_image_url,public_metrics,verified,description`, {
       headers: {
         'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
       }
     });
     
-    if (!response.ok) {
-      throw new Error(`Failed to get user info: ${response.status} ${response.statusText}`);
+    if (!userResponse.ok) {
+      throw new Error(`Failed to get user info: ${userResponse.status} ${userResponse.statusText}`);
     }
     
-    const userData = await response.json();
+    const userData = await userResponse.json();
     const userId = userData.data?.id;
+    const profileImageUrl = userData.data?.profile_image_url;
+    const isVerified = userData.data?.verified;
+    const publicMetrics = userData.data?.public_metrics;
     
     if (!userId) {
       throw new Error('Could not get user ID for @PrimapeApp');
     }
     
-    // Get user timeline
-    const timelineResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics,attachments&expansions=attachments.media_keys&media.fields=url,preview_image_url`, {
+    // Get user timeline with rich content
+    const timelineResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics,attachments,referenced_tweets,context_annotations,entities&expansions=attachments.media_keys,referenced_tweets.id,author_id&media.fields=url,preview_image_url,type,width,height&user.fields=profile_image_url,verified`, {
       headers: {
         'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`
       }
@@ -203,10 +195,64 @@ async function fetchPrimapeTweetsFromAPI(limit = 10) {
     }
     
     const timelineData = await timelineResponse.json();
-    return timelineData.data || [];
+    const tweets = timelineData.data || [];
+    
+    // Enhance tweets with profile data and media
+    const enhancedTweets = tweets.map((tweet, index) => {
+      // Skip tweets based on offset
+      if (index < offset) return null;
+      
+      const mediaUrls = [];
+      if (tweet.attachments && timelineData.includes?.media) {
+        tweet.attachments.media_keys?.forEach(key => {
+          const media = timelineData.includes.media.find(m => m.media_key === key);
+          if (media) {
+            mediaUrls.push({
+              url: media.url || media.preview_image_url,
+              type: media.type,
+              width: media.width,
+              height: media.height
+            });
+          }
+        });
+      }
+      
+      return {
+        ...tweet,
+        profile_image_url: profileImageUrl?.replace('_normal', '_400x400') || profileImageUrl, // Get higher res
+        author_verified: isVerified,
+        author_metrics: publicMetrics,
+        media_urls: mediaUrls,
+        // Convert engagement stats to expected format
+        engagement_stats: tweet.public_metrics || { like_count: 0, retweet_count: 0, reply_count: 0 }
+      };
+    }).filter(tweet => tweet !== null);
+    
+    // Cache tweets in database
+    for (const tweet of enhancedTweets) {
+      try {
+        await require('../config/database').query(
+          `INSERT INTO primape_tweets (tweet_id, content, media_urls, created_at, engagement_stats)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (tweet_id) DO UPDATE
+           SET content = $2, engagement_stats = $5, last_updated = NOW()`,
+          [
+            tweet.id,
+            tweet.text,
+            JSON.stringify(tweet.media_urls),
+            tweet.created_at,
+            JSON.stringify(tweet.engagement_stats)
+          ]
+        );
+      } catch (dbError) {
+        console.warn('Failed to cache tweet:', dbError.message);
+      }
+    }
+    
+    return enhancedTweets;
   }
   
-  // Method 2: Using OAuth 2.0 App-only with Client Credentials
+  // Method 2: Using OAuth 2.0 Client Credentials (similar enhancement)
   if (process.env.TWITTER_CLIENT_ID && process.env.TWITTER_CLIENT_SECRET) {
     console.log('🔑 Using OAuth 2.0 Client Credentials');
     
@@ -229,8 +275,8 @@ async function fetchPrimapeTweetsFromAPI(limit = 10) {
     const tokenData = await tokenResponse.json();
     const appToken = tokenData.access_token;
     
-    // Get user by username
-    const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}`, {
+    // Get user with profile data
+    const userResponse = await fetch(`https://api.x.com/2/users/by/username/${primapeUserId}?user.fields=profile_image_url,public_metrics,verified,description`, {
       headers: {
         'Authorization': `Bearer ${appToken}`
       }
@@ -242,13 +288,15 @@ async function fetchPrimapeTweetsFromAPI(limit = 10) {
     
     const userData = await userResponse.json();
     const userId = userData.data?.id;
+    const profileImageUrl = userData.data?.profile_image_url;
+    const isVerified = userData.data?.verified;
     
     if (!userId) {
       throw new Error('Could not get user ID');
     }
     
-    // Get tweets
-    const tweetsResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics`, {
+    // Get tweets with rich content
+    const tweetsResponse = await fetch(`https://api.x.com/2/users/${userId}/tweets?max_results=${Math.min(limit, 100)}&tweet.fields=created_at,public_metrics,attachments&expansions=attachments.media_keys&media.fields=url,preview_image_url,type,width,height`, {
       headers: {
         'Authorization': `Bearer ${appToken}`
       }
@@ -259,7 +307,35 @@ async function fetchPrimapeTweetsFromAPI(limit = 10) {
     }
     
     const tweetsData = await tweetsResponse.json();
-    return tweetsData.data || [];
+    const tweets = tweetsData.data || [];
+    
+    // Enhance and filter tweets based on offset
+    const enhancedTweets = tweets.slice(offset, offset + limit).map(tweet => {
+      const mediaUrls = [];
+      if (tweet.attachments && tweetsData.includes?.media) {
+        tweet.attachments.media_keys?.forEach(key => {
+          const media = tweetsData.includes.media.find(m => m.media_key === key);
+          if (media) {
+            mediaUrls.push({
+              url: media.url || media.preview_image_url,
+              type: media.type,
+              width: media.width,
+              height: media.height
+            });
+          }
+        });
+      }
+      
+      return {
+        ...tweet,
+        profile_image_url: profileImageUrl?.replace('_normal', '_400x400') || profileImageUrl,
+        author_verified: isVerified,
+        media_urls: mediaUrls,
+        engagement_stats: tweet.public_metrics || { like_count: 0, retweet_count: 0, reply_count: 0 }
+      };
+    });
+    
+    return enhancedTweets;
   }
   
   throw new Error('No valid Twitter API credentials found');
@@ -289,6 +365,112 @@ router.post('/validate-engagement', async (req, res) => {
   } catch (error) {
     console.error('Error validating engagement:', error);
     res.status(500).json({ error: 'Failed to validate engagement' });
+  }
+});
+
+// Queue engagement validation (new endpoint for better UX)
+router.post('/queue-engagement-check', async (req, res) => {
+  try {
+    const userAddress = req.headers['x-wallet-address'];
+    if (!userAddress) {
+      return res.status(401).json({ error: 'No wallet address provided' });
+    }
+
+    const { tweet_id, engagement_type, tweet_url } = req.body;
+    
+    if (!tweet_id || !engagement_type) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+
+    if (!['like', 'repost', 'comment'].includes(engagement_type)) {
+      return res.status(400).json({ error: 'Invalid engagement type' });
+    }
+
+    // Store pending validation in database
+    try {
+      await require('../config/database').query(
+        `INSERT INTO pending_twitter_validations (user_address, tweet_id, engagement_type, tweet_url, status, created_at)
+         VALUES ($1, $2, $3, $4, 'pending', NOW())
+         ON CONFLICT (user_address, tweet_id, engagement_type) 
+         DO UPDATE SET status = 'pending', created_at = NOW()`,
+        [userAddress, tweet_id, engagement_type, tweet_url]
+      );
+
+      // Return immediate response for better UX
+      res.json({
+        queued: true,
+        message: `${engagement_type} queued for validation`,
+        tweet_id,
+        engagement_type,
+        estimated_validation_time: '10-30 seconds'
+      });
+
+      // Perform async validation with delay to allow user time to complete action
+      setTimeout(async () => {
+        try {
+          console.log(`🔄 Validating queued ${engagement_type} for tweet ${tweet_id}`);
+          const validationResult = await twitterService.validateEngagement(userAddress, tweet_id, engagement_type);
+          
+          // Update pending validation status
+          await require('../config/database').query(
+            `UPDATE pending_twitter_validations 
+             SET status = $1, validated_at = NOW(), points_awarded = $2
+             WHERE user_address = $3 AND tweet_id = $4 AND engagement_type = $5`,
+            [
+              validationResult.valid ? 'validated' : 'failed',
+              validationResult.points_awarded || 0,
+              userAddress,
+              tweet_id,
+              engagement_type
+            ]
+          );
+
+          console.log(`✅ Validation complete: ${validationResult.valid ? 'Valid' : 'Invalid'}, Points: ${validationResult.points_awarded || 0}`);
+        } catch (validationError) {
+          console.error('❌ Async validation failed:', validationError);
+          
+          // Update status to error
+          await require('../config/database').query(
+            `UPDATE pending_twitter_validations 
+             SET status = 'error', validated_at = NOW()
+             WHERE user_address = $1 AND tweet_id = $2 AND engagement_type = $3`,
+            [userAddress, tweet_id, engagement_type]
+          );
+        }
+      }, 15000); // Wait 15 seconds before validation
+
+    } catch (dbError) {
+      console.error('Failed to queue validation:', dbError);
+      throw new Error('Failed to queue validation');
+    }
+
+  } catch (error) {
+    console.error('Error queuing engagement validation:', error);
+    res.status(500).json({ error: 'Failed to queue engagement validation' });
+  }
+});
+
+// Get validation status for pending engagements
+router.get('/validation-status/:userAddress', async (req, res) => {
+  try {
+    const { userAddress } = req.params;
+    
+    const result = await require('../config/database').query(
+      `SELECT tweet_id, engagement_type, status, points_awarded, created_at, validated_at
+       FROM pending_twitter_validations 
+       WHERE user_address = $1 
+       ORDER BY created_at DESC 
+       LIMIT 50`,
+      [userAddress]
+    );
+
+    res.json({
+      validations: result.rows
+    });
+
+  } catch (error) {
+    console.error('Error getting validation status:', error);
+    res.status(500).json({ error: 'Failed to get validation status' });
   }
 });
 

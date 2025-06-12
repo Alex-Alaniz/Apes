@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { FaTrophy, FaCoins, FaStar, FaCheckCircle, FaExternalLinkAlt, FaHeart, FaRetweet, FaComment, FaSpinner } from 'react-icons/fa';
+import { FaTrophy, FaCoins, FaStar, FaCheckCircle, FaExternalLinkAlt, FaHeart, FaRetweet, FaComment, FaSpinner, FaClock } from 'react-icons/fa';
 import { FaXTwitter } from 'react-icons/fa6';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -9,6 +9,66 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
   const [engagements, setEngagements] = useState({});
   const [pointsEarned, setPointsEarned] = useState(0);
   const [isVerifying, setIsVerifying] = useState({});
+  const [pendingValidations, setPendingValidations] = useState({});
+
+  // Poll for validation status
+  useEffect(() => {
+    if (!publicKey || !twitterLinked) return;
+
+    const pollValidations = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/validation-status/${publicKey.toString()}`, {
+          headers: {
+            'x-wallet-address': publicKey.toString(),
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const validationMap = {};
+          let newPoints = 0;
+
+          data.validations.forEach(validation => {
+            const key = `${validation.tweet_id}-${validation.engagement_type}`;
+            validationMap[key] = validation;
+            
+            // If newly validated, add to points
+            if (validation.status === 'validated' && validation.points_awarded > 0) {
+              if (!engagements[validation.tweet_id]?.[validation.engagement_type]) {
+                newPoints += validation.points_awarded;
+              }
+            }
+          });
+
+          setPendingValidations(validationMap);
+          
+          // Update engagements based on validated results
+          const newEngagements = { ...engagements };
+          Object.values(validationMap).forEach(validation => {
+            if (validation.status === 'validated') {
+              if (!newEngagements[validation.tweet_id]) {
+                newEngagements[validation.tweet_id] = {};
+              }
+              newEngagements[validation.tweet_id][validation.engagement_type] = true;
+            }
+          });
+          setEngagements(newEngagements);
+          
+          if (newPoints > 0) {
+            setPointsEarned(prev => prev + newPoints);
+          }
+        }
+      } catch (error) {
+        console.error('Error polling validation status:', error);
+      }
+    };
+
+    // Poll every 5 seconds
+    const interval = setInterval(pollValidations, 5000);
+    pollValidations(); // Initial poll
+
+    return () => clearInterval(interval);
+  }, [publicKey, twitterLinked, engagements]);
 
   const handleEngagement = async (postId, type) => {
     if (!publicKey) {
@@ -21,8 +81,9 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
       return;
     }
 
-    // Check if already engaged
-    if (engagements[postId]?.[type]) {
+    // Check if already engaged or pending
+    const validationKey = `${postId}-${type}`;
+    if (engagements[postId]?.[type] || pendingValidations[validationKey]?.status === 'pending') {
       return;
     }
 
@@ -34,20 +95,47 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
       // Open Twitter in new tab
       window.open(post.url, '_blank');
       
-      // Set engagement as done immediately for better UX
-      setEngagements(prev => ({
-        ...prev,
-        [postId]: { ...prev[postId], [type]: true }
-      }));
-      
-      // Award points
-      const points = type === 'like' ? 5 : type === 'repost' ? 10 : 15;
-      setPointsEarned(prev => prev + points);
-      
-      // Show success message
-      setTimeout(() => {
-        alert(`🎉 +${points} APES earned for ${type}!\n\nTotal earned this session: ${pointsEarned + points} APES`);
-      }, 1000);
+      try {
+        // Queue validation instead of awarding points immediately
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/queue-engagement-check`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-wallet-address': publicKey.toString(),
+          },
+          body: JSON.stringify({
+            tweet_id: postId,
+            engagement_type: type,
+            tweet_url: post.url
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          
+          // Update pending validations
+          setPendingValidations(prev => ({
+            ...prev,
+            [validationKey]: {
+              tweet_id: postId,
+              engagement_type: type,
+              status: 'pending',
+              created_at: new Date().toISOString()
+            }
+          }));
+
+          // Show success message
+          const points = type === 'like' ? 5 : type === 'repost' ? 10 : 15;
+          setTimeout(() => {
+            alert(`🔄 ${type} queued for validation!\n\nWe'll check your ${type} in a few seconds and award ${points} APES if verified.`);
+          }, 1000);
+        } else {
+          throw new Error('Failed to queue validation');
+        }
+      } catch (error) {
+        console.error('Error queuing validation:', error);
+        alert('❌ Failed to queue validation. Please try again.');
+      }
     }
 
     setTimeout(() => {
@@ -67,11 +155,23 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
   const formatTimeAgo = (dateString) => {
     const now = new Date();
     const date = new Date(dateString);
-    const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
     
-    if (diffInHours < 1) return 'now';
-    if (diffInHours < 24) return `${diffInHours}h`;
-    return `${Math.floor(diffInHours / 24)}d`;
+    if (diffInMinutes < 1) return 'now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h`;
+    return `${Math.floor(diffInMinutes / 1440)}d`;
+  };
+
+  const getValidationStatus = (postId, type) => {
+    const key = `${postId}-${type}`;
+    const validation = pendingValidations[key];
+    
+    if (engagements[postId]?.[type]) return 'completed';
+    if (validation?.status === 'pending') return 'pending';
+    if (validation?.status === 'failed') return 'failed';
+    if (validation?.status === 'error') return 'error';
+    return 'none';
   };
 
   // Check if user is authenticated but not linked (show different message)
@@ -135,7 +235,7 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
           <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <FaXTwitter className="text-gray-900 dark:text-gray-100" />
             @PrimapeApp Latest Posts
-            {posts.length > 0 && posts[0].isRealData && (
+            {posts.length > 0 && posts[0].profile_image_url && (
               <span className="bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs px-2 py-1 rounded-full font-normal">
                 Live
               </span>
@@ -168,20 +268,13 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
         ) : postsError ? (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-6 text-center">
             <FaXTwitter className="text-2xl mx-auto mb-2 text-amber-600 dark:text-amber-400" />
-            <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
-              {posts.length > 0 && !posts[0].isRealData ? 'Using Fallback Content' : 'Connection Issue'}
-            </h4>
+            <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">Connection Issue</h4>
             <p className="text-amber-700 dark:text-amber-300 mb-4 text-sm">{postsError}</p>
-            {posts.length > 0 && !posts[0].isRealData && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">
-                📡 Server is updating with the fixed Twitter API. Real tweets will appear automatically once complete.
-              </p>
-            )}
             <button
               onClick={onRefreshPosts}
               className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
             >
-              {posts.length > 0 && !posts[0].isRealData ? 'Check for Real Tweets' : 'Try Again'}
+              Try Again
             </button>
           </div>
         ) : posts.length === 0 ? (
@@ -189,132 +282,138 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
             <p className="text-gray-600 dark:text-gray-400">No posts available</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {posts.map(post => {
             const postEngagements = engagements[post.id] || {};
             
             return (
-              <div key={post.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:shadow-lg dark:hover:shadow-gray-900/50 transition-all">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                      <FaXTwitter className="text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                        @PrimapeApp
-                        <span className="text-blue-500">✓</span>
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {formatTimeAgo(post.created_at)}
-                      </div>
+              <div key={post.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all cursor-pointer">
+                {/* X-like Tweet Header */}
+                <div className="flex items-start p-4 space-x-3">
+                  {/* Profile Picture */}
+                  <div className="flex-shrink-0">
+                    {post.profile_image_url ? (
+                      <img 
+                        src={post.profile_image_url} 
+                        alt="@PrimapeApp"
+                        className="w-12 h-12 rounded-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div className={`w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center ${post.profile_image_url ? 'hidden' : ''}`}>
+                      <FaXTwitter className="text-blue-600 dark:text-blue-400 text-lg" />
                     </div>
                   </div>
+                  
+                  {/* Tweet Content */}
+                  <div className="flex-1 min-w-0">
+                    {/* User Info */}
+                    <div className="flex items-center space-x-1 mb-1">
+                      <span className="font-bold text-gray-900 dark:text-gray-100">PrimapeApp</span>
+                      {post.author_verified && (
+                        <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                      <span className="text-gray-500 dark:text-gray-400">@PrimapeApp</span>
+                      <span className="text-gray-500 dark:text-gray-400">·</span>
+                      <span className="text-gray-500 dark:text-gray-400 text-sm">
+                        {formatTimeAgo(post.created_at)}
+                      </span>
+                    </div>
+                    
+                    {/* Tweet Text */}
+                    <div className="text-gray-900 dark:text-gray-100 text-[15px] leading-normal mb-3 whitespace-pre-line">
+                      {post.text}
+                    </div>
+                    
+                    {/* Media */}
+                    {post.media_urls && post.media_urls.length > 0 && (
+                      <div className="mb-3 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                        {post.media_urls.map((media, index) => (
+                          <img 
+                            key={index}
+                            src={media.url} 
+                            alt="Tweet media"
+                            className="w-full max-h-96 object-cover"
+                          />
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Engagement Stats */}
+                    <div className="flex items-center space-x-6 text-gray-500 dark:text-gray-400 text-sm mb-3">
+                      <span>{post.engagement_stats?.reply_count || post.engagement_stats?.comments || 0}</span>
+                      <span>{post.engagement_stats?.retweet_count || post.engagement_stats?.retweets || 0}</span>
+                      <span>{post.engagement_stats?.like_count || post.engagement_stats?.likes || 0}</span>
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-between max-w-md">
+                      {['like', 'repost', 'comment'].map(type => {
+                        const status = getValidationStatus(post.id, type);
+                        const Icon = type === 'like' ? FaHeart : type === 'repost' ? FaRetweet : FaComment;
+                        const points = getEngagementPoints(type);
+                        
+                        return (
+                          <button
+                            key={type}
+                            onClick={() => isAuthenticated ? handleEngagement(post.id, type) : alert('🔗 Please link your 𝕏 account first!')}
+                            disabled={!isAuthenticated || status === 'completed' || status === 'pending' || isVerifying[`${post.id}-${type}`]}
+                            className={`flex items-center space-x-2 px-3 py-2 rounded-full transition-all text-sm font-medium group ${
+                              !isAuthenticated
+                                ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                : status === 'completed'
+                                ? type === 'like' 
+                                  ? 'text-red-600 bg-red-50 dark:bg-red-900/20' 
+                                  : type === 'repost'
+                                  ? 'text-green-600 bg-green-50 dark:bg-green-900/20'
+                                  : 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                                : status === 'pending'
+                                ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/20'
+                                : status === 'failed'
+                                ? 'text-gray-400 bg-gray-50 dark:bg-gray-800'
+                                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                            }`}
+                          >
+                            <Icon className={`${status === 'completed' && type === 'like' ? 'fill-current' : ''}`} />
+                            {!isAuthenticated ? (
+                              <span>Link 𝕏</span>
+                            ) : isVerifying[`${post.id}-${type}`] ? (
+                              <span>Opening...</span>
+                            ) : status === 'completed' ? (
+                              <span className="flex items-center space-x-1">
+                                <FaCheckCircle className="text-green-500" />
+                                <span>Done</span>
+                              </span>
+                            ) : status === 'pending' ? (
+                              <span className="flex items-center space-x-1">
+                                <FaClock />
+                                <span>Validating...</span>
+                              </span>
+                            ) : status === 'failed' ? (
+                              <span>Try Again</span>
+                            ) : (
+                              <span>+{points}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  {/* External Link */}
                   <a
                     href={post.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                   >
-                    <FaExternalLinkAlt />
+                    <FaExternalLinkAlt className="text-sm" />
                   </a>
-                </div>
-
-                <p className="text-gray-800 dark:text-gray-200 mb-4 whitespace-pre-line leading-relaxed">
-                  {post.text}
-                </p>
-
-                {/* Engagement Stats */}
-                <div className="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  <span>{post.engagement_stats.like_count || post.engagement_stats.likes || 0} likes</span>
-                  <span>{post.engagement_stats.retweet_count || post.engagement_stats.retweets || 0} reposts</span>
-                  <span>{post.engagement_stats.reply_count || post.engagement_stats.comments || 0} comments</span>
-                </div>
-
-                <div className="flex items-center gap-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <button
-                    onClick={() => isAuthenticated ? handleEngagement(post.id, 'like') : alert('🔗 Please link your 𝕏 account first!\n\nGo to Profile → Link 𝕏 Account to start earning points.')}
-                    disabled={!isAuthenticated || postEngagements.like || isVerifying[`${post.id}-like`]}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
-                      !isAuthenticated
-                        ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60'
-                        : postEngagements.like
-                        ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 cursor-default'
-                        : isVerifying[`${post.id}-like`]
-                        ? 'bg-gray-200 dark:bg-gray-600 text-gray-500 cursor-wait'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400'
-                    }`}
-                  >
-                    <FaHeart className={postEngagements.like ? 'fill-current' : ''} />
-                    {!isAuthenticated ? (
-                      'Link 𝕏 to Like'
-                    ) : isVerifying[`${post.id}-like`] ? (
-                      'Verifying...'
-                    ) : postEngagements.like ? (
-                      <span className="flex items-center gap-1">
-                        <FaCheckCircle className="text-green-500" />
-                        Liked
-                      </span>
-                    ) : (
-                      `+${getEngagementPoints('like')} pts`
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => isAuthenticated ? handleEngagement(post.id, 'repost') : alert('🔗 Please link your 𝕏 account first!\n\nGo to Profile → Link 𝕏 Account to start earning points.')}
-                    disabled={!isAuthenticated || postEngagements.repost || isVerifying[`${post.id}-repost`]}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
-                      !isAuthenticated
-                        ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60'
-                        : postEngagements.repost
-                        ? 'bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 cursor-default'
-                        : isVerifying[`${post.id}-repost`]
-                        ? 'bg-gray-200 dark:bg-gray-600 text-gray-500 cursor-wait'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-green-100 dark:hover:bg-green-900/20 hover:text-green-600 dark:hover:text-green-400'
-                    }`}
-                  >
-                    <FaRetweet />
-                    {!isAuthenticated ? (
-                      'Link 𝕏 to Repost'
-                    ) : isVerifying[`${post.id}-repost`] ? (
-                      'Verifying...'
-                    ) : postEngagements.repost ? (
-                      <span className="flex items-center gap-1">
-                        <FaCheckCircle className="text-green-500" />
-                        Reposted
-                      </span>
-                    ) : (
-                      `+${getEngagementPoints('repost')} pts`
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => isAuthenticated ? handleEngagement(post.id, 'comment') : alert('🔗 Please link your 𝕏 account first!\n\nGo to Profile → Link 𝕏 Account to start earning points.')}
-                    disabled={!isAuthenticated || postEngagements.comment || isVerifying[`${post.id}-comment`]}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
-                      !isAuthenticated
-                        ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60'
-                        : postEngagements.comment
-                        ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 cursor-default'
-                        : isVerifying[`${post.id}-comment`]
-                        ? 'bg-gray-200 dark:bg-gray-600 text-gray-500 cursor-wait'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400'
-                    }`}
-                  >
-                    <FaComment />
-                    {!isAuthenticated ? (
-                      'Link 𝕏 to Comment'
-                    ) : isVerifying[`${post.id}-comment`] ? (
-                      'Verifying...'
-                    ) : postEngagements.comment ? (
-                      <span className="flex items-center gap-1">
-                        <FaCheckCircle className="text-green-500" />
-                        Commented
-                      </span>
-                    ) : (
-                      `+${getEngagementPoints('comment')} pts`
-                    )}
-                  </button>
                 </div>
               </div>
             );
@@ -322,35 +421,38 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
         </div>
         )}
 
-        <div className="mt-6 text-center">
-          <button
-            onClick={onLoadMorePosts}
-            disabled={postsLoading}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {postsLoading ? (
-              <>
-                <FaSpinner className="animate-spin" />
-                Loading More...
-              </>
-            ) : (
-              <>
-                <FaXTwitter />
-                Load More Posts
-              </>
-            )}
-          </button>
-          <div className="mt-2">
-            <a
-              href="https://twitter.com/PrimapeApp"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 dark:text-blue-400 hover:underline text-sm flex items-center gap-1 justify-center"
+        {/* Load More Posts Button - Only show if we have real tweets */}
+        {posts.length > 0 && posts[0].profile_image_url && (
+          <div className="mt-6 text-center">
+            <button
+              onClick={onLoadMorePosts}
+              disabled={postsLoading}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Follow @PrimapeApp <FaExternalLinkAlt className="text-xs" />
-            </a>
+              {postsLoading ? (
+                <>
+                  <FaSpinner className="animate-spin" />
+                  Loading More...
+                </>
+              ) : (
+                <>
+                  <FaXTwitter />
+                  Load More Posts
+                </>
+              )}
+            </button>
+            <div className="mt-2">
+              <a
+                href="https://twitter.com/PrimapeApp"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 dark:text-blue-400 hover:underline text-sm flex items-center gap-1 justify-center"
+              >
+                Follow @PrimapeApp <FaExternalLinkAlt className="text-xs" />
+              </a>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -476,79 +578,53 @@ const EngageToEarnPage = () => {
       console.log('🐦 Fetched posts data:', data);
       console.log('🔍 API source:', data.source);
       
-      // Check if we got real API data or fallback
-      const isRealData = data.source === 'api' || (data.source !== 'fallback' && data.source !== 'simplified_test_version' && data.source !== 'emergency_fallback');
+      // Only accept real data or cached data
+      const isRealData = data.source === 'api' || data.source === 'database_cache';
       
-      if (!isRealData) {
-        console.warn('⚠️ API returned fallback data. Source:', data.source);
-        setPostsError(`Using fallback tweets (API source: ${data.source}). Real tweets will load once server restarts.`);
+      if (!isRealData || data.tweets.length === 0) {
+        console.warn('⚠️ No real tweets available. Source:', data.source);
+        setPostsError('No tweets available. Please check back later when the API is working.');
+        setPosts([]);
+        return;
       }
       
       // Transform API response to match the expected format
-      const transformedPosts = (data.tweets || []).map(tweet => ({
+      const transformedPosts = data.tweets.map(tweet => ({
         id: tweet.id,
         text: tweet.text,
         created_at: tweet.created_at,
         author_username: 'PrimapeApp',
         url: `https://twitter.com/PrimapeApp/status/${tweet.id}`,
-        engagement_stats: tweet.public_metrics || { 
-          like_count: tweet.public_metrics?.like_count || 0, 
-          retweet_count: tweet.public_metrics?.retweet_count || 0, 
-          reply_count: tweet.public_metrics?.reply_count || 0 
-        },
-        isRealData: isRealData
+        profile_image_url: tweet.profile_image_url,
+        author_verified: tweet.author_verified,
+        media_urls: tweet.media_urls,
+        engagement_stats: tweet.engagement_stats || tweet.public_metrics || { 
+          like_count: 0, 
+          retweet_count: 0, 
+          reply_count: 0 
+        }
       }));
       
-      if (transformedPosts.length > 0) {
-        setPosts(transformedPosts);
-        
-        if (isRealData) {
-          setPostsError(null);
-          console.log('✅ Real @PrimapeApp tweets loaded successfully!');
-        }
-      } else {
-        throw new Error('No tweets returned from API');
-      }
+      setPosts(transformedPosts);
+      setPostsError(null);
+      console.log('✅ Real @PrimapeApp tweets loaded successfully!');
+      
     } catch (error) {
       console.error('❌ Error fetching @PrimapeApp posts:', error);
-      setPostsError('Failed to load real tweets - using demo content. Please try refreshing in a few minutes.');
-      
-      // Enhanced fallback with multiple demo posts
-      setPosts([
-        {
-          id: 'demo-post-1',
-          text: '🔥 FIFA Club World Cup 2025 Tournament is LIVE!\n\n💰 25,000 APES Prize Pool\n🏆 Join now and earn instant rewards\n⚡ Early bird bonus still available!\n\n🚀 apes.primape.app/tournaments\n\n#PredictionMarkets #FIFA #ClubWorldCup #Web3',
-          created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          author_username: 'PrimapeApp',
-          url: 'https://twitter.com/PrimapeApp',
-          engagement_stats: { like_count: 45, retweet_count: 12, reply_count: 8 },
-          isRealData: false
-        },
-        {
-          id: 'demo-post-2',
-          text: 'GM Apes! 🦍\n\nReady to make some epic predictions today?\n\n✨ New markets added daily\n💎 Earn APES points for every prediction\n🎯 Tournament leaderboards heating up\n\nWhat\'s your play today? 👀\n\n#GM #PredictionMarkets #Solana',
-          created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-          author_username: 'PrimapeApp',
-          url: 'https://twitter.com/PrimapeApp',
-          engagement_stats: { like_count: 23, retweet_count: 6, reply_count: 4 },
-          isRealData: false
-        },
-        {
-          id: 'demo-post-3',
-          text: '🎉 Community Milestone Alert! 🎉\n\n✅ 1,000+ Active Predictors\n✅ 500+ Markets Created\n✅ 100,000+ Predictions Made\n✅ 50,000+ APES Distributed\n\nThanks to our amazing community! The future of prediction markets is bright 🚀\n\n#Community #Milestones #Web3',
-          created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-          author_username: 'PrimapeApp',
-          url: 'https://twitter.com/PrimapeApp',
-          engagement_stats: { like_count: 67, retweet_count: 18, reply_count: 12 },
-          isRealData: false
-        }
-      ]);
+      setPostsError('Failed to load tweets. Please try refreshing.');
+      setPosts([]); // No fallback tweets - keep empty
     } finally {
       setPostsLoading(false);
     }
   };
 
   const loadMorePosts = async () => {
+    // Only allow loading more if we have real tweets
+    if (posts.length === 0 || !posts[0].profile_image_url) {
+      console.log('❌ Cannot load more - no real tweets available');
+      return;
+    }
+
     try {
       setPostsLoading(true);
       const newOffset = postsOffset + 10;
@@ -562,27 +638,36 @@ const EngageToEarnPage = () => {
       }
       
       const data = await response.json();
+      
+      // Only accept real data
+      if (data.source !== 'api' && data.source !== 'database_cache') {
+        console.log('❌ Load more failed - no real data available');
+        return;
+      }
+      
       const newPosts = data.tweets.map(tweet => ({
         id: tweet.id,
         text: tweet.text,
         created_at: tweet.created_at,
         author_username: 'PrimapeApp',
         url: `https://twitter.com/PrimapeApp/status/${tweet.id}`,
-        engagement_stats: {
-          like_count: tweet.public_metrics?.like_count || 0,
-          retweet_count: tweet.public_metrics?.retweet_count || 0,
-          reply_count: tweet.public_metrics?.reply_count || 0
-        },
-        isRealData: data.source === 'database' || data.source === 'api_fresh'
+        profile_image_url: tweet.profile_image_url,
+        author_verified: tweet.author_verified,
+        media_urls: tweet.media_urls,
+        engagement_stats: tweet.engagement_stats || tweet.public_metrics || { 
+          like_count: 0, 
+          retweet_count: 0, 
+          reply_count: 0 
+        }
       }));
       
-      // Only append if we got new posts
-      if (newPosts.length > 0) {
+      // Only append if we got new real posts
+      if (newPosts.length > 0 && newPosts[0].profile_image_url) {
         setPosts(prev => [...prev, ...newPosts]);
         setPostsOffset(newOffset);
-        console.log(`✅ Loaded ${newPosts.length} more posts`);
+        console.log(`✅ Loaded ${newPosts.length} more real posts`);
       } else {
-        console.log('📭 No more posts available');
+        console.log('📭 No more real posts available');
       }
       
     } catch (error) {
