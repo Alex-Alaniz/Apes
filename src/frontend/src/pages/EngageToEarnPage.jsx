@@ -218,6 +218,92 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
   const isAuthenticated = !!publicKey;
   const isLinked = twitterLinked;
 
+  const renderEngagementButton = (tweet, engagementType) => {
+    const key = `${tweet.id}_${engagementType}`;
+    const status = pendingValidations[key]?.status || 'idle';
+    
+    // Check Twitter linking status first
+    if (!isLinked) {
+      return (
+        <button
+          onClick={() => window.open('/api/twitter/auth', '_blank')}
+          className="flex items-center gap-1 px-3 py-1 rounded-full border border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-sm"
+        >
+          Link X
+        </button>
+      );
+    }
+
+    // Handle different validation statuses
+    switch (status) {
+      case 'not_linked':
+        return (
+          <button
+            onClick={() => window.open('/api/twitter/auth', '_blank')}
+            className="flex items-center gap-1 px-3 py-1 rounded-full border border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-sm"
+          >
+            Link X
+          </button>
+        );
+
+      case 'auth_expired':
+        return (
+          <button
+            onClick={() => window.open('/api/twitter/auth', '_blank')}
+            className="flex items-center gap-1 px-3 py-1 rounded-full border border-orange-500 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors text-sm"
+          >
+            Re-link X
+          </button>
+        );
+
+      case 'validating':
+        return (
+          <button
+            disabled
+            className="flex items-center gap-1 px-3 py-1 rounded-full border border-gray-400 text-gray-500 cursor-not-allowed text-sm"
+          >
+            <FaSpinner className="animate-spin text-xs" />
+            Validating...
+          </button>
+        );
+
+      case 'validated':
+        const validatedConfig = getValidationMessage(status, engagementType);
+        return (
+          <button
+            disabled
+            className="flex items-center gap-1 px-3 py-1 rounded-full border border-green-500 text-green-600 dark:text-green-400 cursor-default text-sm"
+          >
+            {validatedConfig.icon}
+            Done
+          </button>
+        );
+
+      case 'failed':
+      case 'error':
+        return (
+          <button
+            onClick={() => handleEngagement(tweet.id, engagementType)}
+            className="flex items-center gap-1 px-3 py-1 rounded-full border border-red-500 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-sm"
+          >
+            Try Again
+          </button>
+        );
+
+      default:
+        const defaultConfig = getValidationMessage(status, engagementType);
+        return (
+          <button
+            onClick={() => handleEngagement(tweet.id, engagementType)}
+            className="flex items-center gap-1 px-3 py-1 rounded-full border border-gray-600 dark:border-gray-400 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm"
+          >
+            {defaultConfig.icon}
+            {defaultConfig.text}
+          </button>
+        );
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Twitter Authentication Banner for non-authenticated users */}
@@ -305,28 +391,34 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
             )}
           </h3>
           <div className="flex items-center gap-3">
+            <span className="text-blue-600 dark:text-blue-400">Live</span>
             <button
               onClick={onRefreshPosts}
               disabled={postsLoading}
-              className="text-blue-600 dark:text-blue-400 hover:underline text-sm flex items-center gap-1"
+              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 text-sm transition-colors disabled:opacity-50"
+              title="Refresh posts"
             >
-              {postsLoading ? 'Loading...' : 'Refresh'}
+              Refresh
             </button>
-            {publicKey && (
-              <button
-                onClick={refreshCache}
-                disabled={postsLoading}
-                className="text-green-600 dark:text-green-400 hover:underline text-sm flex items-center gap-1"
-                title="Manually trigger tweet cache refresh"
-              >
-                🔄 Force Update
-              </button>
+            {/* Only show Force Update to admins */}
+            {isAdmin && (
+              <>
+                <span className="text-gray-400">•</span>
+                <button
+                  onClick={onForceUpdate}
+                  disabled={postsLoading}
+                  className="text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300 flex items-center gap-1 text-sm transition-colors disabled:opacity-50"
+                  title="Force update cache (Admin only)"
+                >
+                  🔄 Force Update
+                </button>
+              </>
             )}
             <a
               href="https://twitter.com/PrimapeApp"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 dark:text-blue-400 hover:underline text-sm flex items-center gap-1"
+              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 text-sm transition-colors"
             >
               Follow <FaExternalLinkAlt className="text-xs" />
             </a>
@@ -442,42 +534,9 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
                     
                     {/* Action Buttons */}
                     <div className="flex items-center justify-between max-w-md">
-                      {['like', 'repost', 'comment'].map(type => {
-                        const status = getValidationStatus(post.id, type);
-                        const { icon: Icon, text, color } = getValidationMessage(status, type);
-                        
-                        return (
-                          <button
-                            key={type}
-                            onClick={() => {
-                              if (!isAuthenticated) {
-                                alert('🔗 Please link your 𝕏 account first!');
-                                return;
-                              }
-                              if (status === 'none') {
-                                handleEngagement(post.id, type);
-                              } else {
-                                handleValidationClick(post.id, type, status);
-                              }
-                            }}
-                            disabled={status === 'completed' || status === 'pending' || isVerifying[`${post.id}-${type}`]}
-                            className={`flex items-center space-x-2 px-3 py-2 rounded-full transition-all text-sm font-medium group ${
-                              !isAuthenticated
-                                ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                : color
-                            }`}
-                          >
-                            <Icon className={`${status === 'completed' && type === 'like' ? 'fill-current' : ''}`} />
-                            {!isAuthenticated ? (
-                              <span>Link 𝕏</span>
-                            ) : isVerifying[`${post.id}-${type}`] ? (
-                              <span>Opening...</span>
-                            ) : (
-                              <span>{text}</span>
-                            )}
-                          </button>
-                        );
-                      })}
+                      {['like', 'repost', 'comment'].map(type => 
+                        renderEngagementButton(post, type)
+                      )}
                     </div>
                   </div>
                   
@@ -500,9 +559,12 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
         {/* Load More Posts Button - Only show if we have cached tweets */}
         {posts.length > 0 && posts[0].profile_image_url && (
           <div className="mt-6 text-center">
-            <div className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-              📅 Cached tweets from the last 48 hours • Updated every 2-3 hours
-            </div>
+            {/* Only show cache info to admins */}
+            {isAdmin && (
+              <div className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+                📅 Cached tweets from the last 48 hours • Updated every 2-3 hours
+              </div>
+            )}
             <button
               onClick={onLoadMorePosts}
               disabled={postsLoading}
@@ -516,7 +578,7 @@ const TwitterEngagement = ({ twitterLinked, posts, postsLoading, postsError, onR
               ) : (
                 <>
                   <FaXTwitter />
-                  Load More Cached Posts
+                  Load More Posts
                 </>
               )}
             </button>
@@ -585,15 +647,17 @@ const EngageToEarnPage = () => {
         console.log('🔍 EngageToEarn: User data received:', {
           wallet: data.wallet_address,
           hasTwitter: !!data.twitter_username,
-          twitterUsername: data.twitter_username
+          twitterUsername: data.twitter_username,
+          twitterId: data.twitter_id
         });
         
         setUserProfile(data);
-        const twitterLinked = !!(data.twitter_username && data.twitter_username.trim());
+        // More robust Twitter link detection
+        const twitterLinked = !!(data.twitter_username && data.twitter_username.trim() && data.twitter_id);
         setIsTwitterLinked(twitterLinked);
         
         if (twitterLinked) {
-          console.log('✅ EngageToEarn: Twitter linked detected:', data.twitter_username);
+          console.log('✅ EngageToEarn: Twitter linked detected:', data.twitter_username, 'ID:', data.twitter_id);
         } else {
           console.log('❌ EngageToEarn: No Twitter linked for this wallet');
         }
@@ -843,6 +907,47 @@ const EngageToEarnPage = () => {
     ).join(' ');
   };
 
+  // Check if user is admin (check for admin role or specific wallet addresses)
+  const isAdmin = userProfile?.role === 'admin' || 
+                  userProfile?.is_admin === true ||
+                  // Add your admin wallet addresses here
+                  ['9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM'].includes(publicKey?.toString());
+
+  const onRefreshPosts = () => {
+    setPosts([]);
+    fetchPrimapePosts();
+  };
+
+  const onForceUpdate = async () => {
+    if (!publicKey) return;
+    
+    try {
+      setPostsLoading(true);
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/twitter/refresh-cache`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-address': publicKey.toString()
+        }
+      });
+      
+      if (response.ok) {
+        console.log('✅ Force update triggered successfully');
+        // Wait a moment then refresh
+        setTimeout(() => {
+          onRefreshPosts();
+        }, 2000);
+      } else {
+        console.error('❌ Force update failed:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ Error triggering force update:', error);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
   if (!publicKey) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -1028,7 +1133,7 @@ const EngageToEarnPage = () => {
               posts={posts}
               postsLoading={postsLoading}
               postsError={postsError}
-              onRefreshPosts={fetchPrimapePosts}
+              onRefreshPosts={onRefreshPosts}
               onRefreshAuth={checkTwitterStatus}
               onLoadMorePosts={loadMorePosts}
               refreshCache={refreshCache}

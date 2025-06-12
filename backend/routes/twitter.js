@@ -310,22 +310,57 @@ router.post('/queue-engagement-check', async (req, res) => {
         try {
           console.log(`🔄 Validating queued ${engagement_type} for tweet ${tweet_id}`);
           
-          // First check if user has linked Twitter account
-          const twitterAccount = await require('../config/database').query(
+          // First check if user has linked Twitter account in wallet_twitter_links
+          const twitterLinkResult = await require('../config/database').query(
             'SELECT twitter_id FROM wallet_twitter_links WHERE wallet_address = $1',
             [userAddress]
           );
 
-          if (twitterAccount.rows.length === 0) {
+          if (twitterLinkResult.rows.length === 0) {
             console.log(`⚠️ User ${userAddress} has not linked Twitter account`);
             await require('../config/database').query(
               `UPDATE pending_twitter_validations 
-               SET status = 'failed', validated_at = NOW(), points_awarded = 0
+               SET status = 'not_linked', validated_at = NOW(), points_awarded = 0
                WHERE user_address = $1 AND tweet_id = $2 AND engagement_type = $3`,
               [userAddress, tweet_id, engagement_type]
             );
             return;
           }
+
+          const twitterId = twitterLinkResult.rows[0].twitter_id;
+          console.log(`✅ Found Twitter link for wallet ${userAddress}: Twitter ID ${twitterId}`);
+
+          // Check if we have valid OAuth tokens for this Twitter account
+          const tokenResult = await require('../config/database').query(
+            'SELECT access_token, refresh_token, expires_at FROM twitter_oauth_tokens WHERE twitter_id = $1',
+            [twitterId]
+          );
+
+          if (tokenResult.rows.length === 0) {
+            console.log(`⚠️ No OAuth tokens found for Twitter ID ${twitterId}`);
+            await require('../config/database').query(
+              `UPDATE pending_twitter_validations 
+               SET status = 'auth_expired', validated_at = NOW(), points_awarded = 0
+               WHERE user_address = $1 AND tweet_id = $2 AND engagement_type = $3`,
+              [userAddress, tweet_id, engagement_type]
+            );
+            return;
+          }
+
+          // Check if tokens are expired
+          const { expires_at } = tokenResult.rows[0];
+          if (new Date() >= new Date(expires_at)) {
+            console.log(`⚠️ OAuth tokens expired for Twitter ID ${twitterId}`);
+            await require('../config/database').query(
+              `UPDATE pending_twitter_validations 
+               SET status = 'auth_expired', validated_at = NOW(), points_awarded = 0
+               WHERE user_address = $1 AND tweet_id = $2 AND engagement_type = $3`,
+              [userAddress, tweet_id, engagement_type]
+            );
+            return;
+          }
+
+          console.log(`✅ Valid OAuth tokens found for Twitter ID ${twitterId}, proceeding with validation`);
 
           const validationResult = await twitterService.validateEngagement(userAddress, tweet_id, engagement_type);
           
