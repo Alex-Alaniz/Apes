@@ -258,21 +258,21 @@ const ClubWorldCupMatches = ({ tournamentAssets }) => {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-right min-w-[120px]">
-              {tournamentAssets?.teamLogos?.[match.home] && (
-                <img 
-                  src={tournamentAssets.teamLogos[match.home]} 
-                  alt={match.home}
-                  className="w-6 h-6 rounded-full object-cover"
-                />
-              )}
+                          {tournamentAssets?.team_logos?.[match.home] && (
+              <img 
+                src={tournamentAssets.team_logos[match.home]} 
+                alt={match.home}
+                className="w-6 h-6 rounded-full object-cover"
+              />
+            )}
               <div className="font-bold text-gray-900 dark:text-white text-sm">{match.home}</div>
             </div>
             <div className="text-gray-400 font-bold">vs</div>
             <div className="flex items-center gap-2 text-left min-w-[120px]">
               <div className="font-bold text-gray-900 dark:text-white text-sm">{match.away}</div>
-              {tournamentAssets?.teamLogos?.[match.away] && (
+              {tournamentAssets?.team_logos?.[match.away] && (
                 <img 
-                  src={tournamentAssets.teamLogos[match.away]} 
+                  src={tournamentAssets.team_logos[match.away]} 
                   alt={match.away}
                   className="w-6 h-6 rounded-full object-cover"
                 />
@@ -757,8 +757,8 @@ const TournamentDetailPage = () => {
         const data = await response.json();
         setTournamentAssets({
           assets: data.assets || {},
-          teamLogos: data.team_logos || {},
-          matchBanners: data.match_banners || {}
+          team_logos: data.team_logos || {},
+          match_banners: data.match_banners || {}
         });
         console.log('✅ Loaded tournament assets:', data);
       } else {

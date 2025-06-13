@@ -61,6 +61,7 @@ const MOCK_TOURNAMENTS = [
 
 const TournamentsPage = () => {
   const [tournaments, setTournaments] = useState(MOCK_TOURNAMENTS);
+  const [tournamentAssets, setTournamentAssets] = useState({});
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [selectedFilters, setSelectedFilters] = useState({
@@ -78,6 +79,7 @@ const TournamentsPage = () => {
 
   useEffect(() => {
     loadTournaments();
+    loadTournamentAssets();
     if (connected && publicKey) {
       loadUserTournaments();
     }
@@ -101,6 +103,36 @@ const TournamentsPage = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTournamentAssets = async () => {
+    try {
+      const assets = {};
+      
+      // Load assets for each tournament
+      for (const tournament of MOCK_TOURNAMENTS) {
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/tournaments/${tournament.id}/details`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            assets[tournament.id] = {
+              banner: data.assets?.banner,
+              icon: data.assets?.icon,
+              team_logos: data.team_logos || {},
+              match_banners: data.match_banners || {}
+            };
+          }
+        } catch (error) {
+          console.error(`Error loading assets for tournament ${tournament.id}:`, error);
+        }
+      }
+      
+      setTournamentAssets(assets);
+      console.log('✅ Loaded tournament assets:', assets);
+    } catch (error) {
+      console.error('Error loading tournament assets:', error);
     }
   };
 
@@ -332,15 +364,24 @@ const TournamentsPage = () => {
                   Available Tournaments ({filteredTournaments.length})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredTournaments.map(tournament => (
-                    <TournamentCard
-                      key={tournament.id}
-                      tournament={tournament}
-                      onJoinTournament={handleJoinTournament}
-                      isParticipating={userTournaments.has(tournament.id)}
-                      userRank={null}
-                    />
-                  ))}
+                  {filteredTournaments.map(tournament => {
+                    // Merge tournament data with assets
+                    const tournamentWithAssets = {
+                      ...tournament,
+                      banner: tournamentAssets[tournament.id]?.banner || tournament.banner,
+                      icon: tournamentAssets[tournament.id]?.icon || tournament.banner
+                    };
+                    
+                    return (
+                      <TournamentCard
+                        key={tournament.id}
+                        tournament={tournamentWithAssets}
+                        onJoinTournament={handleJoinTournament}
+                        isParticipating={userTournaments.has(tournament.id)}
+                        userRank={null}
+                      />
+                    );
+                  })}
                 </div>
               </section>
             )}

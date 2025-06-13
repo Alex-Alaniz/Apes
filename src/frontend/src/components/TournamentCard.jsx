@@ -121,17 +121,32 @@ const TournamentCard = ({
       <div className="p-5">
         {/* Tournament Title and Category */}
         <div className="mb-3">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs text-purple-400 font-medium uppercase tracking-wide">
-              {tournament.category || 'Tournament'}
-            </span>
-            {tournament.isOfficial && (
-              <Star className="w-3 h-3 text-yellow-400" />
+          <div className="flex items-center gap-3">
+            {/* Tournament Icon */}
+            {tournament.icon && (
+              <img 
+                src={tournament.icon} 
+                alt={tournament.name}
+                className="w-12 h-12 rounded-lg object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
             )}
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs text-purple-400 font-medium uppercase tracking-wide">
+                  {tournament.category || 'Tournament'}
+                </span>
+                {tournament.isOfficial && (
+                  <Star className="w-3 h-3 text-yellow-400" />
+                )}
+              </div>
+              <h3 className="text-lg font-bold text-white line-clamp-2">
+                {tournament.name}
+              </h3>
+            </div>
           </div>
-          <h3 className="text-lg font-bold text-white line-clamp-2">
-            {tournament.name}
-          </h3>
         </div>
 
         {/* Tournament Stats */}
