@@ -1,7 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { isWalletAuthorized } = require('../config/authorizedWallets');
+
+// List of authorized admin wallets (same as in admin.js)
+const AUTHORIZED_WALLETS = [
+  'APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z', // PRIMAPE Treasury
+  'APESxbwPNyJW62vSY83zENJwoL2gXJ8HbpXfkBGfnghe', // Community Treasury
+  'XgkAtCrgMcz63WBm6LR1uqEKDDJM4q6tLxRH7Dg6nSe', // New admin wallet
+];
+
+// Check if wallet is authorized
+const isWalletAuthorized = (walletAddress) => {
+  return AUTHORIZED_WALLETS.includes(walletAddress);
+};
 
 // Tournament entry endpoint
 router.post('/:tournamentId/join', async (req, res) => {
