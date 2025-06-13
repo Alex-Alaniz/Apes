@@ -406,12 +406,20 @@ const AdminTournamentPage = () => {
         });
 
         if (createResult.success && createResult.marketPubkey) {
-          console.log('✅ Market deployed on-chain:', createResult.marketPubkey);
+          // Ensure market address is a string
+          const marketAddress = createResult.marketPubkey.toString ? createResult.marketPubkey.toString() : createResult.marketPubkey;
+          console.log('✅ Market deployed on-chain:', marketAddress);
+          
+          // Validate the market address length
+          if (marketAddress.length > 44) {
+            console.error('⚠️ Market address too long:', marketAddress.length, 'characters');
+            console.error('Market address value:', marketAddress);
+          }
           
           // Now save to database with all metadata
           const marketData = {
-            market_address: createResult.marketPubkey,
-            creator_address: publicKey.toString(),
+            market_address: marketAddress,
+            creator: publicKey.toString(), // Changed from creator_address to creator
             question: question,
             description: `Club World Cup 2025 - ${match.round} ${match.group !== 'A' && match.group !== 'B' && match.group !== 'C' && match.group !== 'D' && match.group !== 'E' && match.group !== 'F' && match.group !== 'G' && match.group !== 'H' ? '' : `Group ${match.group}`} match between ${match.home} and ${match.away} at ${match.venue} on ${match.date}`,
             options: options,
@@ -422,7 +430,6 @@ const AdminTournamentPage = () => {
             resolution_date: resolutionDate.toISOString(),
             min_bet: 10,
             status: 'Active',
-            transaction_hash: createResult.transaction,
             assets: {
               banner: matchBanner,
               icon: tournamentAssets.icon
@@ -440,6 +447,11 @@ const AdminTournamentPage = () => {
           };
 
           console.log('💾 Saving market to database:', marketData);
+          console.log('📏 Field lengths:', {
+            market_address: marketData.market_address.length,
+            creator: marketData.creator.length, // Changed from creator_address
+            tournament_id: marketData.tournament_id.length
+          });
 
           // Save to database
           const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets`, {
@@ -460,8 +472,8 @@ const AdminTournamentPage = () => {
               matchId,
               match: `${match.home} - ${match.away}`,
               status: 'success',
-              message: `Market deployed on-chain (${optionCount}) at ${createResult.marketPubkey}`,
-              marketAddress: createResult.marketPubkey
+              message: `Market deployed on-chain (${optionCount}) at ${marketAddress}`,
+              marketAddress: marketAddress
             });
             setDeploymentStatus(prev => ({ ...prev, [matchId]: 'success' }));
           } else {
@@ -474,8 +486,8 @@ const AdminTournamentPage = () => {
               matchId,
               match: `${match.home} - ${match.away}`,
               status: 'warning',
-              message: `Market deployed on-chain at ${createResult.marketPubkey} but failed to save to database: ${errorMessage}`,
-              marketAddress: createResult.marketPubkey
+              message: `Market deployed on-chain at ${marketAddress} but failed to save to database: ${errorMessage}`,
+              marketAddress: marketAddress
             });
             setDeploymentStatus(prev => ({ ...prev, [matchId]: 'warning' }));
           }
