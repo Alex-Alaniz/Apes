@@ -57,7 +57,9 @@ const TournamentCard = ({
 
   // Calculate prize pool distribution
   const totalPrizePool = tournament.prizePool || 0;
-  const participantCount = tournament.participants?.length || 0;
+  const participantCount = typeof tournament.participants === 'number' 
+    ? tournament.participants 
+    : tournament.participants?.length || 0;
   const maxParticipants = tournament.maxParticipants || 1000;
 
   return (
@@ -95,11 +97,18 @@ const TournamentCard = ({
         {/* Prize Pool Badge */}
         <div className="absolute top-3 left-3">
           <div className="bg-yellow-500/20 backdrop-blur-sm rounded-lg px-3 py-1 border border-yellow-500/30">
-            <div className="flex items-center gap-1">
-              <DollarSign className="w-4 h-4 text-yellow-400" />
-              <span className="text-sm font-medium text-yellow-300">
-                {totalPrizePool >= 1000 ? `${(totalPrizePool / 1000).toFixed(1)}k` : totalPrizePool} APES
-              </span>
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1">
+                <DollarSign className="w-4 h-4 text-yellow-400" />
+                <span className="text-sm font-medium text-yellow-300">
+                  {totalPrizePool >= 1000 ? `${(totalPrizePool / 1000).toFixed(1)}k` : totalPrizePool} APES
+                </span>
+              </div>
+              {tournament.prizePoolSol > 0 && (
+                <span className="text-xs font-medium text-purple-300">
+                  + {tournament.prizePoolSol} SOL
+                </span>
+              )}
             </div>
           </div>
         </div>

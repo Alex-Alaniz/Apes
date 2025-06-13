@@ -27,8 +27,9 @@ const MOCK_TOURNAMENTS = [
     banner: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1893&q=80',
     startDate: '2025-06-14T00:00:00Z',
     endDate: '2025-07-13T23:59:59Z',
-    prizePool: 0, // Configured through admin
-    maxParticipants: 0, // Configured through admin
+    prizePool: 1000000, // 1,000,000 APES
+    prizePoolSol: 3, // 3 SOL
+    maxParticipants: 1000,
     participants: [],
     totalMarkets: 63,
     isOfficial: true,
@@ -36,7 +37,7 @@ const MOCK_TOURNAMENTS = [
     league: 'fifa-club-world-cup',
     status: 'upcoming',
     tournament_type: 'tournament',
-    additionalPrizes: [] // Configured through admin
+    additionalPrizes: []
   },
   {
     id: 'nba-finals-2025',
@@ -46,8 +47,9 @@ const MOCK_TOURNAMENTS = [
     banner: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2059&q=80',
     startDate: '2025-06-05T00:00:00Z',
     endDate: '2025-06-22T23:59:59Z',
-    prizePool: 0, // Configured through admin
-    maxParticipants: 0, // Configured through admin
+    prizePool: 500000, // 500,000 APES
+    prizePoolSol: 1.5, // 1.5 SOL
+    maxParticipants: 500,
     participants: [],
     totalMarkets: 15,
     isOfficial: true,
@@ -55,13 +57,14 @@ const MOCK_TOURNAMENTS = [
     league: 'nba',
     status: 'upcoming',
     tournament_type: 'tournament',
-    additionalPrizes: [] // Configured through admin
+    additionalPrizes: []
   }
 ];
 
 const TournamentsPage = () => {
   const [tournaments, setTournaments] = useState(MOCK_TOURNAMENTS);
   const [tournamentAssets, setTournamentAssets] = useState({});
+  const [participantCounts, setParticipantCounts] = useState({});
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [selectedFilters, setSelectedFilters] = useState({
@@ -80,6 +83,7 @@ const TournamentsPage = () => {
   useEffect(() => {
     loadTournaments();
     loadTournamentAssets();
+    loadParticipantCounts();
     if (connected && publicKey) {
       loadUserTournaments();
     }
@@ -136,15 +140,54 @@ const TournamentsPage = () => {
     }
   };
 
-  const loadUserTournaments = async () => {
+  const loadParticipantCounts = async () => {
     try {
-      // In a real app, fetch user's participating tournaments
-      // const response = await fetch(`/api/tournaments/user/${publicKey.toString()}`);
-      // const data = await response.json();
-      // setUserTournaments(new Set(data.tournamentIds));
+      const counts = {};
       
-      // Mock user participating in tournaments
-      setUserTournaments(new Set(['club-world-cup-2025', 'nba-finals-2025']));
+      // Load participant counts for each tournament
+      for (const tournament of MOCK_TOURNAMENTS) {
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/tournaments/${tournament.id}/leaderboard`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            counts[tournament.id] = data.totalParticipants || data.leaderboard?.length || 0;
+            console.log(`✅ Loaded participant count for ${tournament.id}:`, counts[tournament.id]);
+          }
+        } catch (error) {
+          console.error(`Error loading participant count for tournament ${tournament.id}:`, error);
+        }
+      }
+      
+      setParticipantCounts(counts);
+    } catch (error) {
+      console.error('Error loading participant counts:', error);
+    }
+  };
+
+  const loadUserTournaments = async () => {
+    if (!publicKey) return;
+    
+    try {
+      const participatingTournaments = new Set();
+      
+      // Check each tournament to see if user is participating
+      for (const tournament of MOCK_TOURNAMENTS) {
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/tournaments/${tournament.id}/status/${publicKey.toString()}`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.participating) {
+              participatingTournaments.add(tournament.id);
+            }
+          }
+        } catch (error) {
+          console.error(`Error checking participation for ${tournament.id}:`, error);
+        }
+      }
+      
+      setUserTournaments(participatingTournaments);
     } catch (error) {
       console.error('Error loading user tournaments:', error);
     }
@@ -267,7 +310,7 @@ const TournamentsPage = () => {
 
   const activeTournaments = filteredTournaments.filter(t => t.status === 'active');
   const totalPrizePool = tournaments.reduce((sum, t) => sum + (t.prizePool || 0), 0);
-  const totalParticipants = tournaments.reduce((sum, t) => sum + (t.participants?.length || 0), 0);
+  const totalParticipants = Object.values(participantCounts).reduce((sum, count) => sum + count, 0);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -365,11 +408,16 @@ const TournamentsPage = () => {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredTournaments.map(tournament => {
-                    // Merge tournament data with assets
+                    // Merge tournament data with assets and participant counts
                     const tournamentWithAssets = {
                       ...tournament,
                       banner: tournamentAssets[tournament.id]?.banner || tournament.banner,
-                      icon: tournamentAssets[tournament.id]?.icon || tournament.banner
+                      icon: tournamentAssets[tournament.id]?.icon || tournament.banner,
+                      participants: participantCounts[tournament.id] || 0,
+                      prizePoolDisplay: {
+                        apes: tournament.prizePool,
+                        sol: tournament.prizePoolSol || 0
+                      }
                     };
                     
                     return (
