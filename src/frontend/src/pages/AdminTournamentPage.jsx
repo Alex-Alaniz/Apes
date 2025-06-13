@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import {
   Trophy,
@@ -120,6 +120,46 @@ const AdminTournamentPage = () => {
     ? CLUB_WC_MATCHES 
     : CLUB_WC_MATCHES.filter(match => match.group === filterGroup);
 
+  // Load deployment status for existing markets
+  const loadDeploymentStatus = useCallback(async () => {
+    try {
+      console.log('📋 Loading deployment status for existing markets...');
+      
+      // Fetch all markets for this tournament
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=${TOURNAMENT_ID}`);
+      
+      if (response.ok) {
+        const markets = await response.json();
+        console.log(`📊 Found ${markets.length} existing markets for tournament`);
+        
+        // Create a map of deployed markets by match question
+        const deployedMarkets = new Map();
+        markets.forEach(market => {
+          if (market.tournament_id === TOURNAMENT_ID) {
+            deployedMarkets.set(market.question, market);
+          }
+        });
+        
+        // Update deployment status for each match
+        const newStatus = {};
+        CLUB_WC_MATCHES.forEach(match => {
+          const question = `${match.home} - ${match.away}`;
+          if (deployedMarkets.has(question)) {
+            newStatus[match.match] = 'success';
+            console.log(`✅ Match #${match.match} (${question}) is already deployed`);
+          }
+        });
+        
+        setDeploymentStatus(newStatus);
+        console.log(`📊 Updated deployment status for ${Object.keys(newStatus).length} deployed matches`);
+      } else {
+        console.error('❌ Failed to load existing markets');
+      }
+    } catch (error) {
+      console.error('Error loading deployment status:', error);
+    }
+  }, [TOURNAMENT_ID]);
+
   // Load tournament assets from API on mount
   useEffect(() => {
     const loadTournamentAssets = async () => {
@@ -153,7 +193,8 @@ const AdminTournamentPage = () => {
     };
 
     loadTournamentAssets();
-  }, []);
+    loadDeploymentStatus();
+  }, [loadDeploymentStatus]);
 
   const handleSelectAll = () => {
     if (selectedMatches.size === filteredMatches.length) {
@@ -449,6 +490,12 @@ const AdminTournamentPage = () => {
         `⚠️ Warnings: ${results.filter(r => r.status === 'warning').length}\n` +
         `❌ Errors: ${results.filter(r => r.status === 'error').length}`;
       alert(summary);
+    }
+    
+    // Reload deployment status to reflect newly deployed markets
+    if (results.some(r => r.status === 'success')) {
+      console.log('🔄 Reloading deployment status after successful deployments...');
+      await loadDeploymentStatus();
     }
   };
 
