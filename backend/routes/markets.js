@@ -93,6 +93,7 @@ router.get('/', async (req, res) => {
         created_at,
         updated_at
       `)
+      .not('market_address', 'like', 'test-market%')  // Filter out test markets
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -322,6 +323,7 @@ router.get('/', async (req, res) => {
             updated_at
           `)
           .eq('status', 'Active')
+          .not('market_address', 'like', 'test-market%')  // Filter out test markets
           .order('created_at', { ascending: false });
         
         if (fallbackError) throw fallbackError;

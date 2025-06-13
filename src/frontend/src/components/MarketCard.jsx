@@ -407,9 +407,11 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
                 ? 'Ended' 
                 : endTime ? (() => {
                   const date = new Date(endTime);
-                  // For tournament markets, show more detail
+                  // For tournament markets, convert UTC to ET and show more detail
                   if (market.tournament_id) {
-                    return format(date, 'MMM d, h:mm a');
+                    // Convert UTC to ET (EDT in June is UTC-4)
+                    const etTime = new Date(date.getTime() - (4 * 60 * 60 * 1000));
+                    return format(etTime, 'MMM d, h:mm a') + ' ET';
                   }
                   return `Ends ${format(date, 'MMM d')}`;
                 })() : 'Ongoing'
