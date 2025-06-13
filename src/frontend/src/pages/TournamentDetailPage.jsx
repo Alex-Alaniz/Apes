@@ -772,6 +772,11 @@ const TournamentDetailPage = () => {
   const loadTournamentData = async () => {
     setLoading(true);
     
+    // First load tournament assets for club world cup
+    if (id === 'club-world-cup-2025') {
+      await loadTournamentAssets();
+    }
+    
     // Load tournament participant count with cache busting
     try {
       const cacheBuster = Date.now();
@@ -1081,7 +1086,7 @@ const TournamentDetailPage = () => {
       {/* Tournament Header */}
       <div className="relative h-64 md:h-80 overflow-hidden">
         <img 
-          src={tournament.banner} 
+          src={tournamentAssets?.assets?.banner || tournament.banner} 
           alt={tournament.name}
           className="w-full h-full object-cover"
         />
@@ -1674,6 +1679,13 @@ const TournamentDetailPage = () => {
                             <div className="w-6 h-6 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-xs font-bold">
                               {index + 1}
                             </div>
+                            {tournamentAssets?.team_logos?.[team] && (
+                              <img 
+                                src={tournamentAssets.team_logos[team]} 
+                                alt={team}
+                                className="w-6 h-6 object-contain"
+                              />
+                            )}
                             <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{team}</span>
                           </div>
                         ))}
@@ -1731,6 +1743,13 @@ const TournamentDetailPage = () => {
                               }`}>
                                 {index + 1}
                               </div>
+                              {tournamentAssets?.team_logos?.[team] && (
+                                <img 
+                                  src={tournamentAssets.team_logos[team]} 
+                                  alt={team}
+                                  className="w-8 h-8 object-contain"
+                                />
+                              )}
                               <span className="font-medium text-gray-900 dark:text-white">{team}</span>
                             </div>
                             <div className="text-right">
@@ -1767,8 +1786,28 @@ const TournamentDetailPage = () => {
                                 </div>
                               </div>
                               <div className="flex items-center justify-between">
-                                <div className="font-bold text-gray-900 dark:text-white">
-                                  {match.home} vs {match.away}
+                                <div className="flex items-center gap-3">
+                                  <div className="flex items-center gap-2">
+                                    {tournamentAssets?.team_logos?.[match.home] && (
+                                      <img 
+                                        src={tournamentAssets.team_logos[match.home]} 
+                                        alt={match.home}
+                                        className="w-6 h-6 object-contain"
+                                      />
+                                    )}
+                                    <span className="font-bold text-gray-900 dark:text-white">{match.home}</span>
+                                  </div>
+                                  <span className="text-gray-500 dark:text-gray-400">vs</span>
+                                  <div className="flex items-center gap-2">
+                                    {tournamentAssets?.team_logos?.[match.away] && (
+                                      <img 
+                                        src={tournamentAssets.team_logos[match.away]} 
+                                        alt={match.away}
+                                        className="w-6 h-6 object-contain"
+                                      />
+                                    )}
+                                    <span className="font-bold text-gray-900 dark:text-white">{match.away}</span>
+                                  </div>
                                 </div>
                                 <button className="text-xs bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 px-3 py-1 rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors">
                                   View Market
