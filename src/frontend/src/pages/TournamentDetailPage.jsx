@@ -1084,14 +1084,21 @@ const TournamentDetailPage = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Tournament Header */}
-      <div className="relative h-64 md:h-80 overflow-hidden">
-        <img 
-          src={tournamentAssets?.assets?.banner || tournament.banner} 
-          alt={tournament.name}
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-end">
-          <div className="max-w-7xl mx-auto px-6 pb-8 w-full">
+      <div className="relative">
+        {/* Banner Container with dynamic height */}
+        <div className="relative bg-black">
+          <img 
+            src={tournamentAssets?.assets?.banner || tournament.banner} 
+            alt={tournament.name}
+            className="w-full h-auto max-h-[500px] object-contain mx-auto"
+          />
+          {/* Gradient overlay only at the bottom */}
+          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black via-black/70 to-transparent"></div>
+        </div>
+        
+        {/* Tournament Info Overlay */}
+        <div className="absolute bottom-0 left-0 right-0 pb-8">
+          <div className="max-w-7xl mx-auto px-6">
             <button 
               onClick={() => navigate('/tournaments')}
               className="mb-4 flex items-center gap-2 text-white hover:text-gray-300 transition-colors"
@@ -1099,8 +1106,8 @@ const TournamentDetailPage = () => {
               <ArrowLeft className="w-5 h-5" />
               Back to Tournaments
             </button>
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">{tournament.name}</h1>
-            <p className="text-gray-200 text-lg max-w-2xl">{tournament.description}</p>
+            <h1 className="text-4xl md:text-5xl font-bold text-white mb-2 drop-shadow-lg">{tournament.name}</h1>
+            <p className="text-gray-200 text-lg max-w-2xl drop-shadow-md">{tournament.description}</p>
           </div>
         </div>
       </div>
