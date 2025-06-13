@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { isWalletAuthorized } from '../config/access';
+import { format } from 'date-fns';
 import {
   Trophy,
   Calendar,
@@ -248,46 +249,77 @@ const ClubWorldCupMatches = ({ tournamentAssets }) => {
     return matchesByGroup[groupLetter]?.[0];
   };
 
-  const MatchCard = ({ match, isFirst = false }) => (
-    <div className={`bg-white dark:bg-gray-800 rounded-xl p-4 ${isFirst ? 'border-2 border-purple-200 dark:border-purple-700' : 'border border-gray-200 dark:border-gray-700'}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="text-center min-w-[60px]">
-            <div className="text-xs text-gray-500 dark:text-gray-400">#{match.match}</div>
-            <div className="font-bold text-purple-600 dark:text-purple-400 text-sm">{match.round === 'Group Stage' ? `Group ${match.group}` : match.round}</div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-right min-w-[120px]">
-                          {tournamentAssets?.team_logos?.[match.home] && (
-              <img 
-                src={tournamentAssets.team_logos[match.home]} 
-                alt={match.home}
-                className="w-6 h-6 rounded-full object-cover"
-              />
-            )}
-              <div className="font-bold text-gray-900 dark:text-white text-sm">{match.home}</div>
+  const MatchCard = ({ match, isFirst = false }) => {
+    const navigate = useNavigate();
+    
+    const handleViewMarket = async () => {
+      const question = `${match.home} - ${match.away}`;
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=club-world-cup-2025`);
+        if (response.ok) {
+          const markets = await response.json();
+          const market = markets.find(m => m.question === question);
+          if (market) {
+            navigate(`/markets/${market.publicKey || market.market_address}`);
+          } else {
+            alert('Market not yet deployed for this match');
+          }
+        }
+      } catch (error) {
+        console.error('Error finding market:', error);
+        alert('Error finding market for this match');
+      }
+    };
+    
+    return (
+      <div className={`bg-white dark:bg-gray-800 rounded-xl p-4 ${isFirst ? 'border-2 border-purple-200 dark:border-purple-700' : 'border border-gray-200 dark:border-gray-700'}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4 flex-1">
+            <div className="text-center min-w-[60px]">
+              <div className="text-xs text-gray-500 dark:text-gray-400">#{match.match}</div>
+              <div className="font-bold text-purple-600 dark:text-purple-400 text-sm">{match.round === 'Group Stage' ? `Group ${match.group}` : match.round}</div>
             </div>
-            <div className="text-gray-400 font-bold">vs</div>
-            <div className="flex items-center gap-2 text-left min-w-[120px]">
-              <div className="font-bold text-gray-900 dark:text-white text-sm">{match.away}</div>
-              {tournamentAssets?.team_logos?.[match.away] && (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-right min-w-[120px]">
+                            {tournamentAssets?.team_logos?.[match.home] && (
                 <img 
-                  src={tournamentAssets.team_logos[match.away]} 
-                  alt={match.away}
+                  src={tournamentAssets.team_logos[match.home]} 
+                  alt={match.home}
                   className="w-6 h-6 rounded-full object-cover"
                 />
               )}
+                <div className="font-bold text-gray-900 dark:text-white text-sm">{match.home}</div>
+              </div>
+              <div className="text-gray-400 font-bold">vs</div>
+              <div className="flex items-center gap-2 text-left min-w-[120px]">
+                <div className="font-bold text-gray-900 dark:text-white text-sm">{match.away}</div>
+                {tournamentAssets?.team_logos?.[match.away] && (
+                  <img 
+                    src={tournamentAssets.team_logos[match.away]} 
+                    alt={match.away}
+                    className="w-6 h-6 rounded-full object-cover"
+                  />
+                )}
+              </div>
             </div>
           </div>
-        </div>
-        <div className="text-right">
-          <div className="text-sm font-medium text-gray-900 dark:text-white">{match.date}</div>
-          <div className="text-xs text-gray-600 dark:text-gray-400">{match.time} {match.timezone}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-500">{match.venue}</div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <div className="text-sm font-medium text-gray-900 dark:text-white">{match.date}</div>
+              <div className="text-xs text-gray-600 dark:text-gray-400">{match.time} {match.timezone}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-500">{match.venue}</div>
+            </div>
+            <button
+              onClick={handleViewMarket}
+              className="bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 px-4 py-2 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors text-sm font-medium"
+            >
+              View Market
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -413,6 +445,107 @@ const ClubWorldCupMatches = ({ tournamentAssets }) => {
 };
 
 // Tournament Leaderboard Component
+// Tournament Markets Component
+const TournamentMarkets = ({ tournamentId }) => {
+  const [markets, setMarkets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    const loadTournamentMarkets = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=${tournamentId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setMarkets(data);
+        } else {
+          console.error('Failed to load tournament markets');
+        }
+      } catch (error) {
+        console.error('Error loading tournament markets:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadTournamentMarkets();
+  }, [tournamentId]);
+  
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+        <p className="text-gray-600 dark:text-gray-400 mt-4">Loading tournament markets...</p>
+      </div>
+    );
+  }
+  
+  if (markets.length === 0) {
+    return (
+      <div>
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Tournament Markets</h3>
+        <div className="text-center py-12">
+          <Target className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">No markets deployed yet for this tournament</p>
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <div>
+      <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+        Tournament Markets ({markets.length})
+      </h3>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {markets.map((market) => (
+          <div 
+            key={market.market_address || market.publicKey}
+            onClick={() => navigate(`/markets/${market.market_address || market.publicKey}`)}
+            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-400 transition-all cursor-pointer hover:shadow-lg"
+          >
+            <div className="flex justify-between items-start mb-4">
+              <span className="bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-xs px-2 py-1 rounded">
+                {market.status || 'Active'}
+              </span>
+              {market.resolution_date && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {format(new Date(market.resolution_date), 'MMM d, h:mm a')}
+                </span>
+              )}
+            </div>
+            
+            <h4 className="font-bold text-gray-900 dark:text-white mb-3">
+              {market.question}
+            </h4>
+            
+            <div className="space-y-2">
+              {(market.options || []).map((option, index) => (
+                <div key={index} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">{option}</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {market.optionPercentages?.[index]?.toFixed(1) || '0.0'}%
+                  </span>
+                </div>
+              ))}
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">Volume</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {(market.totalVolume || market.total_volume || 0).toFixed(2)} APES
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const TournamentLeaderboard = ({ tournamentId, participantCount, onJoinSuccess }) => {
   const { publicKey } = useWallet();
   const [leaderboard, setLeaderboard] = useState([]);
@@ -1816,7 +1949,28 @@ const TournamentDetailPage = () => {
                                     <span className="font-bold text-gray-900 dark:text-white">{match.away}</span>
                                   </div>
                                 </div>
-                                <button className="text-xs bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 px-3 py-1 rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors">
+                                <button 
+                                  onClick={async () => {
+                                    // Find the market for this match
+                                    const question = `${match.home} - ${match.away}`;
+                                    try {
+                                      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=${tournament.id}`);
+                                      if (response.ok) {
+                                        const markets = await response.json();
+                                        const market = markets.find(m => m.question === question);
+                                        if (market) {
+                                          navigate(`/markets/${market.publicKey || market.market_address}`);
+                                        } else {
+                                          alert('Market not yet deployed for this match');
+                                        }
+                                      }
+                                    } catch (error) {
+                                      console.error('Error finding market:', error);
+                                      alert('Error finding market for this match');
+                                    }
+                                  }}
+                                  className="text-xs bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 px-3 py-1 rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors"
+                                >
                                   View Market
                                 </button>
                               </div>
@@ -1933,19 +2087,7 @@ const TournamentDetailPage = () => {
         )}
 
         {activeTab === 'markets' && (
-          <div>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Available Markets</h3>
-            <div className="text-center py-12">
-              <Target className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 dark:text-gray-400">Markets will be available closer to match dates</p>
-              <button 
-                onClick={() => navigate('/markets')}
-                className="mt-4 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                Browse All Markets
-              </button>
-            </div>
-          </div>
+          <TournamentMarkets tournamentId={tournament.id} />
         )}
 
         {activeTab === 'leaderboard' && (
