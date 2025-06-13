@@ -175,26 +175,26 @@ const AdminTournamentPage = () => {
 
   // Time zone conversion utility with 5-minute buffer
   const convertToUTC = (date, time, timezone) => {
+    // For June 2025, Eastern Time will be EDT (UTC-4)
     const timezoneOffsets = {
-      'ET': -5,  // Eastern Time
-      'PT': -8,  // Pacific Time
-      'CT': -6,  // Central Time
-      'MT': -7   // Mountain Time
+      'ET': -4,  // Eastern Daylight Time (June is EDT)
+      'PT': -7,  // Pacific Daylight Time
+      'CT': -5,  // Central Daylight Time
+      'MT': -6   // Mountain Daylight Time
     };
     
-    // Add 5-minute buffer before match start to ensure betting stops
-    const bufferMinutes = 5;
+    // Create the date string with timezone offset to ensure proper parsing
+    const offsetHours = timezoneOffsets[timezone] || -4; // Default to EDT
+    const offsetSign = offsetHours < 0 ? '-' : '+';
+    const offsetString = `${offsetSign}${Math.abs(offsetHours).toString().padStart(2, '0')}:00`;
     
-    // Create date object in local time
-    const matchDateTime = new Date(`${date}T${time}:00`);
-    const offsetHours = timezoneOffsets[timezone] || 0;
+    // Create ISO string with timezone offset
+    const dateTimeString = `${date}T${time}:00${offsetString}`;
+    const matchDateTime = new Date(dateTimeString);
     
-    // Adjust for timezone
-    matchDateTime.setHours(matchDateTime.getHours() - offsetHours);
-    // Subtract buffer to close betting early
-    matchDateTime.setMinutes(matchDateTime.getMinutes() - bufferMinutes);
+    console.log(`⏰ Match time conversion: ${date} ${time} ${timezone} → ${matchDateTime.toISOString()} (exact match start time)`);
+    console.log(`   Input string: ${dateTimeString}`);
     
-    console.log(`⏰ Match time conversion: ${date} ${time} ${timezone} → ${matchDateTime.toISOString()} (includes 5min buffer)`);
     return matchDateTime.toISOString();
   };
 
@@ -265,10 +265,20 @@ const AdminTournamentPage = () => {
 
     setIsDeploying(true);
     const results = [];
+    
+    console.log(`📋 Starting deployment of ${selectedMatches.size} selected markets...`);
+    const matchIdArray = Array.from(selectedMatches);
+    console.log('Selected match IDs:', matchIdArray);
 
-    for (const matchId of selectedMatches) {
+    for (let index = 0; index < matchIdArray.length; index++) {
+      const matchId = matchIdArray[index];
+      console.log(`\n🔄 Processing market ${index + 1} of ${matchIdArray.length} - Match ID: ${matchId}`);
+      
       const match = CLUB_WC_MATCHES.find(m => m.match === matchId);
-      if (!match) continue;
+      if (!match) {
+        console.error(`❌ Match not found for ID: ${matchId}`);
+        continue;
+      }
 
       try {
         // Create market data using tournament assets and match-specific banner
@@ -414,12 +424,32 @@ const AdminTournamentPage = () => {
       }
 
       // Add delay between deployments
+      console.log(`⏳ Waiting 1 second before next deployment...`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
+
+    console.log(`\n✅ Deployment loop completed!`);
+    console.log(`📊 Final results:`, {
+      total: matchIdArray.length,
+      processed: results.length,
+      successful: results.filter(r => r.status === 'success').length,
+      warnings: results.filter(r => r.status === 'warning').length,
+      errors: results.filter(r => r.status === 'error').length
+    });
 
     setDeploymentResults(results);
     setIsDeploying(false);
     setSelectedMatches(new Set()); // Clear selection
+    
+    // Show summary alert if multiple markets were deployed
+    if (results.length > 1) {
+      const summary = `Deployment Summary:\n\n` +
+        `Total Markets: ${results.length}\n` +
+        `✅ Successful: ${results.filter(r => r.status === 'success').length}\n` +
+        `⚠️ Warnings: ${results.filter(r => r.status === 'warning').length}\n` +
+        `❌ Errors: ${results.filter(r => r.status === 'error').length}`;
+      alert(summary);
+    }
   };
 
   const handlePreviewMarket = (match) => {
