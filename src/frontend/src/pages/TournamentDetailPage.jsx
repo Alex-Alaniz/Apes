@@ -219,7 +219,7 @@ const CountdownTimer = ({ targetDate, label }) => {
 };
 
 // Club World Cup Matches Component with group-based organization
-const ClubWorldCupMatches = () => {
+const ClubWorldCupMatches = ({ tournamentAssets }) => {
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [showAllMatches, setShowAllMatches] = useState(false);
 
@@ -257,12 +257,26 @@ const ClubWorldCupMatches = () => {
             <div className="font-bold text-purple-600 dark:text-purple-400 text-sm">{match.round === 'Group Stage' ? `Group ${match.group}` : match.round}</div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="text-right min-w-[120px]">
+            <div className="flex items-center gap-2 text-right min-w-[120px]">
+              {tournamentAssets?.teamLogos?.[match.home] && (
+                <img 
+                  src={tournamentAssets.teamLogos[match.home]} 
+                  alt={match.home}
+                  className="w-6 h-6 rounded-full object-cover"
+                />
+              )}
               <div className="font-bold text-gray-900 dark:text-white text-sm">{match.home}</div>
             </div>
             <div className="text-gray-400 font-bold">vs</div>
-            <div className="text-left min-w-[120px]">
+            <div className="flex items-center gap-2 text-left min-w-[120px]">
               <div className="font-bold text-gray-900 dark:text-white text-sm">{match.away}</div>
+              {tournamentAssets?.teamLogos?.[match.away] && (
+                <img 
+                  src={tournamentAssets.teamLogos[match.away]} 
+                  alt={match.away}
+                  className="w-6 h-6 rounded-full object-cover"
+                />
+              )}
             </div>
           </div>
         </div>
@@ -665,6 +679,7 @@ const TournamentDetailPage = () => {
   const { connected, publicKey } = useWallet();
   
   const [tournament, setTournament] = useState(null);
+  const [tournamentAssets, setTournamentAssets] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedGroup, setSelectedGroup] = useState('groups');
   const [loading, setLoading] = useState(true);
@@ -678,16 +693,25 @@ const TournamentDetailPage = () => {
 
   useEffect(() => {
     loadTournamentData();
+    loadTournamentAssets();
   }, [tournamentId]);
 
   // Function to create tournament object with current participant count
   const createTournamentObject = (currentParticipantCount) => {
+    const defaultBanner = tournamentId === 'nba-finals-2025' 
+      ? 'https://images.unsplash.com/photo-1546519638-68e109498ffc?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2059&q=80'
+      : 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1893&q=80';
+    
+    // Use tournament assets if available, otherwise defaults
+    const banner = tournamentAssets?.assets?.banner || defaultBanner;
+    
     if (tournamentId === 'club-world-cup-2025') {
       return {
         id: 'club-world-cup-2025',
         name: 'FIFA Club World Cup 2025',
         description: 'The ultimate club football championship featuring 32 teams from around the world',
-        banner: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1893&q=80',
+        banner: banner,
+        icon: tournamentAssets?.assets?.icon || banner,
         startDate: '2025-06-14',
         endDate: '2025-07-13',
         totalMarkets: 63,
@@ -706,7 +730,8 @@ const TournamentDetailPage = () => {
         id: 'nba-finals-2025',
         name: 'NBA Finals 2025',
         description: 'The championship series of the National Basketball Association - Oklahoma City Thunder vs Indiana Pacers',
-        banner: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2059&q=80',
+        banner: banner,
+        icon: tournamentAssets?.assets?.icon || banner,
         startDate: '2025-06-05',
         endDate: '2025-06-22',
         totalMarkets: 7, // Up to 7 games in best of 7 series
@@ -722,6 +747,26 @@ const TournamentDetailPage = () => {
       };
     }
     return null;
+  };
+
+  const loadTournamentAssets = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/tournaments/${tournamentId}/details`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setTournamentAssets({
+          assets: data.assets || {},
+          teamLogos: data.team_logos || {},
+          matchBanners: data.match_banners || {}
+        });
+        console.log('✅ Loaded tournament assets:', data);
+      } else {
+        console.log('ℹ️ No tournament assets found, using defaults');
+      }
+    } catch (error) {
+      console.error('Error loading tournament assets:', error);
+    }
   };
 
   const loadTournamentData = async () => {
@@ -953,6 +998,16 @@ const TournamentDetailPage = () => {
       checkUserParticipation();
     }
   }, [tournament, publicKey]);
+
+  // Update tournament when assets change
+  useEffect(() => {
+    if (tournamentAssets && participantCount > 0) {
+      const updatedTournament = createTournamentObject(participantCount);
+      if (updatedTournament) {
+        setTournament(updatedTournament);
+      }
+    }
+  }, [tournamentAssets]);
 
   const addNBAGame = async (gameNumber) => {
     try {
@@ -1263,7 +1318,7 @@ const TournamentDetailPage = () => {
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <div className="space-y-8">
-            {tournament.id === 'club-world-cup-2025' && <ClubWorldCupMatches />}
+            {tournament.id === 'club-world-cup-2025' && <ClubWorldCupMatches tournamentAssets={tournamentAssets} />}
 
             {tournament.id === 'nba-finals-2025' && (
               <div>

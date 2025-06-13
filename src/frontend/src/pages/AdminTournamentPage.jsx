@@ -122,19 +122,61 @@ const AdminTournamentPage = () => {
   const [showAssetManager, setShowAssetManager] = useState(false);
   const [filterGroup, setFilterGroup] = useState('all');
   const [prizePool, setPrizePool] = useState(50000);
-  const [tournamentAssets, setTournamentAssets] = useState({
+  
+  // Default tournament assets
+  const defaultTournamentAssets = {
     banner: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1893&q=80',
     icon: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1893&q=80',
     teamLogos: {},
-    matchBanners: {} // Individual banner for each match
-  });
+    matchBanners: {}
+  };
+  
+  const [tournamentAssets, setTournamentAssets] = useState(defaultTournamentAssets);
+  const [loadingAssets, setLoadingAssets] = useState(true);
   const { publicKey, connected } = useWallet();
+  
+  const TOURNAMENT_ID = 'club-world-cup-2025';
 
   const groups = ['all', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'R16', 'QF', 'SF', 'F'];
   
   const filteredMatches = filterGroup === 'all' 
     ? CLUB_WC_MATCHES 
     : CLUB_WC_MATCHES.filter(match => match.group === filterGroup);
+
+  // Load tournament assets from API on mount
+  useEffect(() => {
+    const loadTournamentAssets = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/tournaments/${TOURNAMENT_ID}/details`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Parse JSONB fields
+          const assets = data.assets || {};
+          const teamLogos = data.team_logos || {};
+          const matchBanners = data.match_banners || {};
+          
+          setTournamentAssets({
+            banner: assets.banner || defaultTournamentAssets.banner,
+            icon: assets.icon || defaultTournamentAssets.icon,
+            teamLogos: teamLogos,
+            matchBanners: matchBanners
+          });
+          
+          console.log('✅ Loaded tournament assets from database');
+        } else {
+          console.log('ℹ️ No tournament data found, using defaults');
+        }
+      } catch (error) {
+        console.error('Error loading tournament assets:', error);
+      } finally {
+        setLoadingAssets(false);
+      }
+    };
+
+    loadTournamentAssets();
+  }, []);
 
   const handleSelectAll = () => {
     if (selectedMatches.size === filteredMatches.length) {
@@ -192,6 +234,7 @@ const AdminTournamentPage = () => {
           category: 'Sports',
           league: 'fifa-club-world-cup',
           tournament_type: 'tournament',
+          tournament_id: TOURNAMENT_ID,
           endTime: `${match.date}T${match.time}:00.000Z`,
           minBetAmount: 10,
           creatorFeeRate: 2.5,
@@ -301,19 +344,44 @@ const AdminTournamentPage = () => {
   };
 
   const saveAssets = async () => {
+    if (!publicKey) {
+      alert('Please connect your wallet to save assets.');
+      return;
+    }
+
     try {
-      // In a real app, this would save to your API
-      console.log('Saving tournament assets:', {
-        ...tournamentAssets,
-        matchBannersCount: Object.keys(tournamentAssets.matchBanners).length,
-        totalMatches: CLUB_WC_MATCHES.length
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/tournaments/${TOURNAMENT_ID}/assets`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Wallet-Address': publicKey.toString()
+        },
+        body: JSON.stringify({
+          assets: {
+            banner: tournamentAssets.banner,
+            icon: tournamentAssets.icon
+          },
+          team_logos: tournamentAssets.teamLogos,
+          match_banners: tournamentAssets.matchBanners
+        })
       });
-      
-      const customBannerCount = Object.keys(tournamentAssets.matchBanners).length;
-      alert(`Tournament assets saved successfully!\n\n✓ Default banner: Set\n✓ Tournament icon: Set\n✓ Team logos: ${Object.keys(tournamentAssets.teamLogos).length} configured\n✓ Custom match banners: ${customBannerCount} of ${CLUB_WC_MATCHES.length} matches\n\nMatches without custom banners will use the default tournament banner.`);
+
+      if (response.ok) {
+        console.log('Saving tournament assets:', {
+          ...tournamentAssets,
+          matchBannersCount: Object.keys(tournamentAssets.matchBanners).length,
+          totalMatches: CLUB_WC_MATCHES.length
+        });
+        
+        const customBannerCount = Object.keys(tournamentAssets.matchBanners).length;
+        alert(`Tournament assets saved successfully!\n\n✓ Default banner: Set\n✓ Tournament icon: Set\n✓ Team logos: ${Object.keys(tournamentAssets.teamLogos).length} configured\n✓ Custom match banners: ${customBannerCount} of ${CLUB_WC_MATCHES.length} matches\n\nMatches without custom banners will use the default tournament banner.\n\nAssets are saved to the database and visible across the platform.`);
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save assets');
+      }
     } catch (error) {
       console.error('Error saving assets:', error);
-      alert('Failed to save assets. Please try again.');
+      alert(`Failed to save assets: ${error.message}`);
     }
   };
 
@@ -969,20 +1037,55 @@ const AdminTournamentPage = () => {
                 </div>
 
                 {/* Save Button */}
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-600">
+                <div className="flex justify-between items-center gap-3 pt-4 border-t border-gray-200 dark:border-gray-600">
                   <button
-                    onClick={() => setShowAssetManager(false)}
-                    className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                    onClick={async () => {
+                      if (confirm('Are you sure you want to clear all tournament assets? This will reset everything to defaults.')) {
+                        setTournamentAssets(defaultTournamentAssets);
+                        // Save the default assets to database
+                        try {
+                          await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/tournaments/${TOURNAMENT_ID}/assets`, {
+                            method: 'PUT',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'X-Wallet-Address': publicKey.toString()
+                            },
+                            body: JSON.stringify({
+                              assets: {
+                                banner: defaultTournamentAssets.banner,
+                                icon: defaultTournamentAssets.icon
+                              },
+                              team_logos: {},
+                              match_banners: {}
+                            })
+                          });
+                          alert('All tournament assets have been reset to defaults.');
+                        } catch (error) {
+                          console.error('Error clearing assets:', error);
+                          alert('Failed to clear assets. Please try again.');
+                        }
+                      }
+                    }}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                   >
-                    Cancel
+                    Clear All Assets
                   </button>
-                  <button
-                    onClick={saveAssets}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    <Save className="w-4 h-4" />
-                    Save Assets
-                  </button>
+                  
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowAssetManager(false)}
+                      className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={saveAssets}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      <Save className="w-4 h-4" />
+                      Save Assets
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

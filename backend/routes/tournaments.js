@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { isWalletAuthorized } = require('../config/authorizedWallets');
 
 // Tournament entry endpoint
 router.post('/:tournamentId/join', async (req, res) => {
@@ -198,6 +199,131 @@ router.get('/:tournamentId/markets', async (req, res) => {
   } catch (error) {
     console.error('Error fetching tournament markets:', error);
     res.status(500).json({ error: 'Failed to fetch tournament markets' });
+  }
+});
+
+// Get tournament details including assets
+router.get('/:tournamentId/details', async (req, res) => {
+  try {
+    const { tournamentId } = req.params;
+
+    const query = `
+      SELECT 
+        tournament_id,
+        name,
+        description,
+        category,
+        start_date,
+        end_date,
+        prize_pool,
+        max_participants,
+        status,
+        assets,
+        team_logos,
+        match_banners,
+        created_at,
+        updated_at
+      FROM tournaments 
+      WHERE tournament_id = $1
+    `;
+
+    const result = await db.query(query, [tournamentId]);
+    
+    if (result.rows.length === 0) {
+      // If tournament doesn't exist in database, create it with defaults
+      if (tournamentId === 'club-world-cup-2025') {
+        await db.query(`
+          INSERT INTO tournaments (
+            tournament_id, name, description, category, 
+            start_date, end_date, prize_pool, max_participants, status
+          ) VALUES (
+            $1, 'FIFA Club World Cup 2025', 
+            'Predict winners of the FIFA Club World Cup 2025 matches',
+            'Football', '2025-06-14', '2025-07-13', 50000, 10000, 'upcoming'
+          ) ON CONFLICT (tournament_id) DO NOTHING
+        `, [tournamentId]);
+        
+        // Fetch again
+        const newResult = await db.query(query, [tournamentId]);
+        if (newResult.rows.length > 0) {
+          res.json(newResult.rows[0]);
+          return;
+        }
+      }
+      
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    res.json(result.rows[0]);
+
+  } catch (error) {
+    console.error('Error fetching tournament details:', error);
+    res.status(500).json({ error: 'Failed to fetch tournament details' });
+  }
+});
+
+// Update tournament assets (admin only)
+router.put('/:tournamentId/assets', async (req, res) => {
+  try {
+    const { tournamentId } = req.params;
+    const { assets, team_logos, match_banners } = req.body;
+    const walletAddress = req.headers['x-wallet-address'];
+
+    // Check if user is authorized admin
+    if (!walletAddress || !isWalletAuthorized(walletAddress)) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    // Update tournament assets
+    const query = `
+      UPDATE tournaments 
+      SET 
+        assets = COALESCE($1, assets),
+        team_logos = COALESCE($2, team_logos),
+        match_banners = COALESCE($3, match_banners),
+        updated_at = NOW()
+      WHERE tournament_id = $4
+      RETURNING *
+    `;
+
+    const result = await db.query(query, [
+      assets ? JSON.stringify(assets) : null,
+      team_logos ? JSON.stringify(team_logos) : null,
+      match_banners ? JSON.stringify(match_banners) : null,
+      tournamentId
+    ]);
+
+    if (result.rows.length === 0) {
+      // Tournament doesn't exist, create it first
+      await db.query(`
+        INSERT INTO tournaments (
+          tournament_id, name, assets, team_logos, match_banners
+        ) VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (tournament_id) DO UPDATE
+        SET 
+          assets = EXCLUDED.assets,
+          team_logos = EXCLUDED.team_logos,
+          match_banners = EXCLUDED.match_banners,
+          updated_at = NOW()
+      `, [
+        tournamentId,
+        tournamentId,
+        JSON.stringify(assets || {}),
+        JSON.stringify(team_logos || {}),
+        JSON.stringify(match_banners || {})
+      ]);
+
+      const newResult = await db.query('SELECT * FROM tournaments WHERE tournament_id = $1', [tournamentId]);
+      console.log(`✅ Tournament ${tournamentId} assets saved by ${walletAddress.substring(0, 8)}...`);
+      res.json(newResult.rows[0]);
+    } else {
+      console.log(`✅ Tournament ${tournamentId} assets updated by ${walletAddress.substring(0, 8)}...`);
+      res.json(result.rows[0]);
+    }
+
+  } catch (error) {
+    console.error('Error updating tournament assets:', error);
+    res.status(500).json({ error: 'Failed to update tournament assets' });
   }
 });
 
