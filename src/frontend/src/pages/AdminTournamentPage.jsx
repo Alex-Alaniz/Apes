@@ -18,8 +18,22 @@ import {
   X,
   Image,
   Palette,
-  Save
+  Save,
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  FileText,
+  Shield,
+  Filter
 } from 'lucide-react';
+import {
+  formatCompactNumber,
+  formatSOL,
+  formatDate
+} from '../utils/formatters';
+import { CLUB_WC_MATCHES } from '../constants/worldCupMatches';
+import { TEAM_LOGOS } from '../constants/teamLogos';
+import marketService from '../services/marketService';
 import { isWalletAuthorized } from '../config/access';
 import { useNavigate } from 'react-router-dom';
 
@@ -116,7 +130,10 @@ const CLUB_WC_MATCHES = [
 
 const AdminTournamentPage = () => {
   const navigate = useNavigate();
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, wallet } = useWallet();
+  
+  // Get the actual Phantom wallet with signAndSendTransaction method
+  const phantomWallet = window.phantom?.solana;
   
   // Authorization check
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -144,6 +161,37 @@ const AdminTournamentPage = () => {
   const [showAssetManager, setShowAssetManager] = useState(false);
   const [filterGroup, setFilterGroup] = useState('all');
   const [prizePool, setPrizePool] = useState(50000);
+  const [serviceInitialized, setServiceInitialized] = useState(false);
+  
+  // Initialize market service when wallet connects
+  useEffect(() => {
+    if (serviceInitialized) {
+      console.log('🔄 MarketService already initialized for tournament page');
+      return;
+    }
+
+    const initService = async () => {
+      if (wallet && publicKey && connected && phantomWallet) {
+        try {
+          if (typeof phantomWallet.signAndSendTransaction !== 'function') {
+            console.log('⚠️ Phantom wallet missing signAndSendTransaction method');
+            setServiceInitialized(false);
+            return;
+          }
+          
+          console.log('🚀 Initializing MarketService for tournament deployment');
+          await marketService.initialize(phantomWallet);
+          setServiceInitialized(true);
+          console.log('✅ MarketService initialized for tournament page');
+        } catch (error) {
+          console.error('❌ Failed to initialize market service:', error);
+          setServiceInitialized(false);
+        }
+      }
+    };
+
+    initService();
+  }, [wallet, publicKey, connected, phantomWallet, serviceInitialized]);
   
   // Default tournament assets
   const defaultTournamentAssets = {
@@ -278,6 +326,11 @@ const AdminTournamentPage = () => {
 
   const handleDeploySelectedMarkets = async () => {
     if (!connected || selectedMatches.size === 0) return;
+    
+    if (!serviceInitialized) {
+      alert('Market service not initialized. Please reconnect your wallet.');
+      return;
+    }
 
     // Check for duplicates first
     console.log('🔍 Checking for duplicate markets...');
@@ -330,69 +383,104 @@ const AdminTournamentPage = () => {
               { label: match.away, icon: tournamentAssets.teamLogos[match.away] || null }
             ];
 
-        const marketData = {
-          market_address: `tournament-${TOURNAMENT_ID}-match-${match.match}-${Date.now()}`,
-          creator_address: publicKey.toString(),
-          question: `${match.home} - ${match.away}`,
-          description: `Club World Cup 2025 - ${match.round} ${match.group !== 'A' && match.group !== 'B' && match.group !== 'C' && match.group !== 'D' && match.group !== 'E' && match.group !== 'F' && match.group !== 'G' && match.group !== 'H' ? '' : `Group ${match.group}`} match between ${match.home} and ${match.away} at ${match.venue} on ${match.date}`,
-          options: options,
-          category: 'Sports',
-          league: 'fifa-club-world-cup',
-          tournament_type: 'tournament',
-          tournament_id: TOURNAMENT_ID,
-          endTime: convertToUTC(match.date, match.time, match.timezone),
-          end_time: convertToUTC(match.date, match.time, match.timezone),
-          resolution_date: convertToUTC(match.date, match.time, match.timezone),
-          minBetAmount: 10,
-          creatorFeeRate: 2.5,
-          min_bet: 10,
-          status: 'Active',
-          transaction_hash: `admin-deploy-${TOURNAMENT_ID}-match-${match.match}-${Date.now()}`,
-          assets: {
-            banner: matchBanner,
-            icon: tournamentAssets.icon
-          },
-          optionsMetadata: optionsMetadata,
-          options_metadata: optionsMetadata,
-          matchMetadata: {
-            matchNumber: match.match,
-            round: match.round,
-            group: match.group,
-            venue: match.venue,
-            localTime: `${match.time} ${match.timezone}`,
-            utcEndTime: convertToUTC(match.date, match.time, match.timezone)
-          }
-        };
-
-        console.log('🚀 Deploying market:', marketData);
-
-        // API call to create market
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Wallet-Address': publicKey.toString()
-          },
-          body: JSON.stringify(marketData)
+        const question = `${match.home} - ${match.away}`;
+        const resolutionDate = new Date(convertToUTC(match.date, match.time, match.timezone));
+        
+        console.log('🚀 Deploying market on-chain:', {
+          question,
+          options,
+          resolutionDate: resolutionDate.toISOString(),
+          optionCount: options.length
         });
 
-        if (response.ok) {
-          const responseData = await response.json();
-          console.log('✅ Market created:', responseData);
+        // Deploy market on-chain using marketService
+        const createResult = await marketService.createMarket({
+          question: question,
+          options: options,
+          actualOptionCount: options.length,
+          category: 'Sports',
+          resolutionDate: resolutionDate,
+          creatorFeeRate: 250, // 2.5% for tournament markets
+          minBetAmount: 10,
+          creatorStakeAmount: 10 // Admin deployment with minimal stake
+        });
+
+        if (createResult.success && createResult.marketPubkey) {
+          console.log('✅ Market deployed on-chain:', createResult.marketPubkey);
           
-          const optionCount = isGroupStage ? '3 options (w/ Draw)' : '2 options (Knockout)';
-          results.push({
-            matchId,
-            match: `${match.home} - ${match.away}`,
-            status: 'success',
-            message: `Market created successfully (${optionCount})`
+          // Now save to database with all metadata
+          const marketData = {
+            market_address: createResult.marketPubkey,
+            creator_address: publicKey.toString(),
+            question: question,
+            description: `Club World Cup 2025 - ${match.round} ${match.group !== 'A' && match.group !== 'B' && match.group !== 'C' && match.group !== 'D' && match.group !== 'E' && match.group !== 'F' && match.group !== 'G' && match.group !== 'H' ? '' : `Group ${match.group}`} match between ${match.home} and ${match.away} at ${match.venue} on ${match.date}`,
+            options: options,
+            category: 'Sports',
+            tournament_type: 'tournament',
+            tournament_id: TOURNAMENT_ID,
+            end_time: resolutionDate.toISOString(),
+            resolution_date: resolutionDate.toISOString(),
+            min_bet: 10,
+            status: 'Active',
+            transaction_hash: createResult.transaction,
+            assets: {
+              banner: matchBanner,
+              icon: tournamentAssets.icon
+            },
+            options_metadata: optionsMetadata,
+            // Additional metadata for display
+            matchMetadata: {
+              matchNumber: match.match,
+              round: match.round,
+              group: match.group,
+              venue: match.venue,
+              localTime: `${match.time} ${match.timezone}`,
+              utcEndTime: resolutionDate.toISOString()
+            }
+          };
+
+          console.log('💾 Saving market to database:', marketData);
+
+          // Save to database
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Wallet-Address': publicKey.toString()
+            },
+            body: JSON.stringify(marketData)
           });
-          setDeploymentStatus(prev => ({ ...prev, [matchId]: 'success' }));
+
+          if (response.ok) {
+            const responseData = await response.json();
+            console.log('✅ Market saved to database:', responseData);
+            
+            const optionCount = isGroupStage ? '3 options (w/ Draw)' : '2 options (Knockout)';
+            results.push({
+              matchId,
+              match: `${match.home} - ${match.away}`,
+              status: 'success',
+              message: `Market deployed on-chain (${optionCount}) at ${createResult.marketPubkey}`,
+              marketAddress: createResult.marketPubkey
+            });
+            setDeploymentStatus(prev => ({ ...prev, [matchId]: 'success' }));
+          } else {
+            const errorData = await response.json().catch(() => null);
+            const errorMessage = errorData?.error || errorData?.message || `HTTP ${response.status}`;
+            console.error('❌ Failed to save to database:', errorMessage, errorData);
+            
+            // Market deployed on-chain but failed to save to DB
+            results.push({
+              matchId,
+              match: `${match.home} - ${match.away}`,
+              status: 'warning',
+              message: `Market deployed on-chain at ${createResult.marketPubkey} but failed to save to database: ${errorMessage}`,
+              marketAddress: createResult.marketPubkey
+            });
+            setDeploymentStatus(prev => ({ ...prev, [matchId]: 'warning' }));
+          }
         } else {
-          const errorData = await response.json().catch(() => null);
-          const errorMessage = errorData?.error || errorData?.message || `HTTP ${response.status}`;
-          console.error('❌ Market creation failed:', errorMessage, errorData);
-          throw new Error(errorMessage);
+          throw new Error(createResult.error || 'Failed to deploy market on-chain');
         }
       } catch (error) {
         console.error('❌ Error deploying market:', error);
