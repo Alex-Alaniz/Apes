@@ -196,8 +196,90 @@ const AdminTournamentPage = () => {
     setSelectedMatches(newSelected);
   };
 
+  // Time zone conversion utility with 5-minute buffer
+  const convertToUTC = (date, time, timezone) => {
+    const timezoneOffsets = {
+      'ET': -5,  // Eastern Time
+      'PT': -8,  // Pacific Time
+      'CT': -6,  // Central Time
+      'MT': -7   // Mountain Time
+    };
+    
+    // Add 5-minute buffer before match start to ensure betting stops
+    const bufferMinutes = 5;
+    
+    // Create date object in local time
+    const matchDateTime = new Date(`${date}T${time}:00`);
+    const offsetHours = timezoneOffsets[timezone] || 0;
+    
+    // Adjust for timezone
+    matchDateTime.setHours(matchDateTime.getHours() - offsetHours);
+    // Subtract buffer to close betting early
+    matchDateTime.setMinutes(matchDateTime.getMinutes() - bufferMinutes);
+    
+    console.log(`⏰ Match time conversion: ${date} ${time} ${timezone} → ${matchDateTime.toISOString()} (includes 5min buffer)`);
+    return matchDateTime.toISOString();
+  };
+
+  // Check for duplicate markets before deployment
+  const checkForDuplicates = async (selectedMatchIds) => {
+    const duplicates = [];
+    
+    for (const matchId of selectedMatchIds) {
+      const match = CLUB_WC_MATCHES.find(m => m.match === matchId);
+      if (!match) continue;
+      
+      const question = `${match.home} - ${match.away}`;
+      
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets/check-duplicate?` +
+          `question=${encodeURIComponent(question)}&tournament_id=${TOURNAMENT_ID}`
+        );
+        
+        const data = await response.json();
+        
+        if (data.exists) {
+          duplicates.push({
+            matchId,
+            question,
+            match: match,
+            existingMarket: data.market
+          });
+        }
+      } catch (error) {
+        console.error(`Error checking duplicate for match ${matchId}:`, error);
+      }
+    }
+    
+    return duplicates;
+  };
+
   const handleDeploySelectedMarkets = async () => {
     if (!connected || selectedMatches.size === 0) return;
+
+    // Check for duplicates first
+    console.log('🔍 Checking for duplicate markets...');
+    const duplicates = await checkForDuplicates(selectedMatches);
+    
+    if (duplicates.length > 0) {
+      const duplicateList = duplicates.map(d => 
+        `• Match #${d.matchId}: ${d.question} (Market: ${d.existingMarket.market_address})`
+      ).join('\n');
+      
+      const proceed = confirm(
+        `⚠️ DUPLICATE MARKETS DETECTED!\n\n` +
+        `The following ${duplicates.length} markets already exist:\n\n${duplicateList}\n\n` +
+        `These will be skipped. Continue with the remaining ${selectedMatches.size - duplicates.length} markets?`
+      );
+      
+      if (!proceed) {
+        return;
+      }
+      
+      // Remove duplicates from selection
+      duplicates.forEach(d => selectedMatches.delete(d.matchId));
+    }
 
     setIsDeploying(true);
     const results = [];
@@ -235,14 +317,24 @@ const AdminTournamentPage = () => {
           league: 'fifa-club-world-cup',
           tournament_type: 'tournament',
           tournament_id: TOURNAMENT_ID,
-          endTime: `${match.date}T${match.time}:00.000Z`,
+          endTime: convertToUTC(match.date, match.time, match.timezone), // Use proper timezone conversion
+          end_time: convertToUTC(match.date, match.time, match.timezone), // Backend expects end_time
           minBetAmount: 10,
           creatorFeeRate: 2.5,
           assets: {
             banner: matchBanner,
             icon: tournamentAssets.icon
           },
-          optionsMetadata: optionsMetadata
+          optionsMetadata: optionsMetadata,
+          // Additional metadata for tracking
+          matchMetadata: {
+            matchNumber: match.match,
+            round: match.round,
+            group: match.group,
+            venue: match.venue,
+            localTime: `${match.time} ${match.timezone}`,
+            utcEndTime: convertToUTC(match.date, match.time, match.timezone)
+          }
         };
 
         // Simulate API call to create market

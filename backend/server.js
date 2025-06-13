@@ -35,6 +35,7 @@ const twitterRoutes = require('./routes/twitter');
 const tournamentRoutes = require('./routes/tournaments');
 const leaderboardRoutes = require('./routes/leaderboard');
 const adminRoutes = require('./routes/admin');
+const marketCreatorsRoutes = require('./routes/marketCreators');
 
 app.use('/api/users', userRoutes);
 app.use('/api/predictions', predictionRoutes);
@@ -44,6 +45,7 @@ app.use('/api/twitter', twitterRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/market-creators', marketCreatorsRoutes);
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
@@ -125,6 +127,20 @@ async function startServer() {
       }
     } catch (syncError) {
       console.log('⚠️ Blockchain sync service not available:', syncError.message);
+    }
+
+    // Start market monitoring service for tournament markets
+    try {
+      const marketMonitoringService = require('./services/marketMonitoringService');
+      if (!global.marketMonitoringStarted) {
+        marketMonitoringService.start();
+        global.marketMonitoringStarted = true;
+        console.log('✅ Market monitoring service started (checking end times every minute)');
+      } else {
+        console.log('⚠️ Market monitoring service already running');
+      }
+    } catch (monitorError) {
+      console.log('⚠️ Market monitoring service error:', monitorError.message);
     }
 
     // Start the server

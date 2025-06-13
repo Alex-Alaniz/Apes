@@ -4,6 +4,63 @@ const db = require('../config/database');
 const supabase = require('../config/supabase');
 const liveMarketSync = require('../services/liveMarketSyncService');
 
+// GET /api/markets/check-duplicate - Check if a market already exists
+router.get('/check-duplicate', async (req, res) => {
+  try {
+    const { question, tournament_id } = req.query;
+    
+    if (!question) {
+      return res.status(400).json({ error: 'Question parameter is required' });
+    }
+    
+    console.log(`🔍 Checking for duplicate market: "${question}"${tournament_id ? ` in tournament ${tournament_id}` : ''}`);
+    
+    let query;
+    let params;
+    
+    if (tournament_id) {
+      query = `
+        SELECT market_address, question, created_at, status, tournament_id
+        FROM markets 
+        WHERE question = $1 
+          AND tournament_id = $2
+          AND status != 'Resolved'
+        LIMIT 1
+      `;
+      params = [question, tournament_id];
+    } else {
+      query = `
+        SELECT market_address, question, created_at, status, tournament_id
+        FROM markets 
+        WHERE question = $1 
+          AND category = 'Sports'
+          AND status != 'Resolved'
+        LIMIT 1
+      `;
+      params = [question];
+    }
+    
+    const result = await db.query(query, params);
+    
+    if (result.rows.length > 0) {
+      console.log(`✅ Found existing market for "${question}"`);
+      return res.json({
+        exists: true,
+        market: result.rows[0]
+      });
+    }
+    
+    console.log(`❌ No duplicate found for "${question}"`);
+    return res.json({
+      exists: false
+    });
+    
+  } catch (error) {
+    console.error('Error checking for duplicate market:', error);
+    res.status(500).json({ error: 'Failed to check for duplicate' });
+  }
+});
+
 // GET /api/markets - Fetch all markets with enhanced data including assets
 router.get('/', async (req, res) => {
   try {
@@ -1293,7 +1350,14 @@ router.post('/', async (req, res) => {
       end_time,
       creator_address,
       transaction_hash,
-      status = 'Active'
+      status = 'Active',
+      tournament_id,
+      tournament_type,
+      description,
+      assets,
+      optionsMetadata,
+      minBetAmount = 10,
+      creatorFeeRate = 2.5
     } = req.body;
 
     const walletAddress = req.headers['x-wallet-address'];
@@ -1303,6 +1367,39 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ 
         error: 'Missing required fields: market_address, question, options' 
       });
+    }
+
+    // 🚫 DUPLICATE PREVENTION CHECK
+    if (tournament_id) {
+      console.log(`🔍 Checking for duplicate market: "${question}" in tournament ${tournament_id}`);
+      
+      const duplicateCheck = await db.query(`
+        SELECT market_address, question, created_at, status
+        FROM markets 
+        WHERE question = $1 
+          AND (
+            (tournament_id = $2 AND tournament_id IS NOT NULL)
+            OR (category = 'Sports' AND status != 'Resolved' AND question = $1)
+          )
+        LIMIT 1
+      `, [question, tournament_id]);
+      
+      if (duplicateCheck.rows.length > 0) {
+        const existing = duplicateCheck.rows[0];
+        console.log(`⚠️ DUPLICATE DETECTED: Market already exists for "${question}"`);
+        
+        return res.status(409).json({
+          error: 'Market already exists',
+          code: 'DUPLICATE_MARKET',
+          existing_market: {
+            address: existing.market_address,
+            question: existing.question,
+            created_at: existing.created_at,
+            status: existing.status
+          },
+          message: `A market for "${question}" already exists${tournament_id ? ' in this tournament' : ''}. Market address: ${existing.market_address}`
+        });
+      }
     }
 
     // Ensure we have a creator
@@ -1356,13 +1453,18 @@ router.post('/', async (req, res) => {
         option_volumes,
         total_volume,
         poly_id,
+        tournament_id,
+        tournament_type,
+        assets,
+        options_metadata,
         created_at,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
       ON CONFLICT (market_address) DO UPDATE SET
         question = EXCLUDED.question,
         category = EXCLUDED.category,
         options = EXCLUDED.options,
+        tournament_id = EXCLUDED.tournament_id,
         updated_at = NOW()
       RETURNING *
     `;
@@ -1371,15 +1473,19 @@ router.post('/', async (req, res) => {
       market_address,
       creator,
       question,
-      question, // use question as description
+      description || question, // use description or fallback to question
       category || 'General',
       end_time ? new Date(end_time) : null,
       status,
       options, // PostgreSQL array format
-      10, // default min_bet
+      minBetAmount,
       optionVolumes,
       actualTotalVolume, // realistic initial total_volume
-      `user-created-${Date.now()}` // unique poly_id for manually created markets
+      `user-created-${Date.now()}`, // unique poly_id for manually created markets
+      tournament_id || null,
+      tournament_type || null,
+      assets ? JSON.stringify(assets) : null,
+      optionsMetadata ? JSON.stringify(optionsMetadata) : null
     ]);
 
     const market = result.rows[0];
