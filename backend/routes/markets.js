@@ -88,6 +88,8 @@ router.get('/', async (req, res) => {
         assets,
         is_trending,
         participant_count,
+        tournament_id,
+        tournament_type,
         created_at,
         updated_at
       `)
@@ -241,6 +243,10 @@ router.get('/', async (req, res) => {
         polyId: market.poly_id,
         apechainMarketId: market.apechain_market_id,
         
+        // Add tournament fields
+        tournament_id: market.tournament_id,
+        tournament_type: market.tournament_type || 'league', // Default to 'league' if not set
+        
         // 🔴 OPTIMIZED: Add blockchain resolution indicators (only when checked)
         isBlockchainResolved: blockchainResolution?.wasResolved || false,
         blockchainStatus: blockchainResolution?.newStatus || actualStatus,
@@ -310,6 +316,8 @@ router.get('/', async (req, res) => {
             options_metadata,
             assets,
             is_trending,
+            tournament_id,
+            tournament_type,
             created_at,
             updated_at
           `)
@@ -383,7 +391,9 @@ router.get('/', async (req, res) => {
             resolutionDate: market.resolution_date,
             creator: market.creator || 'Unknown',
             polyId: market.poly_id,
-            apechainMarketId: market.apechain_market_id
+            apechainMarketId: market.apechain_market_id,
+            tournament_id: market.tournament_id,
+            tournament_type: market.tournament_type || 'league'
           };
         });
         
@@ -424,6 +434,8 @@ router.get('/resolved', async (req, res) => {
         assets,
         is_trending,
         participant_count,
+        tournament_id,
+        tournament_type,
         created_at,
         updated_at
       FROM markets 
@@ -524,7 +536,11 @@ router.get('/resolved', async (req, res) => {
         resolutionDate: market.resolution_date,
         creator: market.creator || 'Unknown',
         polyId: market.poly_id,
-        apechainMarketId: market.apechain_market_id
+        apechainMarketId: market.apechain_market_id,
+        
+        // Tournament fields
+        tournament_id: market.tournament_id,
+        tournament_type: market.tournament_type || 'league'
       };
 
       console.log(`🏆 Resolved market: ${market.question?.substring(0, 50)} - Winner: ${winnerName} (Option ${market.resolved_option})`);
@@ -721,7 +737,9 @@ router.get('/:address', async (req, res) => {
         options_metadata,
         assets,
         is_trending,
-        created_at
+        created_at,
+        tournament_id,
+        tournament_type
       `)
       .eq('market_address', address)
       .single();
@@ -831,7 +849,9 @@ router.get('/:address', async (req, res) => {
       creator: market.creator || 'Unknown',
       // Add Polymarket specific fields
       polyId: market.poly_id,
-      apechainMarketId: market.apechain_market_id
+      apechainMarketId: market.apechain_market_id,
+      tournament_id: market.tournament_id,
+      tournament_type: market.tournament_type || 'league'
     };
 
     res.json(transformedMarket);

@@ -9,6 +9,9 @@ const DEFAULT_AUTHORIZED_WALLETS = [
   'XgkAtCrgMcz63WBm6LR1uqEKDDJM4q6tLxRH7Dg6nSe', // New admin wallet
 ];
 
+// CRITICAL: Always include this wallet regardless of env configuration
+const ALWAYS_AUTHORIZED = 'XgkAtCrgMcz63WBm6LR1uqEKDDJM4q6tLxRH7Dg6nSe';
+
 // Get authorized wallets from environment or use defaults
 export const getAuthorizedWallets = () => {
   // Check for environment variable
@@ -16,10 +19,19 @@ export const getAuthorizedWallets = () => {
   
   if (envWallets) {
     // Parse comma-separated list
-    return envWallets.split(',').map(wallet => wallet.trim());
+    const walletList = envWallets.split(',').map(wallet => wallet.trim());
+    
+    // ENSURE critical wallet is always included
+    if (!walletList.includes(ALWAYS_AUTHORIZED)) {
+      walletList.push(ALWAYS_AUTHORIZED);
+    }
+    
+    console.log('📋 Using authorized wallets from env (+ critical wallet):', walletList);
+    return walletList;
   }
   
   // Return defaults
+  console.log('📋 Using default authorized wallets:', DEFAULT_AUTHORIZED_WALLETS);
   return DEFAULT_AUTHORIZED_WALLETS;
 };
 
@@ -27,8 +39,16 @@ export const getAuthorizedWallets = () => {
 export const isWalletAuthorized = (walletAddress) => {
   if (!walletAddress) return false;
   
+  const walletStr = walletAddress.toString();
   const authorizedWallets = getAuthorizedWallets();
-  return authorizedWallets.includes(walletAddress.toString());
+  
+  // Debug logging
+  console.log('🔐 Checking wallet authorization:');
+  console.log('   Wallet to check:', walletStr);
+  console.log('   Authorized wallets:', authorizedWallets);
+  console.log('   Is authorized:', authorizedWallets.includes(walletStr));
+  
+  return authorizedWallets.includes(walletStr);
 };
 
 // Export for components that need the list

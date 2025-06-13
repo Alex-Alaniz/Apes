@@ -20,6 +20,8 @@ import {
   Palette,
   Save
 } from 'lucide-react';
+import { isWalletAuthorized } from '../config/access';
+import { useNavigate } from 'react-router-dom';
 
 // FIFA Club World Cup 2025 - Complete Tournament Structure (63 matches)
 const CLUB_WC_MATCHES = [
@@ -113,6 +115,26 @@ const CLUB_WC_MATCHES = [
 ];
 
 const AdminTournamentPage = () => {
+  const navigate = useNavigate();
+  const { publicKey, connected } = useWallet();
+  
+  // Authorization check
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  
+  useEffect(() => {
+    if (publicKey) {
+      const walletAddress = publicKey.toString();
+      const authorized = isWalletAuthorized(walletAddress);
+      setIsAuthorized(authorized);
+      
+      if (!authorized) {
+        console.log('❌ Unauthorized wallet attempted to access admin tournament page:', walletAddress);
+      }
+    } else {
+      setIsAuthorized(false);
+    }
+  }, [publicKey]);
+  
   const [deploymentStatus, setDeploymentStatus] = useState({});
   const [selectedMatches, setSelectedMatches] = useState(new Set());
   const [isDeploying, setIsDeploying] = useState(false);
@@ -133,7 +155,6 @@ const AdminTournamentPage = () => {
   
   const [tournamentAssets, setTournamentAssets] = useState(defaultTournamentAssets);
   const [loadingAssets, setLoadingAssets] = useState(true);
-  const { publicKey, connected } = useWallet();
   
   const TOURNAMENT_ID = 'club-world-cup-2025';
 
@@ -476,6 +497,44 @@ const AdminTournamentPage = () => {
       alert(`Failed to save assets: ${error.message}`);
     }
   };
+
+  // Show unauthorized message if wallet is connected but not authorized
+  if (publicKey && !isAuthorized) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="container mx-auto px-4">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-6 text-center">
+              <h2 className="text-2xl font-bold text-red-400 mb-4">Unauthorized Access</h2>
+              <p className="text-gray-600 dark:text-gray-300 mb-4">
+                Your wallet <span className="font-mono text-sm">{publicKey.toString()}</span> is not authorized to access tournament admin features.
+              </p>
+              <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+                Only authorized admin wallets can manage tournaments.
+              </p>
+              <button
+                onClick={() => navigate('/tournaments')}
+                className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                Back to Tournaments
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!connected) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Admin Access Required</h2>
+          <p className="text-gray-600 dark:text-gray-400">Please connect your wallet to access tournament admin features</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
