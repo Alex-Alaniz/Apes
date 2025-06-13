@@ -157,7 +157,6 @@ const AdminTournamentPage = () => {
   const [loadingAssets, setLoadingAssets] = useState(true);
   
   const TOURNAMENT_ID = 'club-world-cup-2025';
-  const TOURNAMENT_ID_NUMERIC = 1; // FIFA Club World Cup 2025 ID in database
 
   const groups = ['all', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'R16', 'QF', 'SF', 'F'];
   
@@ -256,7 +255,7 @@ const AdminTournamentPage = () => {
       try {
         const response = await fetch(
           `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets/check-duplicate?` +
-          `question=${encodeURIComponent(question)}&tournament_id=${TOURNAMENT_ID_NUMERIC}`
+          `question=${encodeURIComponent(question)}&tournament_id=${TOURNAMENT_ID}`
         );
         
         const data = await response.json();
@@ -332,7 +331,7 @@ const AdminTournamentPage = () => {
             ];
 
         const marketData = {
-          market_address: `tournament-${TOURNAMENT_ID_NUMERIC}-match-${match.match}-${Date.now()}`,
+          market_address: `tournament-${TOURNAMENT_ID}-match-${match.match}-${Date.now()}`,
           creator_address: publicKey.toString(),
           question: `${match.home} - ${match.away}`,
           description: `Club World Cup 2025 - ${match.round} ${match.group !== 'A' && match.group !== 'B' && match.group !== 'C' && match.group !== 'D' && match.group !== 'E' && match.group !== 'F' && match.group !== 'G' && match.group !== 'H' ? '' : `Group ${match.group}`} match between ${match.home} and ${match.away} at ${match.venue} on ${match.date}`,
@@ -340,7 +339,7 @@ const AdminTournamentPage = () => {
           category: 'Sports',
           league: 'fifa-club-world-cup',
           tournament_type: 'tournament',
-          tournament_id: TOURNAMENT_ID_NUMERIC,
+          tournament_id: TOURNAMENT_ID,
           endTime: convertToUTC(match.date, match.time, match.timezone),
           end_time: convertToUTC(match.date, match.time, match.timezone),
           resolution_date: convertToUTC(match.date, match.time, match.timezone),
@@ -348,6 +347,7 @@ const AdminTournamentPage = () => {
           creatorFeeRate: 2.5,
           min_bet: 10,
           status: 'Active',
+          transaction_hash: `admin-deploy-${TOURNAMENT_ID}-match-${match.match}-${Date.now()}`,
           assets: {
             banner: matchBanner,
             icon: tournamentAssets.icon

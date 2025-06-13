@@ -298,9 +298,9 @@ router.put('/:tournamentId/assets', async (req, res) => {
     `;
 
     const result = await db.query(query, [
-      assets ? JSON.stringify(assets) : null,
-      team_logos ? JSON.stringify(team_logos) : null,
-      match_banners ? JSON.stringify(match_banners) : null,
+      assets || null,
+      team_logos || null,
+      match_banners || null,
       tournamentId
     ]);
 
@@ -319,9 +319,9 @@ router.put('/:tournamentId/assets', async (req, res) => {
       `, [
         tournamentId,
         tournamentId,
-        JSON.stringify(assets || {}),
-        JSON.stringify(team_logos || {}),
-        JSON.stringify(match_banners || {})
+        assets || {},
+        team_logos || {},
+        match_banners || {}
       ]);
 
       const newResult = await db.query('SELECT * FROM tournaments WHERE tournament_id = $1', [tournamentId]);
