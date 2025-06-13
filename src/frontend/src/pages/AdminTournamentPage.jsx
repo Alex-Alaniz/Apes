@@ -32,7 +32,6 @@ import {
   formatDate
 } from '../utils/formatters';
 import { CLUB_WC_MATCHES } from '../constants/worldCupMatches';
-import { TEAM_LOGOS } from '../constants/teamLogos';
 import marketService from '../services/marketService';
 import { isWalletAuthorized } from '../config/access';
 import { useNavigate } from 'react-router-dom';
