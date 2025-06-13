@@ -64,9 +64,10 @@ router.get('/check-duplicate', async (req, res) => {
 // GET /api/markets - Fetch all markets with enhanced data including assets
 router.get('/', async (req, res) => {
   try {
-    console.log('🔄 Fetching markets using Supabase...');
+    const { tournament_id } = req.query;
+    console.log('🔄 Fetching markets using Supabase...', tournament_id ? `for tournament: ${tournament_id}` : 'all markets');
     
-    const { data: result, error } = await supabase
+    let query = supabase
       .from('markets')
       .select(`
         market_address,
@@ -93,15 +94,21 @@ router.get('/', async (req, res) => {
         created_at,
         updated_at
       `)
-      .not('market_address', 'like', 'test-market%')  // Filter out test markets
-      .order('created_at', { ascending: false });
+      .not('market_address', 'like', 'test-market%');  // Filter out test markets
+    
+    // Add tournament filter if provided
+    if (tournament_id) {
+      query = query.eq('tournament_id', tournament_id);
+    }
+    
+    const { data: result, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('❌ Supabase query error:', error);
       throw error;
     }
     
-    console.log(`📊 Found ${result.length} markets in database`);
+    console.log(`📊 Found ${result.length} markets in database${tournament_id ? ` for tournament ${tournament_id}` : ''}`);
     
     // If no markets found, return empty array with helpful message
     if (result.length === 0) {
@@ -296,7 +303,7 @@ router.get('/', async (req, res) => {
       console.log('⚠️  participant_count column missing, falling back to query without it');
       
       try {
-        const { data: fallbackResult, error: fallbackError } = await supabase
+        let fallbackQuery = supabase
           .from('markets')
           .select(`
             market_address,
@@ -323,11 +330,18 @@ router.get('/', async (req, res) => {
             updated_at
           `)
           .eq('status', 'Active')
-          .not('market_address', 'like', 'test-market%')  // Filter out test markets
+          .not('market_address', 'like', 'test-market%');  // Filter out test markets
+        
+        // Add tournament filter if provided
+        if (tournament_id) {
+          fallbackQuery = fallbackQuery.eq('tournament_id', tournament_id);
+        }
+        
+        const { data: fallbackResult, error: fallbackError } = await fallbackQuery
           .order('created_at', { ascending: false });
         
         if (fallbackError) throw fallbackError;
-        console.log(`📊 Fallback query found ${fallbackResult.length} markets`);
+        console.log(`📊 Fallback query found ${fallbackResult.length} markets${tournament_id ? ` for tournament ${tournament_id}` : ''}`);
         
         // Transform the data with participantCount defaulted to 0
         const markets = fallbackResult.map(market => {
