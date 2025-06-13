@@ -405,7 +405,14 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
             <span>
               {isResolved 
                 ? 'Ended' 
-                : endTime ? `Ends ${format(new Date(endTime), 'MMM d')}` : 'Ongoing'
+                : endTime ? (() => {
+                  const date = new Date(endTime);
+                  // For tournament markets, show more detail
+                  if (market.tournament_id) {
+                    return format(date, 'MMM d, h:mm a');
+                  }
+                  return `Ends ${format(date, 'MMM d')}`;
+                })() : 'Ongoing'
               }
             </span>
           </div>

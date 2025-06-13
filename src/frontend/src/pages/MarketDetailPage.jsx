@@ -422,7 +422,19 @@ const MarketDetailPage = ({ marketId }) => {
               <div className="text-gray-400 space-y-1">
                 <p>Created by: <span className="font-mono">{market.creator.slice(0, 8)}...{market.creator.slice(-8)}</span></p>
                 {market.resolutionDate && (
-                  <p>Ends: {format(new Date(market.resolutionDate), 'MMMM d, yyyy h:mm a')}</p>
+                  <p>
+                    Ends: {(() => {
+                      const date = new Date(market.resolutionDate);
+                      // For tournament markets, show the actual match time in ET
+                      if (market.tournament_id || market.matchMetadata) {
+                        // Convert UTC to ET (EDT in June is UTC-4)
+                        const etTime = new Date(date.getTime() - (4 * 60 * 60 * 1000));
+                        return format(etTime, 'MMMM d, yyyy h:mm a') + ' ET';
+                      }
+                      // For other markets, show local time with timezone
+                      return format(date, 'MMMM d, yyyy h:mm a zzz');
+                    })()}
+                  </p>
                 )}
               </div>
             </div>
