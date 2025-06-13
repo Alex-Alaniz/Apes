@@ -773,7 +773,7 @@ const TournamentDetailPage = () => {
     setLoading(true);
     
     // First load tournament assets for club world cup
-    if (id === 'club-world-cup-2025') {
+    if (tournamentId === 'club-world-cup-2025') {
       await loadTournamentAssets();
     }
     
