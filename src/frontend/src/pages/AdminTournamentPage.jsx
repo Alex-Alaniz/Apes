@@ -157,6 +157,7 @@ const AdminTournamentPage = () => {
   const [loadingAssets, setLoadingAssets] = useState(true);
   
   const TOURNAMENT_ID = 'club-world-cup-2025';
+  const TOURNAMENT_ID_NUMERIC = 1; // FIFA Club World Cup 2025 ID in database
 
   const groups = ['all', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'R16', 'QF', 'SF', 'F'];
   
@@ -255,7 +256,7 @@ const AdminTournamentPage = () => {
       try {
         const response = await fetch(
           `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets/check-duplicate?` +
-          `question=${encodeURIComponent(question)}&tournament_id=${TOURNAMENT_ID}`
+          `question=${encodeURIComponent(question)}&tournament_id=${TOURNAMENT_ID_NUMERIC}`
         );
         
         const data = await response.json();
@@ -331,23 +332,28 @@ const AdminTournamentPage = () => {
             ];
 
         const marketData = {
+          market_address: `tournament-${TOURNAMENT_ID_NUMERIC}-match-${match.match}-${Date.now()}`,
+          creator_address: publicKey.toString(),
           question: `${match.home} - ${match.away}`,
           description: `Club World Cup 2025 - ${match.round} ${match.group !== 'A' && match.group !== 'B' && match.group !== 'C' && match.group !== 'D' && match.group !== 'E' && match.group !== 'F' && match.group !== 'G' && match.group !== 'H' ? '' : `Group ${match.group}`} match between ${match.home} and ${match.away} at ${match.venue} on ${match.date}`,
           options: options,
           category: 'Sports',
           league: 'fifa-club-world-cup',
           tournament_type: 'tournament',
-          tournament_id: TOURNAMENT_ID,
-          endTime: convertToUTC(match.date, match.time, match.timezone), // Use proper timezone conversion
-          end_time: convertToUTC(match.date, match.time, match.timezone), // Backend expects end_time
+          tournament_id: TOURNAMENT_ID_NUMERIC,
+          endTime: convertToUTC(match.date, match.time, match.timezone),
+          end_time: convertToUTC(match.date, match.time, match.timezone),
+          resolution_date: convertToUTC(match.date, match.time, match.timezone),
           minBetAmount: 10,
           creatorFeeRate: 2.5,
+          min_bet: 10,
+          status: 'Active',
           assets: {
             banner: matchBanner,
             icon: tournamentAssets.icon
           },
           optionsMetadata: optionsMetadata,
-          // Additional metadata for tracking
+          options_metadata: optionsMetadata,
           matchMetadata: {
             matchNumber: match.match,
             round: match.round,
@@ -358,16 +364,22 @@ const AdminTournamentPage = () => {
           }
         };
 
-        // Simulate API call to create market
+        console.log('🚀 Deploying market:', marketData);
+
+        // API call to create market
         const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'X-Wallet-Address': publicKey.toString()
           },
           body: JSON.stringify(marketData)
         });
 
         if (response.ok) {
+          const responseData = await response.json();
+          console.log('✅ Market created:', responseData);
+          
           const optionCount = isGroupStage ? '3 options (w/ Draw)' : '2 options (Knockout)';
           results.push({
             matchId,
@@ -377,9 +389,13 @@ const AdminTournamentPage = () => {
           });
           setDeploymentStatus(prev => ({ ...prev, [matchId]: 'success' }));
         } else {
-          throw new Error(`HTTP ${response.status}`);
+          const errorData = await response.json().catch(() => null);
+          const errorMessage = errorData?.error || errorData?.message || `HTTP ${response.status}`;
+          console.error('❌ Market creation failed:', errorMessage, errorData);
+          throw new Error(errorMessage);
         }
       } catch (error) {
+        console.error('❌ Error deploying market:', error);
         results.push({
           matchId,
           match: `${match.home} - ${match.away}`,
@@ -463,34 +479,44 @@ const AdminTournamentPage = () => {
     }
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/tournaments/${TOURNAMENT_ID}/assets`, {
+      console.log('💾 Saving tournament assets...');
+      
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/tournaments/${TOURNAMENT_ID}/assets`;
+      console.log('📍 API URL:', apiUrl);
+      
+      const payload = {
+        assets: {
+          banner: tournamentAssets.banner,
+          icon: tournamentAssets.icon
+        },
+        team_logos: tournamentAssets.teamLogos,
+        match_banners: tournamentAssets.matchBanners
+      };
+      
+      console.log('📦 Payload:', payload);
+      
+      const response = await fetch(apiUrl, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'X-Wallet-Address': publicKey.toString()
         },
-        body: JSON.stringify({
-          assets: {
-            banner: tournamentAssets.banner,
-            icon: tournamentAssets.icon
-          },
-          team_logos: tournamentAssets.teamLogos,
-          match_banners: tournamentAssets.matchBanners
-        })
+        body: JSON.stringify(payload)
       });
 
+      console.log('📡 Response status:', response.status);
+
       if (response.ok) {
-        console.log('Saving tournament assets:', {
-          ...tournamentAssets,
-          matchBannersCount: Object.keys(tournamentAssets.matchBanners).length,
-          totalMatches: CLUB_WC_MATCHES.length
-        });
+        const responseData = await response.json();
+        console.log('✅ Assets saved successfully:', responseData);
         
         const customBannerCount = Object.keys(tournamentAssets.matchBanners).length;
         alert(`Tournament assets saved successfully!\n\n✓ Default banner: Set\n✓ Tournament icon: Set\n✓ Team logos: ${Object.keys(tournamentAssets.teamLogos).length} configured\n✓ Custom match banners: ${customBannerCount} of ${CLUB_WC_MATCHES.length} matches\n\nMatches without custom banners will use the default tournament banner.\n\nAssets are saved to the database and visible across the platform.`);
       } else {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to save assets');
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.error || errorData?.message || `HTTP ${response.status}`;
+        console.error('❌ Save assets failed:', errorMessage, errorData);
+        throw new Error(errorMessage);
       }
     } catch (error) {
       console.error('Error saving assets:', error);
@@ -1195,22 +1221,7 @@ const AdminTournamentPage = () => {
                         setTournamentAssets(defaultTournamentAssets);
                         // Save the default assets to database
                         try {
-                          await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/tournaments/${TOURNAMENT_ID}/assets`, {
-                            method: 'PUT',
-                            headers: {
-                              'Content-Type': 'application/json',
-                              'X-Wallet-Address': publicKey.toString()
-                            },
-                            body: JSON.stringify({
-                              assets: {
-                                banner: defaultTournamentAssets.banner,
-                                icon: defaultTournamentAssets.icon
-                              },
-                              team_logos: {},
-                              match_banners: {}
-                            })
-                          });
-                          alert('All tournament assets have been reset to defaults.');
+                          await saveAssets();
                         } catch (error) {
                           console.error('Error clearing assets:', error);
                           alert('Failed to clear assets. Please try again.');
