@@ -20,6 +20,7 @@ async function loadSolanaModules() {
 const AUTHORIZED_WALLETS = [
   'APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z', // PRIMAPE Treasury
   'APESxbwPNyJW62vSY83zENJwoL2gXJ8HbpXfkBGfnghe', // Community Treasury
+  'XgkAtCrgMcz63WBm6LR1uqEKDDJM4q6tLxRH7Dg6nSe', // New admin wallet
   // Add your admin wallet here
 ];
 

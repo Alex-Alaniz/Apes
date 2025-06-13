@@ -70,6 +70,7 @@ We've created an admin interface that allows you to preview and approve markets 
 The following wallets have admin access:
 - `APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z` - PRIMAPE Treasury
 - `APESxbwPNyJW62vSY83zENJwoL2gXJ8HbpXfkBGfnghe` - Community Treasury
+- `XgkAtCrgMcz63WBm6LR1uqEKDDJM4q6tLxRH7Dg6nSe` - Admin Wallet
 
 To add more admin wallets:
 1. Update `src/frontend/src/config/access.js`
