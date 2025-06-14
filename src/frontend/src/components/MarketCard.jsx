@@ -413,8 +413,25 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
                     // Tournament markets store resolution dates in UTC. When displaying these dates:
                     // 1. For tournament markets with tournament_id, convert UTC back to ET (Eastern Time) 
                     // 2. In June 2025, use EDT (UTC-4) for the conversion
-                    // The date from backend is in UTC, convert to EDT (UTC-4)
+                    
+                    // Check if this is a West Coast match that crosses date boundary
+                    // These matches show different dates in PT vs EDT
+                    const utcHour = date.getUTCHours();
                     const etDate = new Date(date.getTime() - (4 * 60 * 60 * 1000));
+                    const ptDate = new Date(date.getTime() - (7 * 60 * 60 * 1000));
+                    
+                    // If UTC hour is between 0-7, it's likely a late PT match crossing to next day EDT
+                    if (utcHour >= 0 && utcHour <= 7) {
+                      const ptDateStr = format(ptDate, 'MMM d');
+                      const ptTimeStr = format(ptDate, 'h:mm a');
+                      const etTimeStr = format(etDate, 'h:mm a');
+                      
+                      // Check if dates are different
+                      if (ptDate.getDate() !== etDate.getDate()) {
+                        return `${ptDateStr}, ${ptTimeStr} PT / ${etTimeStr} EDT`;
+                      }
+                    }
+                    
                     return format(etDate, 'MMM d, h:mm a') + ' EDT';
                   }
                   return `Ends ${format(date, 'MMM d')}`;
