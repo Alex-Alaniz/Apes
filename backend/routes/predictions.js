@@ -83,6 +83,57 @@ router.post('/place', async (req, res) => {
     const prediction = result.rows[0];
     console.log('✅ Prediction inserted:', prediction);
 
+    // STEP 2b: Also insert into prediction_history for better tracking
+    try {
+      // Get market details for prediction_history
+      const marketResult = await db.query(`
+        SELECT question, options 
+        FROM markets_cache 
+        WHERE market_pubkey = $1
+      `, [market_address]);
+      
+      let marketQuestion = 'Unknown Market';
+      let optionText = `Option ${option_index}`;
+      
+      if (marketResult.rows.length > 0) {
+        const market = marketResult.rows[0];
+        marketQuestion = market.question || marketQuestion;
+        try {
+          const options = typeof market.options === 'string' ? JSON.parse(market.options) : market.options;
+          if (options && options[option_index]) {
+            optionText = options[option_index];
+          }
+        } catch (e) {
+          console.log('⚠️ Could not parse options:', e.message);
+        }
+      }
+      
+      await db.query(`
+        INSERT INTO prediction_history (
+          wallet_address,
+          market_pubkey,
+          market_question,
+          option_index,
+          option_text,
+          amount,
+          predicted_at,
+          transaction_signature
+        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7)
+      `, [
+        userAddress,
+        market_address,
+        marketQuestion,
+        option_index,
+        optionText,
+        amount,
+        transaction_signature
+      ]);
+      
+      console.log('✅ Added to prediction_history');
+    } catch (historyError) {
+      console.log('⚠️ Could not add to prediction_history:', historyError.message);
+    }
+
     // STEP 3: Update total_invested
     try {
       await db.query(`
@@ -94,6 +145,61 @@ router.post('/place', async (req, res) => {
       console.log(`✅ Updated total_invested for ${userAddress} by ${amount}`);
     } catch (updateError) {
       console.log('⚠️ Could not update total_invested:', updateError.message);
+    }
+
+    // STEP 4: Update market cache total_volume
+    try {
+      // First ensure the market exists in markets_cache
+      await db.query(`
+        INSERT INTO markets_cache (market_pubkey, total_volume, participant_count)
+        VALUES ($1, 0, 0)
+        ON CONFLICT (market_pubkey) DO NOTHING
+      `, [market_address]);
+
+      // Update the total volume by adding the new bet amount
+      await db.query(`
+        UPDATE markets_cache 
+        SET 
+          total_volume = COALESCE(total_volume, 0) + $1,
+          participant_count = (
+            SELECT COUNT(DISTINCT user_address) 
+            FROM predictions 
+            WHERE market_address = $2
+          ),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE market_pubkey = $2
+      `, [amount, market_address]);
+      
+      // Update option pools - rebuild from all predictions
+      const poolsResult = await db.query(`
+        SELECT 
+          option_index,
+          SUM(amount) as pool_amount
+        FROM predictions
+        WHERE market_address = $1
+        GROUP BY option_index
+        ORDER BY option_index
+      `, [market_address]);
+      
+      // Create option pools array
+      const maxOptions = 10; // Assuming max 10 options
+      const optionPools = new Array(maxOptions).fill(0);
+      poolsResult.rows.forEach(row => {
+        if (row.option_index < maxOptions) {
+          optionPools[row.option_index] = parseFloat(row.pool_amount) || 0;
+        }
+      });
+      
+      // Update markets_cache with option pools
+      await db.query(`
+        UPDATE markets_cache
+        SET option_pools = $1
+        WHERE market_pubkey = $2
+      `, [JSON.stringify(optionPools), market_address]);
+      
+      console.log(`✅ Updated market cache volume and pools for ${market_address}`);
+    } catch (marketUpdateError) {
+      console.log('⚠️ Could not update market cache volume:', marketUpdateError.message);
     }
 
     console.log('🚨 MINIMAL PREDICTION SUCCESSFUL - NO ENGAGEMENT SERVICE CALLS');

@@ -226,8 +226,8 @@ router.get('/:walletAddress/bets', async (req, res) => {
     const bets = await db.query(
       `SELECT 
         ph.*,
-        mc.question as marketTitle,
-        mc.status as marketStatus
+        mc.question as "marketTitle",
+        mc.status as "marketStatus"
        FROM prediction_history ph
        LEFT JOIN markets_cache mc ON ph.market_pubkey = mc.market_pubkey
        WHERE ph.wallet_address = $1
@@ -237,7 +237,7 @@ router.get('/:walletAddress/bets', async (req, res) => {
     );
 
     const formattedBets = bets.rows.map(bet => ({
-      marketTitle: bet.markettitle || bet.market_question,
+      marketTitle: bet.marketTitle || bet.markettitle || bet.market_question,
       position: bet.option_text,
       amount: parseFloat(bet.amount),
       date: bet.predicted_at,
