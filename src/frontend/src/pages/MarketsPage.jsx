@@ -334,8 +334,8 @@ const MarketsPage = () => {
     switch (sortBy) {
       case 'date':
         // Sort by resolution date/end time
-        const dateA = a.resolution_date || a.endTime || '';
-        const dateB = b.resolution_date || b.endTime || '';
+        const dateA = a.resolution_date || a.resolutionDate || a.endTime || '';
+        const dateB = b.resolution_date || b.resolutionDate || b.endTime || '';
         comparison = new Date(dateA) - new Date(dateB);
         break;
         
@@ -483,8 +483,22 @@ const MarketsPage = () => {
               <div className="space-y-8">
                 {Object.entries(
                   sortedMarkets.reduce((groups, market) => {
-                    const date = market.resolution_date || market.endTime || 'No Date';
-                    const dateKey = date !== 'No Date' ? format(parseISO(date), 'yyyy-MM-dd') : 'No Date';
+                    const date = market.resolution_date || market.resolutionDate || market.endTime || 'No Date';
+                    let dateKey = 'No Date';
+                    
+                    if (date !== 'No Date') {
+                      const dateObj = new Date(date);
+                      
+                      // For tournament markets, group by ET date
+                      if (market.tournament_id) {
+                        // Convert UTC to EDT (UTC-4) for June 2025
+                        const etDate = new Date(dateObj.getTime() - (4 * 60 * 60 * 1000));
+                        dateKey = format(etDate, 'yyyy-MM-dd');
+                      } else {
+                        dateKey = format(dateObj, 'yyyy-MM-dd');
+                      }
+                    }
+                    
                     if (!groups[dateKey]) groups[dateKey] = [];
                     groups[dateKey].push(market);
                     return groups;
@@ -507,6 +521,11 @@ const MarketsPage = () => {
                         <span className="text-sm text-gray-500 dark:text-gray-400">
                           ({dateMarkets.length} markets)
                         </span>
+                        {dateMarkets.some(m => m.tournament_id) && (
+                          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                            EDT
+                          </span>
+                        )}
                       </div>
                       <MarketList 
                         markets={dateMarkets} 

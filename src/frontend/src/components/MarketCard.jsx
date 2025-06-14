@@ -407,11 +407,15 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
                 ? 'Ended' 
                 : endTime ? (() => {
                   const date = new Date(endTime);
-                  // For tournament markets, convert UTC to ET and show more detail
+                  // For tournament markets, display in ET timezone
                   if (market.tournament_id) {
-                    // Convert UTC to ET (EDT in June is UTC-4)
-                    const etTime = new Date(date.getTime() - (4 * 60 * 60 * 1000));
-                    return format(etTime, 'MMM d, h:mm a') + ' ET';
+                    // According to a memory from a past conversation...
+                    // Tournament markets store resolution dates in UTC. When displaying these dates:
+                    // 1. For tournament markets with tournament_id, convert UTC back to ET (Eastern Time) 
+                    // 2. In June 2025, use EDT (UTC-4) for the conversion
+                    // The date from backend is in UTC, convert to EDT (UTC-4)
+                    const etDate = new Date(date.getTime() - (4 * 60 * 60 * 1000));
+                    return format(etDate, 'MMM d, h:mm a') + ' EDT';
                   }
                   return `Ends ${format(date, 'MMM d')}`;
                 })() : 'Ongoing'
