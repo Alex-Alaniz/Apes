@@ -5,6 +5,17 @@
   "installCommand": "npm install",
   "rewrites": [
     {
+      "source": "/tournaments/:path*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|Slackbot|Discordbot|TelegramBot|Pinterest|redditbot|Snapchat|SkypeUriPreview).*"
+        }
+      ],
+      "destination": "/api/og?slug=tournaments/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
