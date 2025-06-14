@@ -8,9 +8,21 @@ import ClaimRewardModal from '../components/ClaimRewardModal';
 import Toast from '../components/Toast';
 import marketService from '../services/marketService';
 import blockchainMarketsService from '../services/blockchainMarketsService';
+import { format, parseISO } from 'date-fns';
+import { 
+  Filter, 
+  Calendar, 
+  TrendingUp, 
+  Clock, 
+  Trophy,
+  SortAsc,
+  SortDesc,
+  CalendarDays,
+  Shield 
+} from 'lucide-react';
 
 const MarketsPage = () => {
-  // �� DEPLOYMENT TRIGGER v2: Force Vercel auto-deployment - June 12, 2025 @ 1:45 PM
+  // 📊 DEPLOYMENT TRIGGER v2: Force Vercel auto-deployment - June 12, 2025 @ 1:45 PM
   // Backend optimization complete: 23 active markets ready, testing auto-deploy from master
   const [markets, setMarkets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +43,10 @@ const MarketsPage = () => {
     status: 'all',
     search: ''
   });
+  // New sorting state
+  const [sortBy, setSortBy] = useState('date'); // 'date', 'volume', 'participants'
+  const [sortOrder, setSortOrder] = useState('asc'); // 'asc' or 'desc'
+  
   const { wallet, publicKey, connected, signTransaction, signAllTransactions } = useWallet();
   const scrollPositionRef = useRef(0);
   const navigate = useNavigate();
@@ -311,6 +327,40 @@ const MarketsPage = () => {
     return true;
   });
 
+  // Sort markets based on selected criteria
+  const sortedMarkets = [...filteredMarkets].sort((a, b) => {
+    let comparison = 0;
+    
+    switch (sortBy) {
+      case 'date':
+        // Sort by resolution date/end time
+        const dateA = a.resolution_date || a.endTime || '';
+        const dateB = b.resolution_date || b.endTime || '';
+        comparison = new Date(dateA) - new Date(dateB);
+        break;
+        
+      case 'volume':
+        // Sort by total volume
+        const volA = a.totalVolume || a.total_volume || 0;
+        const volB = b.totalVolume || b.total_volume || 0;
+        comparison = volA - volB;
+        break;
+        
+      case 'participants':
+        // Sort by number of bets/participants
+        const betsA = a.totalBets || a.total_bets || 0;
+        const betsB = b.totalBets || b.total_bets || 0;
+        comparison = betsA - betsB;
+        break;
+        
+      default:
+        comparison = 0;
+    }
+    
+    // Apply sort order
+    return sortOrder === 'asc' ? comparison : -comparison;
+  });
+
   const activeCount = allMarkets.filter(m => m.status === 'Active' || m.status === 'active').length;
   const resolvedCount = allMarkets.filter(m => m.status === 'Resolved' || m.status === 'resolved').length;
 
@@ -318,6 +368,31 @@ const MarketsPage = () => {
   const handleSportFilterChange = (newFilters) => {
     setSportFilters(newFilters);
   };
+
+  // Sort button component
+  const SortButton = ({ value, label, icon: Icon }) => (
+    <button
+      onClick={() => {
+        if (sortBy === value) {
+          setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+          setSortBy(value);
+          setSortOrder('asc');
+        }
+      }}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+        sortBy === value
+          ? 'bg-purple-600 text-white'
+          : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-gray-700'
+      }`}
+    >
+      <Icon className="w-4 h-4" />
+      {label}
+      {sortBy === value && (
+        sortOrder === 'asc' ? <SortAsc className="w-4 h-4" /> : <SortDesc className="w-4 h-4" />
+      )}
+    </button>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -352,13 +427,36 @@ const MarketsPage = () => {
           />
         </div>
 
+        {/* Sorting Options */}
+        <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-gray-200 dark:border-gray-700">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              <Filter className="w-4 h-4" />
+              Sort by:
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <SortButton value="date" label="Date" icon={Calendar} />
+              <SortButton value="volume" label="Volume" icon={TrendingUp} />
+              <SortButton value="participants" label="Participants" icon={Shield} />
+            </div>
+            {sportFilters.tournamentType === 'tournament' && (
+              <div className="ml-auto">
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-full">
+                  <Trophy className="w-4 h-4" />
+                  Tournament Markets
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
             <p className="mt-4 text-gray-600 dark:text-gray-400">Loading markets with blockchain verification...</p>
           </div>
-        ) : filteredMarkets.length === 0 ? (
-          <div className="text-center py-12">
+        ) : sortedMarkets.length === 0 ? (
+          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8">
             <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">
               {filter === 'all' ? 'No Markets Available' : `No ${filter.charAt(0).toUpperCase() + filter.slice(1)} Markets`}
             </h3>
@@ -379,13 +477,57 @@ const MarketsPage = () => {
             )}
           </div>
         ) : (
-          <MarketList 
-            markets={filteredMarkets} 
-            onPredict={handlePredictClick}
-            onClaim={handleClaimClick}
-            canClaimReward={canClaimReward}
-            userPositions={userPositions}
-          />
+          <>
+            {/* Markets grouped by date for tournament markets */}
+            {sportFilters.tournamentType === 'tournament' && sortBy === 'date' ? (
+              <div className="space-y-8">
+                {Object.entries(
+                  sortedMarkets.reduce((groups, market) => {
+                    const date = market.resolution_date || market.endTime || 'No Date';
+                    const dateKey = date !== 'No Date' ? format(parseISO(date), 'yyyy-MM-dd') : 'No Date';
+                    if (!groups[dateKey]) groups[dateKey] = [];
+                    groups[dateKey].push(market);
+                    return groups;
+                  }, {})
+                )
+                  .sort((a, b) => {
+                    if (a[0] === 'No Date') return 1;
+                    if (b[0] === 'No Date') return -1;
+                    return sortOrder === 'asc' 
+                      ? new Date(a[0]) - new Date(b[0])
+                      : new Date(b[0]) - new Date(a[0]);
+                  })
+                  .map(([date, dateMarkets]) => (
+                    <div key={date}>
+                      <div className="flex items-center gap-3 mb-4">
+                        <CalendarDays className="w-5 h-5 text-blue-600" />
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                          {date === 'No Date' ? 'Unscheduled' : format(parseISO(date), 'EEEE, MMMM d, yyyy')}
+                        </h3>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          ({dateMarkets.length} markets)
+                        </span>
+                      </div>
+                      <MarketList 
+                        markets={dateMarkets} 
+                        onPredict={handlePredictClick}
+                        onClaim={handleClaimClick}
+                        canClaimReward={canClaimReward}
+                        userPositions={userPositions}
+                      />
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <MarketList 
+                markets={sortedMarkets} 
+                onPredict={handlePredictClick}
+                onClaim={handleClaimClick}
+                canClaimReward={canClaimReward}
+                userPositions={userPositions}
+              />
+            )}
+          </>
         )}
 
         {/* Prediction Modal */}

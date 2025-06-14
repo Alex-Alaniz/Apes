@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { isWalletAuthorized } from '../config/access';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import {
   Trophy,
   Calendar,
@@ -24,7 +24,24 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
-  Gift
+  Gift,
+  BarChart3,
+  Newspaper,
+  Table2,
+  Filter,
+  Search,
+  Grid3x3,
+  CalendarDays,
+  Shield,
+  UserCircle2,
+  Activity,
+  TrendingDown,
+  Award,
+  Timer,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  ExternalLink
 } from 'lucide-react';
 
 // NBA Finals Series Data
@@ -50,16 +67,80 @@ const NBA_FINALS_SERIES = {
   }
 };
 
-// Club World Cup Groups and Teams
+// Club World Cup Groups and Teams with standings
 const CLUB_WC_GROUPS = {
-  'A': { teams: ['Al Ahly', 'Inter Miami', 'Palmeiras', 'Porto'], results: [] },
-  'B': { teams: ['Paris Saint-Germain', 'Atletico Madrid', 'Botafogo', 'Seattle Sounders'], results: [] },
-  'C': { teams: ['Bayern Munich', 'Auckland City', 'Boca Juniors', 'Benfica'], results: [] },
-  'D': { teams: ['Chelsea', 'LAFC', 'Flamengo', 'Espérance'], results: [] },
-  'E': { teams: ['River Plate', 'Urawa Red Diamonds', 'Monterrey', 'Internazionale'], results: [] },
-  'F': { teams: ['Fluminense', 'Borussia Dortmund', 'Ulsan HD', 'Mamelodi Sundowns'], results: [] },
-  'G': { teams: ['Manchester City', 'Wydad AC', 'Al Ain', 'Juventus'], results: [] },
-  'H': { teams: ['Real Madrid', 'Al Hilal', 'Pachuca', 'Salzburg'], results: [] }
+  'A': { 
+    teams: ['Al Ahly', 'Inter Miami', 'Palmeiras', 'Porto'],
+    standings: [
+      { team: 'Palmeiras', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Porto', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Al Ahly', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Inter Miami', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 }
+    ]
+  },
+  'B': { 
+    teams: ['Paris Saint-Germain', 'Atletico Madrid', 'Botafogo', 'Seattle Sounders'],
+    standings: [
+      { team: 'Paris Saint-Germain', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Atletico Madrid', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Botafogo', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Seattle Sounders', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 }
+    ]
+  },
+  'C': { 
+    teams: ['Bayern Munich', 'Auckland City', 'Boca Juniors', 'Benfica'],
+    standings: [
+      { team: 'Bayern Munich', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Benfica', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Boca Juniors', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Auckland City', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 }
+    ]
+  },
+  'D': { 
+    teams: ['Chelsea', 'LAFC', 'Flamengo', 'Espérance'],
+    standings: [
+      { team: 'Chelsea', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Flamengo', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'LAFC', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Espérance', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 }
+    ]
+  },
+  'E': { 
+    teams: ['River Plate', 'Urawa Red Diamonds', 'Monterrey', 'Internazionale'],
+    standings: [
+      { team: 'River Plate', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Internazionale', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Monterrey', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Urawa Red Diamonds', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 }
+    ]
+  },
+  'F': { 
+    teams: ['Fluminense', 'Borussia Dortmund', 'Ulsan HD', 'Mamelodi Sundowns'],
+    standings: [
+      { team: 'Borussia Dortmund', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Fluminense', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Ulsan HD', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Mamelodi Sundowns', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 }
+    ]
+  },
+  'G': { 
+    teams: ['Manchester City', 'Wydad AC', 'Al Ain', 'Juventus'],
+    standings: [
+      { team: 'Manchester City', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Juventus', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Al Ain', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Wydad AC', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 }
+    ]
+  },
+  'H': { 
+    teams: ['Real Madrid', 'Al Hilal', 'Pachuca', 'Salzburg'],
+    standings: [
+      { team: 'Real Madrid', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Salzburg', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Al Hilal', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 },
+      { team: 'Pachuca', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 }
+    ]
+  }
 };
 
 // Complete FIFA Club World Cup 2025 Match Data (63 matches)
@@ -162,97 +243,122 @@ const getUpcomingMatches = () => {
     .slice(0, 10);
 };
 
-// Countdown Timer Component
-const CountdownTimer = ({ targetDate, label }) => {
-  const [timeLeft, setTimeLeft] = useState({});
+// FotMob-style Tab Navigation Component
+const TabNavigation = ({ activeTab, setActiveTab, tournamentId }) => {
+  const tabs = tournamentId === 'club-world-cup-2025' 
+    ? ['overview', 'table', 'knockout', 'matches', 'stats', 'news']
+    : ['overview', 'matches', 'stats', 'news'];
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date().getTime();
-      const distance = new Date(targetDate).getTime() - now;
-
-      if (distance > 0) {
-        setTimeLeft({
-          days: Math.floor(distance / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-          minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
-          seconds: Math.floor((distance % (1000 * 60)) / 1000)
-        });
-      } else {
-        setTimeLeft({ expired: true });
-      }
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [targetDate]);
-
-  if (timeLeft.expired) {
-    return (
-      <div className="text-center text-red-600 dark:text-red-400 font-bold">
-        🔴 {label} has begun!
-      </div>
-    );
-  }
+  const tabIcons = {
+    overview: Globe,
+    table: Table2,
+    knockout: Trophy,
+    matches: CalendarDays,
+    stats: BarChart3,
+    news: Newspaper
+  };
 
   return (
-    <div className="text-center">
-      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">{label}</div>
-      <div className="flex justify-center gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 min-w-[60px]">
-          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{timeLeft.days || 0}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Days</div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 min-w-[60px]">
-          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{timeLeft.hours || 0}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Hours</div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 min-w-[60px]">
-          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{timeLeft.minutes || 0}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Mins</div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 min-w-[60px]">
-          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{timeLeft.seconds || 0}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Secs</div>
+    <div className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto">
+        <nav className="flex overflow-x-auto no-scrollbar">
+          {tabs.map((tab) => {
+            const Icon = tabIcons[tab];
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-3 transition-all whitespace-nowrap ${
+                  activeTab === tab
+                    ? 'text-gray-900 dark:text-white border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
+                    : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+    </div>
+  );
+};
+
+// Stats Card Component
+const StatsCard = ({ icon: Icon, title, value, subtitle, trend, color = 'yellow' }) => {
+  const colorClasses = {
+    blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400',
+    green: 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400',
+    purple: 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+    yellow: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400',
+    red: 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400',
+    black: 'bg-gray-100 dark:bg-gray-900/20 text-gray-800 dark:text-gray-200'
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className={`inline-flex p-3 rounded-lg ${colorClasses[color]} mb-4`}>
+            <Icon className="w-5 h-5" />
+          </div>
+          <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</h3>
+          <div className="mt-2">
+            <span className="text-2xl font-bold text-gray-900 dark:text-white">{value}</span>
+            {trend && (
+              <span className={`ml-2 text-sm font-medium ${trend > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {trend > 0 ? '+' : ''}{trend}%
+              </span>
+            )}
+          </div>
+          {subtitle && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-// Club World Cup Matches Component with group-based organization
-const ClubWorldCupMatches = ({ tournamentAssets }) => {
-  const [expandedGroups, setExpandedGroups] = useState(new Set());
-  const [showAllMatches, setShowAllMatches] = useState(false);
-
-  const toggleGroup = (group) => {
-    const newExpanded = new Set(expandedGroups);
-    if (newExpanded.has(group)) {
-      newExpanded.delete(group);
-    } else {
-      newExpanded.add(group);
-    }
-    setExpandedGroups(newExpanded);
-  };
-
-  // Group matches by group and round
-  const groupStageMatches = CLUB_WC_ALL_MATCHES.filter(match => match.round === 'Group Stage');
-  const knockoutMatches = CLUB_WC_ALL_MATCHES.filter(match => match.round !== 'Group Stage');
-
-  // Group stage matches by group
-  const matchesByGroup = {};
-  Object.keys(CLUB_WC_GROUPS).forEach(groupLetter => {
-    matchesByGroup[groupLetter] = groupStageMatches.filter(match => match.group === groupLetter);
-  });
-
-  // Get first match for each group (for initial display)
-  const getFirstMatchForGroup = (groupLetter) => {
-    return matchesByGroup[groupLetter]?.[0];
-  };
-
-  const MatchCard = ({ match, isFirst = false }) => {
-    const navigate = useNavigate();
+// Match Card Component (FotMob style)
+const MatchCard = ({ match, tournamentAssets, onViewMarket, timezone = 'ET' }) => {
+  const navigate = useNavigate();
+  
+  // Convert match time to the tournament's timezone
+  const getDisplayTime = useCallback(() => {
+    if (!match.date || !match.time) return { date: 'TBD', time: 'TBD' };
     
-    const handleViewMarket = async () => {
+    try {
+      // Create a date object from the match date and time
+      const matchDateTime = new Date(`${match.date}T${match.time}:00`);
+      
+      // According to a memory from a past conversation...
+      // Tournament markets store resolution dates in UTC. When displaying these dates:
+      // 1. For tournament markets with tournament_id, convert UTC back to ET (Eastern Time) as that's the tournament timezone
+      // 2. In June 2025, use EDT (UTC-4) for the conversion
+      // 3. Always indicate the timezone when displaying times to avoid confusion
+      // 4. The backend correctly stores UTC times, but frontend display should show the actual match time in the tournament's timezone
+      
+      // Since it's June 2025, we use EDT (UTC-4)
+      // The match times are already in the correct timezone (ET/PT as specified in match data)
+      // So we just format them for display
+      const dateStr = format(parseISO(match.date), 'MMM d');
+      const timeStr = match.time || 'TBD';
+      
+      return { date: dateStr, time: timeStr };
+    } catch (error) {
+      console.error('Error formatting match time:', error);
+      return { date: match.date, time: match.time || 'TBD' };
+    }
+  }, [match.date, match.time]);
+  
+  const displayTime = getDisplayTime();
+  
+  const handleViewMarket = async () => {
+    if (onViewMarket) {
+      onViewMarket(match);
+    } else {
       const question = `${match.home} - ${match.away}`;
       try {
         const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=club-world-cup-2025`);
@@ -269,174 +375,944 @@ const ClubWorldCupMatches = ({ tournamentAssets }) => {
         console.error('Error finding market:', error);
         alert('Error finding market for this match');
       }
-    };
-    
-    return (
-      <div className={`bg-white dark:bg-gray-800 rounded-xl p-4 ${isFirst ? 'border-2 border-purple-200 dark:border-purple-700' : 'border border-gray-200 dark:border-gray-700'}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4 flex-1">
-            <div className="text-center min-w-[60px]">
-              <div className="text-xs text-gray-500 dark:text-gray-400">#{match.match}</div>
-              <div className="font-bold text-purple-600 dark:text-purple-400 text-sm">{match.round === 'Group Stage' ? `Group ${match.group}` : match.round}</div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 text-right min-w-[120px]">
-                            {tournamentAssets?.team_logos?.[match.home] && (
+    }
+  };
+  
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all">
+      <div className="p-4">
+        {/* Match header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            {match.round} {match.group && match.round === 'Group Stage' ? `• Group ${match.group}` : ''}
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            {displayTime.date} • {displayTime.time} {match.timezone || timezone}
+          </div>
+        </div>
+        
+        {/* Teams */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 flex-1">
+              {tournamentAssets?.team_logos?.[match.home] && (
                 <img 
                   src={tournamentAssets.team_logos[match.home]} 
                   alt={match.home}
-                  className="w-6 h-6 rounded-full object-cover"
+                  className="w-8 h-8 rounded-full object-cover"
                 />
               )}
-                <div className="font-bold text-gray-900 dark:text-white text-sm">{match.home}</div>
-              </div>
-              <div className="text-gray-400 font-bold">vs</div>
-              <div className="flex items-center gap-2 text-left min-w-[120px]">
-                <div className="font-bold text-gray-900 dark:text-white text-sm">{match.away}</div>
-                {tournamentAssets?.team_logos?.[match.away] && (
-                  <img 
-                    src={tournamentAssets.team_logos[match.away]} 
-                    alt={match.away}
-                    className="w-6 h-6 rounded-full object-cover"
-                  />
-                )}
-              </div>
+              <span className="font-medium text-gray-900 dark:text-white">{match.home}</span>
+            </div>
+            {match.status === 'completed' && match.score && (
+              <span className="font-bold text-gray-900 dark:text-white">{match.score.split('-')[0]}</span>
+            )}
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 flex-1">
+              {tournamentAssets?.team_logos?.[match.away] && (
+                <img 
+                  src={tournamentAssets.team_logos[match.away]} 
+                  alt={match.away}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              )}
+              <span className="font-medium text-gray-900 dark:text-white">{match.away}</span>
+            </div>
+            {match.status === 'completed' && match.score && (
+              <span className="font-bold text-gray-900 dark:text-white">{match.score.split('-')[1]}</span>
+            )}
+          </div>
+        </div>
+        
+        {/* Match info and action */}
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            <MapPin className="w-3 h-3 inline mr-1" />
+            {match.venue}
+          </div>
+          <button
+            onClick={handleViewMarket}
+            className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1"
+          >
+            View Market
+            <ChevronRight className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Table Component for Group Standings
+const TableView = ({ groups, tournamentAssets }) => {
+  return (
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {Object.entries(groups).map(([groupLetter, groupData]) => (
+          <div key={groupLetter} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="font-bold text-gray-900 dark:text-white">Group {groupLetter}</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">#</th>
+                    <th className="px-4 py-3 text-left font-medium">Team</th>
+                    <th className="px-4 py-3 text-center font-medium">P</th>
+                    <th className="px-4 py-3 text-center font-medium">W</th>
+                    <th className="px-4 py-3 text-center font-medium">D</th>
+                    <th className="px-4 py-3 text-center font-medium">L</th>
+                    <th className="px-4 py-3 text-center font-medium">GF</th>
+                    <th className="px-4 py-3 text-center font-medium">GA</th>
+                    <th className="px-4 py-3 text-center font-medium">GD</th>
+                    <th className="px-4 py-3 text-center font-medium">Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupData.standings.map((team, index) => (
+                    <tr key={team.team} className={`border-t border-gray-100 dark:border-gray-700 ${
+                      index < 2 ? 'bg-green-50 dark:bg-green-900/10' : ''
+                    }`}>
+                      <td className="px-4 py-3 text-sm">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          index < 2 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                        }`}>
+                          {index + 1}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {tournamentAssets?.team_logos?.[team.team] && (
+                            <img 
+                              src={tournamentAssets.team_logos[team.team]} 
+                              alt={team.team}
+                              className="w-6 h-6 rounded-full object-cover"
+                            />
+                          )}
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">{team.team}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.played}</td>
+                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.won}</td>
+                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.drawn}</td>
+                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.lost}</td>
+                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.gf}</td>
+                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.ga}</td>
+                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">
+                        <span className={team.gd > 0 ? 'text-green-600' : team.gd < 0 ? 'text-red-600' : ''}>
+                          {team.gd > 0 ? '+' : ''}{team.gd}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm font-bold text-gray-900 dark:text-white">{team.points}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 text-xs text-gray-500 dark:text-gray-400">
+              Top 2 teams advance to Round of 16
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className="text-sm font-medium text-gray-900 dark:text-white">{match.date}</div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">{match.time} {match.timezone}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-500">{match.venue}</div>
-            </div>
-            <button
-              onClick={handleViewMarket}
-              className="bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 px-4 py-2 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors text-sm font-medium"
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Matches View with Filtering
+const MatchesView = ({ matches, tournamentAssets, tournamentId }) => {
+  const [filterBy, setFilterBy] = useState('date');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRound, setSelectedRound] = useState('all');
+  const [selectedGroup, setSelectedGroup] = useState('all');
+  const [selectedTeam, setSelectedTeam] = useState('all');
+  
+  // Get unique values for filters
+  const rounds = [...new Set(matches.map(m => m.round))];
+  const groups = [...new Set(matches.filter(m => m.group && m.group !== 'R16' && m.group !== 'QF' && m.group !== 'SF' && m.group !== 'F').map(m => m.group))].sort();
+  const teams = [...new Set(matches.flatMap(m => [m.home, m.away]))].sort();
+  
+  // Filter matches
+  const filteredMatches = matches.filter(match => {
+    if (searchTerm && !match.home.toLowerCase().includes(searchTerm.toLowerCase()) && 
+        !match.away.toLowerCase().includes(searchTerm.toLowerCase())) {
+      return false;
+    }
+    if (selectedRound !== 'all' && match.round !== selectedRound) return false;
+    if (selectedGroup !== 'all' && match.group !== selectedGroup) return false;
+    if (selectedTeam !== 'all' && match.home !== selectedTeam && match.away !== selectedTeam) return false;
+    return true;
+  });
+  
+  // Group matches based on filter
+  const groupedMatches = () => {
+    if (filterBy === 'date') {
+      const grouped = {};
+      filteredMatches.forEach(match => {
+        const date = match.date;
+        if (!grouped[date]) grouped[date] = [];
+        grouped[date].push(match);
+      });
+      return Object.entries(grouped).sort((a, b) => new Date(a[0]) - new Date(b[0]));
+    } else if (filterBy === 'round') {
+      const grouped = {};
+      filteredMatches.forEach(match => {
+        if (!grouped[match.round]) grouped[match.round] = [];
+        grouped[match.round].push(match);
+      });
+      return Object.entries(grouped);
+    } else if (filterBy === 'group') {
+      const grouped = {};
+      filteredMatches.forEach(match => {
+        const group = match.group || 'Knockout';
+        if (!grouped[group]) grouped[group] = [];
+        grouped[group].push(match);
+      });
+      return Object.entries(grouped).sort((a, b) => {
+        if (a[0] === 'Knockout') return 1;
+        if (b[0] === 'Knockout') return -1;
+        return a[0].localeCompare(b[0]);
+      });
+    } else if (filterBy === 'team') {
+      const grouped = {};
+      filteredMatches.forEach(match => {
+        [match.home, match.away].forEach(team => {
+          if (!grouped[team]) grouped[team] = [];
+          if (!grouped[team].find(m => m.match === match.match)) {
+            grouped[team].push(match);
+          }
+        });
+      });
+      return Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]));
+    }
+    return [];
+  };
+  
+  return (
+    <div className="space-y-6">
+      {/* Filters */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <div className="space-y-4">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search teams..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
+          {/* Filter buttons */}
+          <div className="flex flex-wrap gap-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1">
+              <Filter className="w-4 h-4" />
+              Group by:
+            </span>
+            {['date', 'round', 'group', 'team'].map(filter => (
+              <button
+                key={filter}
+                onClick={() => setFilterBy(filter)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  filterBy === filter
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                By {filter.charAt(0).toUpperCase() + filter.slice(1)}
+              </button>
+            ))}
+          </div>
+          
+          {/* Additional filters */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <select
+              value={selectedRound}
+              onChange={(e) => setSelectedRound(e.target.value)}
+              className="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              View Market
-            </button>
+              <option value="all">All Rounds</option>
+              {rounds.map(round => (
+                <option key={round} value={round}>{round}</option>
+              ))}
+            </select>
+            
+            <select
+              value={selectedGroup}
+              onChange={(e) => setSelectedGroup(e.target.value)}
+              className="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Groups</option>
+              {groups.map(group => (
+                <option key={group} value={group}>Group {group}</option>
+              ))}
+            </select>
+            
+            <select
+              value={selectedTeam}
+              onChange={(e) => setSelectedTeam(e.target.value)}
+              className="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Teams</option>
+              {teams.map(team => (
+                <option key={team} value={team}>{team}</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
-    );
+      
+      {/* Grouped matches */}
+      <div className="space-y-6">
+        {groupedMatches().map(([groupKey, groupMatches]) => (
+          <div key={groupKey}>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              {filterBy === 'date' && (
+                <>
+                  <CalendarDays className="w-5 h-5 text-blue-600" />
+                  {format(parseISO(groupKey), 'EEEE, MMMM d, yyyy')}
+                </>
+              )}
+              {filterBy === 'round' && (
+                <>
+                  <Trophy className="w-5 h-5 text-purple-600" />
+                  {groupKey}
+                </>
+              )}
+              {filterBy === 'group' && (
+                <>
+                  <Grid3x3 className="w-5 h-5 text-green-600" />
+                  {groupKey === 'Knockout' ? 'Knockout Stage' : `Group ${groupKey}`}
+                </>
+              )}
+              {filterBy === 'team' && (
+                <>
+                  <Shield className="w-5 h-5 text-orange-600" />
+                  {groupKey}
+                </>
+              )}
+              <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                ({groupMatches.length} matches)
+              </span>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {groupMatches.map(match => (
+                <MatchCard 
+                  key={match.match} 
+                  match={match} 
+                  tournamentAssets={tournamentAssets}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Knockout View Component (FotMob style)
+const KnockoutView = ({ matches, tournamentAssets }) => {
+  const knockoutMatches = matches.filter(m => m.round !== 'Group Stage');
+  
+  // Group matches by round
+  const matchesByRound = {
+    'Round of 16': knockoutMatches.filter(m => m.round === 'Round of 16'),
+    'Quarterfinal': knockoutMatches.filter(m => m.round === 'Quarterfinal'),
+    'Semifinal': knockoutMatches.filter(m => m.round === 'Semifinal'),
+    'Final': knockoutMatches.filter(m => m.round === 'Final')
+  };
+
+  // Create bracket structure
+  const createBracketPairs = (matches) => {
+    const pairs = [];
+    for (let i = 0; i < matches.length; i += 2) {
+      pairs.push([matches[i], matches[i + 1] || null]);
+    }
+    return pairs;
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Tournament Matches</h3>
-        <button
-          onClick={() => setShowAllMatches(!showAllMatches)}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-        >
-          <Eye className="w-4 h-4" />
-          {showAllMatches ? 'Show Groups Only' : 'Show All Matches'}
-        </button>
-      </div>
-
-      {!showAllMatches ? (
-        // Group-based view
-        <div className="space-y-4">
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-700">
-            <div className="text-sm text-blue-800 dark:text-blue-200 mb-2">
-              <strong>Group Stage Overview:</strong> Showing first match for each group. Click to expand and see all 6 matches per group.
-            </div>
-            <div className="text-xs text-blue-600 dark:text-blue-300">
-              48 total group stage matches • 8 groups with 4 teams each
-            </div>
+    <div className="space-y-8">
+      {/* FotMob-style Visual Bracket */}
+      <div className="bg-gray-900 dark:bg-black rounded-xl p-8 overflow-x-auto">
+        <div className="min-w-[1200px]">
+          {/* Header with trophy icon */}
+          <div className="text-center mb-8">
+            <Trophy className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-white">FIFA Club World Cup 2025</h3>
+            <p className="text-gray-400 mt-2">Knockout Stage</p>
           </div>
 
-          {Object.keys(CLUB_WC_GROUPS).map(groupLetter => {
-            const firstMatch = getFirstMatchForGroup(groupLetter);
-            const groupMatches = matchesByGroup[groupLetter];
-            const isExpanded = expandedGroups.has(groupLetter);
-            
-            if (!firstMatch) return null;
-
-            return (
-              <div key={groupLetter} className="space-y-2">
-                {/* Group Header with First Match */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold">
-                        {groupLetter}
-                      </div>
-                      <div>
-                        <div className="font-bold text-gray-900 dark:text-white">Group {groupLetter}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          {CLUB_WC_GROUPS[groupLetter].teams.join(' • ')}
+          {/* Bracket Grid */}
+          <div className="grid grid-cols-7 gap-4">
+            {/* Round of 16 - Left Side */}
+            <div className="space-y-8">
+              <div className="text-center mb-4">
+                <h4 className="text-sm font-bold text-gray-400">ROUND OF 16</h4>
+                <p className="text-xs text-gray-500">Jun 29</p>
+              </div>
+              {createBracketPairs(matchesByRound['Round of 16'].slice(0, 4)).map((pair, idx) => (
+                <div key={`r16-left-${idx}`} className="space-y-2">
+                  {pair.map((match, i) => match && (
+                    <div key={match.match} className="bg-gray-800 rounded-lg p-3 border border-gray-700 hover:border-yellow-500 transition-colors">
+                      <div className="text-xs text-gray-400 mb-1">Match {match.match}</div>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-white">{match.home}</span>
+                          {tournamentAssets?.team_logos?.[match.home] && (
+                            <img src={tournamentAssets.team_logos[match.home]} alt="" className="w-5 h-5" />
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-white">{match.away}</span>
+                          {tournamentAssets?.team_logos?.[match.away] && (
+                            <img src={tournamentAssets.team_logos[match.away]} alt="" className="w-5 h-5" />
+                          )}
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => toggleGroup(groupLetter)}
-                      className="flex items-center gap-2 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                    >
-                      <span className="text-sm font-medium">
-                        {isExpanded ? 'Hide' : 'Show'} all {groupMatches.length} matches
-                      </span>
-                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  
-                  {/* First match (always shown) */}
-                  <MatchCard match={firstMatch} isFirst={true} />
+                  ))}
                 </div>
-
-                {/* Expanded matches */}
-                {isExpanded && (
-                  <div className="space-y-2 ml-4 border-l-2 border-purple-200 dark:border-purple-700 pl-4">
-                    {groupMatches.slice(1).map(match => (
-                      <MatchCard key={match.match} match={match} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Knockout Stage Preview */}
-          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl p-4 border border-yellow-200 dark:border-yellow-700">
-            <h4 className="font-bold text-yellow-800 dark:text-yellow-200 mb-2 flex items-center gap-2">
-              <Trophy className="w-5 h-5" />
-              Knockout Stage
-            </h4>
-            <div className="text-sm text-yellow-700 dark:text-yellow-300 mb-2">
-              15 knockout matches: Round of 16 (8) • Quarterfinals (4) • Semifinals (2) • Final (1)
+              ))}
             </div>
-            <div className="text-xs text-yellow-600 dark:text-yellow-400">
-              Click "Show All Matches" to see the complete knockout bracket
+
+            {/* Quarterfinals - Left */}
+            <div className="space-y-16 flex flex-col justify-center">
+              <div className="text-center mb-4">
+                <h4 className="text-sm font-bold text-gray-400">QUARTERFINALS</h4>
+                <p className="text-xs text-gray-500">Jul 5</p>
+              </div>
+              {createBracketPairs(matchesByRound['Quarterfinal'].slice(0, 2)).map((pair, idx) => (
+                <div key={`qf-left-${idx}`} className="space-y-2">
+                  {pair.map((match, i) => match && (
+                    <div key={match.match} className="bg-gray-800 rounded-lg p-3 border border-gray-700 hover:border-yellow-500 transition-colors">
+                      <div className="text-xs text-gray-400 mb-1">QF{idx * 2 + i + 1}</div>
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium text-white">TBD</div>
+                        <div className="text-sm font-medium text-white">TBD</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            {/* Semifinals */}
+            <div className="flex flex-col justify-center">
+              <div className="text-center mb-4">
+                <h4 className="text-sm font-bold text-gray-400">SEMIFINALS</h4>
+                <p className="text-xs text-gray-500">Jul 9-10</p>
+              </div>
+              <div className="space-y-32">
+                {matchesByRound['Semifinal'].map((match, idx) => (
+                  <div key={match.match} className="bg-gray-800 rounded-lg p-3 border border-gray-700 hover:border-yellow-500 transition-colors">
+                    <div className="text-xs text-gray-400 mb-1">SF{idx + 1}</div>
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium text-white">TBD</div>
+                      <div className="text-sm font-medium text-white">TBD</div>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-2">{match.venue}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Final */}
+            <div className="flex flex-col justify-center">
+              <div className="text-center mb-4">
+                <h4 className="text-sm font-bold text-yellow-400">FINAL</h4>
+                <p className="text-xs text-gray-500">Jul 13</p>
+              </div>
+              {matchesByRound['Final'].map((match) => (
+                <div key={match.match} className="bg-gradient-to-r from-yellow-900/50 to-yellow-800/50 rounded-lg p-4 border-2 border-yellow-500">
+                  <div className="text-center mb-3">
+                    <Trophy className="w-8 h-8 text-yellow-400 mx-auto" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-bold text-white text-center">TBD</div>
+                    <div className="text-xs text-yellow-400 text-center">vs</div>
+                    <div className="text-sm font-bold text-white text-center">TBD</div>
+                  </div>
+                  <div className="text-xs text-gray-400 text-center mt-3">
+                    {match.venue}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Semifinals - Right */}
+            <div className="flex flex-col justify-center">
+              <div className="space-y-32">
+                {/* Placeholder for right side semifinals */}
+              </div>
+            </div>
+
+            {/* Quarterfinals - Right */}
+            <div className="space-y-16 flex flex-col justify-center">
+              {createBracketPairs(matchesByRound['Quarterfinal'].slice(2, 4)).map((pair, idx) => (
+                <div key={`qf-right-${idx}`} className="space-y-2">
+                  {pair.map((match, i) => match && (
+                    <div key={match.match} className="bg-gray-800 rounded-lg p-3 border border-gray-700 hover:border-yellow-500 transition-colors">
+                      <div className="text-xs text-gray-400 mb-1">QF{idx * 2 + i + 3}</div>
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium text-white">TBD</div>
+                        <div className="text-sm font-medium text-white">TBD</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            {/* Round of 16 - Right Side */}
+            <div className="space-y-8">
+              <div className="text-center mb-4">
+                <h4 className="text-sm font-bold text-gray-400">ROUND OF 16</h4>
+                <p className="text-xs text-gray-500">Jun 30 - Jul 2</p>
+              </div>
+              {createBracketPairs(matchesByRound['Round of 16'].slice(4, 8)).map((pair, idx) => (
+                <div key={`r16-right-${idx}`} className="space-y-2">
+                  {pair.map((match, i) => match && (
+                    <div key={match.match} className="bg-gray-800 rounded-lg p-3 border border-gray-700 hover:border-yellow-500 transition-colors">
+                      <div className="text-xs text-gray-400 mb-1">Match {match.match}</div>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-white">{match.home}</span>
+                          {tournamentAssets?.team_logos?.[match.home] && (
+                            <img src={tournamentAssets.team_logos[match.home]} alt="" className="w-5 h-5" />
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-white">{match.away}</span>
+                          {tournamentAssets?.team_logos?.[match.away] && (
+                            <img src={tournamentAssets.team_logos[match.away]} alt="" className="w-5 h-5" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom info */}
+          <div className="mt-8 text-center">
+            <p className="text-xs text-gray-500">All times shown in Eastern Time (ET)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Stats View Component
+const StatsView = ({ tournament, markets, participantCount }) => {
+  const [topParticipants, setTopParticipants] = useState([]);
+  const [loadingStats, setLoadingStats] = useState(true);
+  
+  // Fetch real leaderboard data
+  useEffect(() => {
+    const fetchLeaderboardData = async () => {
+      try {
+        const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournament.id}/leaderboard`);
+        if (response.ok) {
+          const data = await response.json();
+          // Get top 5 participants with calculations
+          const topFive = (data.leaderboard || []).slice(0, 5).map(player => ({
+            username: player.username || player.twitter_username || `${player.user_address.substring(0, 8)}...`,
+            predictions: player.total_predictions || 0,
+            winRate: player.correct_predictions && player.total_predictions 
+              ? Math.round((player.correct_predictions / player.total_predictions) * 100)
+              : 0,
+            profit: player.points || 0,
+            rank: player.rank || 0
+          }));
+          setTopParticipants(topFive);
+        }
+      } catch (error) {
+        console.error('Error fetching leaderboard data:', error);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+    
+    fetchLeaderboardData();
+  }, [tournament.id]);
+  
+  // Calculate various stats
+  const totalBetsPlaced = markets.reduce((sum, m) => sum + (m.totalBets || 0), 0);
+  const totalVolume = markets.reduce((sum, m) => sum + (m.totalVolume || 0), 0);
+  const avgBetSize = totalBetsPlaced > 0 ? totalVolume / totalBetsPlaced : 0;
+  const activeMarkets = markets.filter(m => m.status === 'Active' || m.status === 'active').length;
+  const resolvedMarkets = markets.filter(m => m.status === 'Resolved' || m.status === 'resolved').length;
+  
+  // Top markets by volume
+  const topMarketsByVolume = [...markets]
+    .sort((a, b) => (b.totalVolume || 0) - (a.totalVolume || 0))
+    .slice(0, 5);
+  
+  return (
+    <div className="space-y-8">
+      {/* Overview Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatsCard 
+          icon={Activity}
+          title="Total Volume"
+          value={`${totalVolume.toLocaleString()} APES`}
+          subtitle="Across all markets"
+          color="black"
+        />
+        <StatsCard 
+          icon={TrendingUp}
+          title="Active Markets"
+          value={activeMarkets}
+          subtitle={`${resolvedMarkets} resolved`}
+          color="green"
+        />
+        <StatsCard 
+          icon={Users}
+          title="Total Predictions"
+          value={totalBetsPlaced.toLocaleString()}
+          subtitle={`Avg: ${avgBetSize.toFixed(0)} APES`}
+          color="yellow"
+        />
+        <StatsCard 
+          icon={Trophy}
+          title="Prize Pool"
+          value={`${tournament.prizePool.apes.toLocaleString()} APES`}
+          subtitle={`+ ${tournament.prizePool.sol} SOL`}
+          color="yellow"
+        />
+      </div>
+      
+      {/* Top Markets */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-green-600" />
+            Top Markets by Volume
+          </h3>
+        </div>
+        <div className="p-6">
+          <div className="space-y-4">
+            {topMarketsByVolume.map((market, index) => (
+              <div key={market.publicKey || index} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="flex items-center gap-4">
+                  <div className="w-8 h-8 bg-yellow-100 dark:bg-yellow-900/20 rounded-full flex items-center justify-center text-sm font-bold text-yellow-600 dark:text-yellow-400">
+                    {index + 1}
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-white">{market.question}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {market.totalBets || 0} predictions
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-gray-900 dark:text-white">
+                    {(market.totalVolume || 0).toLocaleString()} APES
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {market.status}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      
+      {/* Top Predictors - Using Real Data */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <Crown className="w-5 h-5 text-yellow-600" />
+            Top Predictors
+          </h3>
+        </div>
+        <div className="p-6">
+          {loadingStats ? (
+            <div className="text-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-gray-400 mx-auto" />
+              <p className="text-sm text-gray-500 mt-2">Loading leaderboard...</p>
+            </div>
+          ) : topParticipants.length > 0 ? (
+            <div className="space-y-3">
+              {topParticipants.map((participant, index) => (
+                <div key={participant.username} className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                      index === 0 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                      index === 1 ? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' :
+                      index === 2 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400' :
+                      'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">{participant.username}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {participant.predictions} predictions • {participant.winRate}% win rate
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-green-600 dark:text-green-400">
+                      {participant.profit} pts
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No participants yet
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// News View Component
+const NewsView = ({ tournament }) => {
+  // Mock news data - in production, this would come from an API
+  const newsItems = [
+    {
+      id: 1,
+      title: 'Club World Cup 2025: Everything You Need to Know',
+      excerpt: 'The expanded FIFA Club World Cup featuring 32 teams will kick off in Miami on June 14, 2025...',
+      source: 'FIFA Official',
+      time: '2 hours ago',
+      image: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=400'
+    },
+    {
+      id: 2,
+      title: 'Real Madrid and Manchester City Among Favorites',
+      excerpt: 'European giants Real Madrid and Manchester City are leading the betting markets for the inaugural tournament...',
+      source: 'ESPN FC',
+      time: '5 hours ago',
+      image: 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=400'
+    },
+    {
+      id: 3,
+      title: 'Inter Miami to Host Opening Match with Messi',
+      excerpt: 'Lionel Messi\'s Inter Miami will play the tournament opener at Hard Rock Stadium against Al Ahly...',
+      source: 'The Athletic',
+      time: '1 day ago',
+      image: 'https://images.unsplash.com/photo-1606925842584-ffa79285b531?w=400'
+    },
+    {
+      id: 4,
+      title: 'Prize Money and Format Revealed',
+      excerpt: 'FIFA announces record prize money for the Club World Cup with winners set to receive...',
+      source: 'Goal.com',
+      time: '2 days ago',
+      image: 'https://images.unsplash.com/photo-1551958219-acbc608c6377?w=400'
+    }
+  ];
+  
+  return (
+    <div className="space-y-6">
+      {/* Featured Article */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <img 
+          src={newsItems[0].image} 
+          alt={newsItems[0].title}
+          className="w-full h-64 object-cover"
+        />
+        <div className="p-6">
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-2">
+            <span className="font-medium text-blue-600 dark:text-blue-400">{newsItems[0].source}</span>
+            <span>•</span>
+            <span>{newsItems[0].time}</span>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+            {newsItems[0].title}
+          </h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
+            {newsItems[0].excerpt}
+          </p>
+          <button className="text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1 hover:gap-2 transition-all">
+            Read more
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      
+      {/* News Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {newsItems.slice(1).map(item => (
+          <div key={item.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow">
+            <img 
+              src={item.image} 
+              alt={item.title}
+              className="w-full h-48 object-cover"
+            />
+            <div className="p-4">
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                <span className="font-medium text-blue-600 dark:text-blue-400">{item.source}</span>
+                <span>•</span>
+                <span>{item.time}</span>
+              </div>
+              <h3 className="font-bold text-gray-900 dark:text-white mb-2 line-clamp-2">
+                {item.title}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3">
+                {item.excerpt}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      {/* External Links */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800">
+        <h3 className="font-bold text-blue-900 dark:text-blue-200 mb-4">External Resources</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <a 
+            href="https://www.fifa.com/tournaments/mens/clubworldcup/fifa-club-world-cup-2025" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg hover:shadow-md transition-shadow"
+          >
+            <span className="font-medium text-gray-900 dark:text-white">Official FIFA Website</span>
+            <ExternalLink className="w-4 h-4 text-gray-400" />
+          </a>
+          <a 
+            href="#" 
+            className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg hover:shadow-md transition-shadow"
+          >
+            <span className="font-medium text-gray-900 dark:text-white">Tournament Schedule</span>
+            <ExternalLink className="w-4 h-4 text-gray-400" />
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Overview Component
+const OverviewView = ({ tournament, markets, participantCount, recentJoiners, tournamentAssets }) => {
+  const upcomingMatches = getUpcomingMatches();
+  
+  return (
+    <div className="space-y-8">
+      {/* Key Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatsCard 
+          icon={Trophy}
+          title="Prize Pool"
+          value={`${tournament.prizePool.apes.toLocaleString()} APES`}
+          subtitle={`+ ${tournament.prizePool.sol} SOL`}
+          color="yellow"
+        />
+        <StatsCard 
+          icon={Users}
+          title="Participants"
+          value={participantCount}
+          subtitle={`of ${tournament.maxParticipants}`}
+          color="black"
+        />
+        <StatsCard 
+          icon={Target}
+          title="Total Markets"
+          value={tournament.totalMarkets}
+          subtitle={`${markets.length} active`}
+          color="green"
+        />
+        <StatsCard 
+          icon={Calendar}
+          title="Days to Start"
+          value={Math.ceil((new Date(tournament.startDate) - new Date()) / (1000 * 60 * 60 * 24))}
+          subtitle="Get ready!"
+          color="yellow"
+        />
+      </div>
+      
+      {/* Upcoming Matches */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-yellow-600" />
+              Upcoming Matches
+            </span>
+            <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+              Next 10 matches
+            </span>
+          </h3>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {upcomingMatches.map(match => (
+              <MatchCard 
+                key={match.match} 
+                match={match} 
+                tournamentAssets={tournamentAssets}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      
+      {/* Tournament Format */}
+      {tournament.id === 'club-world-cup-2025' && (
+        <div className="bg-gradient-to-r from-gray-900 to-gray-800 dark:from-black dark:to-gray-900 rounded-xl p-6 border border-yellow-500/20">
+          <h3 className="text-lg font-bold text-white mb-4">Tournament Format</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <h4 className="font-medium text-yellow-400 mb-2">Group Stage</h4>
+              <ul className="space-y-1 text-sm text-gray-300">
+                <li>• 8 groups of 4 teams</li>
+                <li>• Round-robin format</li>
+                <li>• Top 2 teams advance</li>
+                <li>• 48 total matches</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium text-yellow-400 mb-2">Knockout Stage</h4>
+              <ul className="space-y-1 text-sm text-gray-300">
+                <li>• Round of 16</li>
+                <li>• Quarterfinals</li>
+                <li>• Semifinals</li>
+                <li>• Final at MetLife Stadium</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium text-yellow-400 mb-2">Key Dates</h4>
+              <ul className="space-y-1 text-sm text-gray-300">
+                <li>• Starts: June 14, 2025</li>
+                <li>• Group Stage: June 14-26</li>
+                <li>• Knockouts: June 29 - July 13</li>
+                <li>• Final: July 13, 2025</li>
+              </ul>
             </div>
           </div>
         </div>
-      ) : (
-        // All matches view
-        <div className="space-y-6">
-          {/* Group Stage */}
-          <div>
-            <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <Flag className="w-5 h-5 text-blue-500" />
-              Group Stage (48 matches)
-            </h4>
-            <div className="space-y-2">
-              {groupStageMatches.map(match => (
-                <MatchCard key={match.match} match={match} />
-              ))}
-            </div>
-          </div>
-
-          {/* Knockout Stage */}
-          <div>
-            <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-yellow-500" />
-              Knockout Stage (15 matches)
-            </h4>
-            <div className="space-y-2">
-              {knockoutMatches.map(match => (
-                <MatchCard key={match.match} match={match} />
-              ))}
-            </div>
+      )}
+      
+      {/* Recent Activity */}
+      {recentJoiners.length > 0 && (
+        <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-6 border border-green-200 dark:border-green-800">
+          <h3 className="font-bold text-green-800 dark:text-green-200 mb-3 flex items-center gap-2">
+            <Activity className="w-5 h-5" />
+            Recent Activity
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {recentJoiners.map((joiner, index) => (
+              <span key={index} className="bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-3 py-1 rounded-full text-sm">
+                {joiner.username} joined
+              </span>
+            ))}
           </div>
         </div>
       )}
@@ -444,8 +1320,7 @@ const ClubWorldCupMatches = ({ tournamentAssets }) => {
   );
 };
 
-// Tournament Leaderboard Component
-// Tournament Markets Component
+// Tournament Markets Component (from original)
 const TournamentMarkets = ({ tournamentId }) => {
   const [markets, setMarkets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -501,41 +1376,31 @@ const TournamentMarkets = ({ tournamentId }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {markets.map((market) => (
           <div 
-            key={market.market_address || market.publicKey}
-            onClick={() => navigate(`/markets/${market.market_address || market.publicKey}`)}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-400 transition-all cursor-pointer hover:shadow-lg"
+            key={market.publicKey || market.market_address} 
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-lg transition-shadow p-6 cursor-pointer"
+            onClick={() => navigate(`/markets/${market.publicKey || market.market_address}`)}
           >
-            <div className="flex justify-between items-start mb-4">
-              <span className="bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-xs px-2 py-1 rounded">
-                {market.status || 'Active'}
-              </span>
-              {market.resolution_date && (
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {format(new Date(market.resolution_date), 'MMM d, h:mm a')}
-                </span>
-              )}
-            </div>
-            
-            <h4 className="font-bold text-gray-900 dark:text-white mb-3">
-              {market.question}
-            </h4>
+            <h4 className="font-bold text-gray-900 dark:text-white mb-2">{market.question}</h4>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{market.description}</p>
             
             <div className="space-y-2">
-              {(market.options || []).map((option, index) => (
-                <div key={index} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">{option}</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {market.optionPercentages?.[index]?.toFixed(1) || '0.0'}%
+              {market.options?.map((option, index) => (
+                <div key={index} className="flex justify-between items-center">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{option}</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {market.optionPools && market.totalVolume > 0 
+                      ? `${((market.optionPools[index] / market.totalVolume) * 100).toFixed(1)}%`
+                      : '50%'}
                   </span>
                 </div>
               ))}
             </div>
             
             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Volume</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {(market.totalVolume || market.total_volume || 0).toFixed(2)} APES
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Volume</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-white">
+                  {(market.totalVolume || 0).toLocaleString()} APES
                 </span>
               </div>
             </div>
@@ -546,20 +1411,20 @@ const TournamentMarkets = ({ tournamentId }) => {
   );
 };
 
+// Tournament Leaderboard Component (from original)
 const TournamentLeaderboard = ({ tournamentId, participantCount, onJoinSuccess }) => {
-  const { publicKey } = useWallet();
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [userStats, setUserStats] = useState(null);
-  const [participating, setParticipating] = useState(false);
-
+  const [userRank, setUserRank] = useState(null);
+  const { publicKey } = useWallet();
+  
   useEffect(() => {
     loadLeaderboard();
     if (publicKey) {
       checkUserStatus();
     }
   }, [tournamentId, publicKey]);
-
+  
   const loadLeaderboard = async () => {
     try {
       const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournamentId}/leaderboard`);
@@ -568,235 +1433,175 @@ const TournamentLeaderboard = ({ tournamentId, participantCount, onJoinSuccess }
         setLeaderboard(data.leaderboard || []);
       }
     } catch (error) {
-      console.error('Error loading tournament leaderboard:', error);
+      console.error('Error loading leaderboard:', error);
     } finally {
       setLoading(false);
     }
   };
-
+  
   const checkUserStatus = async () => {
-    if (!publicKey) return;
-    
     try {
       const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournamentId}/status/${publicKey.toString()}`);
       if (response.ok) {
         const data = await response.json();
-        setParticipating(data.participating);
-        setUserStats(data.stats);
+        if (data.participating && data.rank) {
+          setUserRank(data.rank);
+        }
       }
     } catch (error) {
-      console.error('Error checking user tournament status:', error);
+      console.error('Error checking user status:', error);
     }
   };
-
+  
   const handleJoinTournament = async () => {
-    if (!publicKey) return;
-
-    try {
-      const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournamentId}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userAddress: publicKey.toString() })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setParticipating(true);
-        
-        // Award engagement points for joining
-        let totalPointsEarned = 50; // Base join reward
-        try {
-          const pointsResponse = await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              wallet_address: publicKey.toString(),
-              activity_type: 'TOURNAMENT_JOIN',
-              metadata: { tournamentId, tournament_name: 'FIFA Club World Cup 2025' }
-            })
-          });
-          
-          // Early bird bonus for first 100 participants
-          if (participantCount < 100) {
-            await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                wallet_address: publicKey.toString(),
-                activity_type: 'EARLY_BIRD_BONUS',
-                metadata: { tournamentId, reason: 'First 100 participants' }
-              })
-            });
-            totalPointsEarned = 150; // 50 + 100 bonus
-          }
-        } catch (pointsError) {
-          console.error('Error awarding join points:', pointsError);
-        }
-        
-        // Refresh local data
-        loadLeaderboard(); // Refresh leaderboard
-        checkUserStatus(); // Refresh user stats
-        
-        // Call parent callback to refresh tournament data
-        if (onJoinSuccess) {
-          onJoinSuccess();
-        }
-        
-        // Show success message with rewards
-        alert(`🎉 Successfully joined tournament!\n💰 Earned ${totalPointsEarned} APES points\n🏆 Good luck in the competition!\n\n📊 Participant count will update shortly.`);
-      }
-    } catch (error) {
-      console.error('Error joining tournament:', error);
-      alert('❌ Failed to join tournament. Please try again.');
+    // This would be handled by the parent component
+    if (onJoinSuccess) {
+      await onJoinSuccess();
+      await loadLeaderboard();
+      await checkUserStatus();
     }
   };
-
+  
   const getBadgeForRank = (rank) => {
-    switch (rank) {
-      case 1: return '🥇';
-      case 2: return '🥈';
-      case 3: return '🥉';
-      default: return rank <= 10 ? '🏆' : '📊';
-    }
+    if (rank === 1) return { icon: Crown, color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/20' };
+    if (rank === 2) return { icon: Medal, color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' };
+    if (rank === 3) return { icon: Medal, color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/20' };
+    if (rank <= 10) return { icon: Star, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/20' };
+    return null;
   };
-
+  
   if (loading) {
     return (
       <div className="text-center py-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600 dark:text-gray-400">Loading tournament leaderboard...</p>
+        <p className="text-gray-600 dark:text-gray-400 mt-4">Loading leaderboard...</p>
       </div>
     );
   }
-
+  
   return (
     <div className="space-y-6">
+      {/* Leaderboard Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Tournament Leaderboard</h3>
-        {!participating && publicKey && (
-          <button
-            onClick={handleJoinTournament}
-            className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            Join Tournament
-          </button>
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          {participantCount} participants
+        </div>
+      </div>
+      
+      {/* User Rank Card */}
+      {userRank && (
+        <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-6 border border-purple-200 dark:border-purple-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-bold text-purple-900 dark:text-purple-100 mb-1">Your Ranking</h4>
+              <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">#{userRank}</div>
+            </div>
+            <Trophy className="w-12 h-12 text-purple-500" />
+          </div>
+        </div>
+      )}
+      
+      {/* Leaderboard Table */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 dark:bg-gray-700">
+            <tr>
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Rank</th>
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Player</th>
+              <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Points</th>
+              <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Predictions</th>
+              <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Win Rate</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            {leaderboard.map((player, index) => {
+              const badge = getBadgeForRank(index + 1);
+              const isCurrentUser = publicKey && player.user_address === publicKey.toString();
+              
+              return (
+                <tr 
+                  key={player.user_address} 
+                  className={`${isCurrentUser ? 'bg-purple-50 dark:bg-purple-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'} transition-colors`}
+                >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      {badge ? (
+                        <div className={`w-8 h-8 rounded-full ${badge.bg} flex items-center justify-center`}>
+                          <badge.icon className={`w-4 h-4 ${badge.color}`} />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-sm font-bold text-gray-600 dark:text-gray-400">
+                          {index + 1}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          {player.username || player.twitter_username || `${player.user_address.substring(0, 8)}...`}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          Joined {new Date(player.joined_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      {isCurrentUser && (
+                        <span className="px-2 py-1 text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200 rounded-full">
+                          You
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <div className="text-sm font-bold text-gray-900 dark:text-white">{player.points.toLocaleString()}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">{player.total_predictions || 0}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      {player.correct_predictions && player.total_predictions 
+                        ? `${((player.correct_predictions / player.total_predictions) * 100).toFixed(1)}%`
+                        : '0%'}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        
+        {leaderboard.length === 0 && (
+          <div className="text-center py-12">
+            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 dark:text-gray-400">No participants yet. Be the first to join!</p>
+          </div>
         )}
       </div>
-
-      {/* User's participation status */}
-      {participating && userStats && (
-        <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl p-6 border border-purple-200 dark:border-purple-700">
-          <h4 className="font-bold text-purple-800 dark:text-purple-200 mb-4 flex items-center gap-2">
-            <Medal className="w-5 h-5" />
-            Your Tournament Performance
-          </h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{userStats.total_predictions}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Predictions</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{userStats.accuracy_rate.toFixed(1)}%</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Accuracy</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{userStats.total_profit > 0 ? '+' : ''}{userStats.total_profit.toFixed(2)}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Profit (APES)</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{userStats.winning_predictions}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Wins</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Leaderboard */}
-      {leaderboard.length > 0 ? (
-        <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden">
-          <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
-            <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Crown className="w-5 h-5 text-yellow-500" />
-              Top Performers ({leaderboard.length} participants)
-            </h4>
-          </div>
-          
-          <div className="space-y-1">
-            {leaderboard.map((user, index) => (
-              <div 
-                key={user.user_address} 
-                className={`flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
-                  user.user_address === publicKey?.toString() ? 'bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500' : ''
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="text-center min-w-[60px]">
-                    <div className="text-2xl">{getBadgeForRank(user.rank)}</div>
-                    <div className="text-sm font-bold text-gray-600 dark:text-gray-400">#{user.rank}</div>
-                  </div>
-                  
-                  <div>
-                    <div className="font-bold text-gray-900 dark:text-white">
-                      {user.username || user.twitter_username || `${user.user_address.substring(0, 8)}...`}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      {user.total_predictions} predictions • {user.accuracy_rate.toFixed(1)}% accuracy
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="text-right">
-                  <div className="font-bold text-lg text-gray-900 dark:text-white">
-                    {user.total_profit > 0 ? '+' : ''}{user.total_profit.toFixed(2)} APES
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    {user.winning_predictions}/{user.total_predictions} wins
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="text-center py-12">
-          <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <div className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            No participants yet
-          </div>
-          <div className="text-gray-600 dark:text-gray-400 mb-6">
-            Be the first to join this tournament and start predicting!
-          </div>
-          {!participating && publicKey && (
-            <button
-              onClick={handleJoinTournament}
-              className="bg-purple-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-purple-700 transition-colors"
-            >
-              Join Tournament
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Tournament info */}
-      <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl p-6 border border-yellow-200 dark:border-yellow-700">
-        <h4 className="font-bold text-yellow-800 dark:text-yellow-200 mb-3 flex items-center gap-2">
-          ⚡ How Tournament Competition Works
+      
+      {/* Tournament Info */}
+      <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-6 border border-yellow-200 dark:border-yellow-700">
+        <h4 className="font-bold text-yellow-900 dark:text-yellow-100 mb-3 flex items-center gap-2">
+          <Gift className="w-5 h-5" />
+          Tournament Rewards
         </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-yellow-700 dark:text-yellow-300">
-          <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded-lg p-3">
-            <div className="font-bold mb-1">1️⃣ Join Tournament</div>
-            <div>Click "Join Tournament" to register and earn instant rewards + early bird bonuses</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div>
+            <div className="font-medium text-yellow-800 dark:text-yellow-200">🥇 1st Place</div>
+            <div className="text-yellow-700 dark:text-yellow-300">30% of prize pool</div>
           </div>
-          <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded-lg p-3">
-            <div className="font-bold mb-1">2️⃣ Make Predictions</div>
-            <div>Predict outcomes on Club World Cup matches to earn points and climb the leaderboard</div>
+          <div>
+            <div className="font-medium text-yellow-800 dark:text-yellow-200">🥈 2nd Place</div>
+            <div className="text-yellow-700 dark:text-yellow-300">20% of prize pool</div>
           </div>
-          <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded-lg p-3">
-            <div className="font-bold mb-1">3️⃣ Win Prizes</div>
-            <div>Top performers share the massive prize pool: {tournamentId === 'club-world-cup-2025' ? '1,000,000 APES + 3 SOL' : '500,000 APES + 1.5 SOL'} based on accuracy</div>
+          <div>
+            <div className="font-medium text-yellow-800 dark:text-yellow-200">🥉 3rd Place</div>
+            <div className="text-yellow-700 dark:text-yellow-300">15% of prize pool</div>
           </div>
         </div>
-        <div className="mt-4 p-3 bg-yellow-200 dark:bg-yellow-800/50 rounded-lg">
+        <div className="mt-4 pt-4 border-t border-yellow-200 dark:border-yellow-700">
           <div className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
             💡 <strong>Pro Tip:</strong> Join early to secure your early bird bonus and get first access to prediction markets!
           </div>
@@ -814,29 +1619,83 @@ const TournamentDetailPage = () => {
   const [tournament, setTournament] = useState(null);
   const [tournamentAssets, setTournamentAssets] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
-  const [selectedGroup, setSelectedGroup] = useState('groups');
   const [loading, setLoading] = useState(true);
   const [participantCount, setParticipantCount] = useState(0);
   const [recentJoiners, setRecentJoiners] = useState([]);
   const [participating, setParticipating] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [markets, setMarkets] = useState([]);
   
   // Check if user is admin
   const isAdmin = publicKey && isWalletAuthorized(publicKey.toString());
 
+  // Helper function to get team colors for banner
+  const getTeamColor = (teamName) => {
+    const colors = {
+      // Group A
+      'Al Ahly': 'from-red-600 to-red-800',
+      'Inter Miami': 'from-pink-500 to-pink-700',
+      'Palmeiras': 'from-green-600 to-green-800',
+      'Porto': 'from-blue-600 to-blue-800',
+      // Group B
+      'Paris Saint-Germain': 'from-blue-800 to-red-600',
+      'Atletico Madrid': 'from-red-600 to-white/20',
+      'Botafogo': 'from-gray-800 to-gray-600',
+      'Seattle Sounders': 'from-green-700 to-blue-600',
+      // Group C
+      'Bayern Munich': 'from-red-700 to-gray-800',
+      'Auckland City': 'from-blue-500 to-yellow-500',
+      'Boca Juniors': 'from-blue-800 to-yellow-600',
+      'Benfica': 'from-red-700 to-gray-700',
+      // Group D
+      'Chelsea': 'from-blue-700 to-blue-900',
+      'LAFC': 'from-gray-900 to-yellow-600',
+      'Flamengo': 'from-red-700 to-black',
+      'Espérance': 'from-red-600 to-yellow-600',
+      // Group E
+      'River Plate': 'from-white/20 to-red-600',
+      'Urawa Red Diamonds': 'from-red-600 to-gray-800',
+      'Monterrey': 'from-blue-800 to-white/20',
+      'Internazionale': 'from-blue-900 to-black',
+      // Group F
+      'Fluminense': 'from-green-700 to-red-700',
+      'Borussia Dortmund': 'from-yellow-500 to-black',
+      'Ulsan HD': 'from-blue-600 to-yellow-500',
+      'Mamelodi Sundowns': 'from-yellow-500 to-green-700',
+      // Group G
+      'Manchester City': 'from-sky-500 to-sky-700',
+      'Wydad AC': 'from-red-600 to-white/20',
+      'Al Ain': 'from-purple-700 to-white/20',
+      'Juventus': 'from-white/20 to-black',
+      // Group H
+      'Real Madrid': 'from-white/30 to-purple-800',
+      'Al Hilal': 'from-blue-600 to-white/20',
+      'Pachuca': 'from-blue-700 to-white/20',
+      'Salzburg': 'from-red-600 to-white/20'
+    };
+    
+    return colors[teamName] || 'from-gray-600 to-gray-800';
+  };
+
   useEffect(() => {
-    loadTournamentData();
-    loadTournamentAssets();
+    const loadAllData = async () => {
+      const assets = await loadTournamentAssets();
+      await loadTournamentData(assets);
+      await loadTournamentMarkets();
+    };
+    loadAllData();
   }, [tournamentId]);
 
   // Function to create tournament object with current participant count
-  const createTournamentObject = (currentParticipantCount) => {
+  const createTournamentObject = (currentParticipantCount, loadedAssets = null) => {
     const defaultBanner = tournamentId === 'nba-finals-2025' 
       ? 'https://images.unsplash.com/photo-1546519638-68e109498ffc?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2059&q=80'
       : 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1893&q=80';
     
-    // Use tournament assets if available, otherwise defaults
-    const banner = tournamentAssets?.assets?.banner || defaultBanner;
+    // Use loaded assets if available, otherwise check state, then defaults
+    const assets = loadedAssets || tournamentAssets;
+    const banner = assets?.assets?.banner || defaultBanner;
+    const icon = assets?.assets?.icon || defaultBanner;
     
     if (tournamentId === 'club-world-cup-2025') {
       return {
@@ -844,30 +1703,30 @@ const TournamentDetailPage = () => {
         name: 'FIFA Club World Cup 2025',
         description: 'The ultimate club football championship featuring 32 teams from around the world',
         banner: banner,
-        icon: tournamentAssets?.assets?.icon || banner,
+        icon: icon,
         startDate: '2025-06-14',
         endDate: '2025-07-13',
         totalMarkets: 63,
         prizePool: {
           apes: 1000000,
-          sol: 3 // Enhanced massive prize pool
+          sol: 3
         },
         participants: currentParticipantCount,
-        maxParticipants: 1000, // Create scarcity
+        maxParticipants: 1000,
         type: 'football',
-        earlyBirdBonus: 100, // Points for early joiners
-        joinReward: 50 // Base points for joining
+        earlyBirdBonus: 100,
+        joinReward: 50
       };
     } else if (tournamentId === 'nba-finals-2025') {
       return {
         id: 'nba-finals-2025',
         name: 'NBA Finals 2025',
-        description: 'The championship series of the National Basketball Association - Oklahoma City Thunder vs Indiana Pacers',
+        description: 'The championship series of the National Basketball Association',
         banner: banner,
-        icon: tournamentAssets?.assets?.icon || banner,
+        icon: icon,
         startDate: '2025-06-05',
         endDate: '2025-06-22',
-        totalMarkets: 7, // Up to 7 games in best of 7 series
+        totalMarkets: 7,
         prizePool: {
           apes: 500000,
           sol: 1.5
@@ -888,49 +1747,34 @@ const TournamentDetailPage = () => {
       
       if (response.ok) {
         const data = await response.json();
-        setTournamentAssets({
+        const assets = {
           assets: data.assets || {},
           team_logos: data.team_logos || {},
           match_banners: data.match_banners || {}
-        });
-        console.log('✅ Loaded tournament assets:', data);
-      } else {
-        console.log('ℹ️ No tournament assets found, using defaults');
+        };
+        setTournamentAssets(assets);
+        return assets;
       }
     } catch (error) {
       console.error('Error loading tournament assets:', error);
     }
+    return null;
   };
 
-  const loadTournamentData = async () => {
+  const loadTournamentData = async (loadedAssets) => {
     setLoading(true);
     
-    // First load tournament assets for club world cup
-    if (tournamentId === 'club-world-cup-2025') {
-      await loadTournamentAssets();
-    }
-    
-    // Load tournament participant count with cache busting
     try {
       const cacheBuster = Date.now();
       const response = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournamentId}/leaderboard?t=${cacheBuster}`);
-      
-      console.log('🔍 Loading tournament data for:', tournamentId, 'Response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
         const newParticipantCount = data.totalParticipants || data.leaderboard?.length || 0;
         
-        console.log('📊 Tournament data loaded:', {
-          totalParticipants: data.totalParticipants,
-          leaderboardLength: data.leaderboard?.length,
-          finalCount: newParticipantCount
-        });
-        
-        // Set participant count first
         setParticipantCount(newParticipantCount);
         
-        // Get recent joiners (last 3)
+        // Get recent joiners
         const recentJoiners = (data.leaderboard || [])
           .sort((a, b) => new Date(b.joined_at) - new Date(a.joined_at))
           .slice(0, 3)
@@ -940,34 +1784,37 @@ const TournamentDetailPage = () => {
           }));
         setRecentJoiners(recentJoiners);
         
-        console.log('👥 Recent joiners updated:', recentJoiners.length);
-        console.log('🎯 About to update tournament with participant count:', newParticipantCount);
-        
-        // Create tournament object directly with the correct participant count
-        const tournamentData = createTournamentObject(newParticipantCount);
+        const tournamentData = createTournamentObject(newParticipantCount, loadedAssets);
         if (tournamentData) {
           setTournament(tournamentData);
-          console.log('✅ Tournament updated with', tournamentData.participants, 'participants');
         }
-        
       } else {
-        console.error('❌ Failed to load tournament data:', response.status, response.statusText);
-        // Create tournament with 0 participants as fallback
-        const fallbackTournament = createTournamentObject(0);
+        const fallbackTournament = createTournamentObject(0, loadedAssets);
         if (fallbackTournament) {
           setTournament(fallbackTournament);
         }
       }
     } catch (error) {
-      console.error('❌ Error loading tournament data:', error);
-      // Create tournament with 0 participants as fallback
-      const fallbackTournament = createTournamentObject(0);
+      console.error('Error loading tournament data:', error);
+      const fallbackTournament = createTournamentObject(0, loadedAssets);
       if (fallbackTournament) {
         setTournament(fallbackTournament);
       }
     }
     
     setLoading(false);
+  };
+
+  const loadTournamentMarkets = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=${tournamentId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setMarkets(data);
+      }
+    } catch (error) {
+      console.error('Error loading tournament markets:', error);
+    }
   };
 
   // Check if user is participating in tournament
@@ -985,7 +1832,7 @@ const TournamentDetailPage = () => {
     }
   };
 
-  // Shared join tournament function
+  // Handle join tournament
   const handleJoinTournament = async () => {
     if (!publicKey || !tournament || joining) return;
 
@@ -998,17 +1845,12 @@ const TournamentDetailPage = () => {
       });
 
       if (response.ok) {
-        const joinData = await response.json();
         setParticipating(true);
         
-        // Award engagement points for joining with better error handling
-        let totalPointsEarned = 50; // Base join reward
-        let pointsAwarded = false;
-        
-        console.log('🎯 Awarding tournament join points for wallet:', publicKey.toString());
+        // Award engagement points
+        let totalPointsEarned = 50;
         
         try {
-          // Award base tournament join points
           const basePointsResponse = await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
             method: 'POST',
             headers: { 
@@ -1027,15 +1869,10 @@ const TournamentDetailPage = () => {
           });
           
           if (basePointsResponse.ok) {
-            const basePointsResult = await basePointsResponse.json();
-            console.log('✅ Base tournament points awarded:', basePointsResult);
-            pointsAwarded = true;
-          } else {
-            const errorText = await basePointsResponse.text();
-            console.error('❌ Failed to award base points:', basePointsResponse.status, errorText);
+            console.log('✅ Tournament points awarded');
           }
           
-          // Early bird bonus for first 100 participants
+          // Early bird bonus
           if (participantCount < 100) {
             const bonusResponse = await fetch(`https://apes-production.up.railway.app/api/engagement/track`, {
               method: 'POST',
@@ -1055,72 +1892,16 @@ const TournamentDetailPage = () => {
             });
             
             if (bonusResponse.ok) {
-              const bonusResult = await bonusResponse.json();
-              console.log('✅ Early bird bonus awarded:', bonusResult);
-              totalPointsEarned = 150; // 50 + 100 bonus
-            } else {
-              const errorText = await bonusResponse.text();
-              console.error('❌ Failed to award early bird bonus:', bonusResponse.status, errorText);
+              totalPointsEarned = 150;
             }
           }
         } catch (pointsError) {
-          console.error('❌ Error awarding join points:', pointsError);
+          console.error('Error awarding points:', pointsError);
         }
         
-        // Force refresh tournament data multiple times to ensure count updates
-        console.log('🔄 Refreshing tournament data...');
         await loadTournamentData();
         
-        // Wait a moment and refresh again to ensure database updates are reflected
-        setTimeout(async () => {
-          await loadTournamentData();
-          console.log('🔄 Second refresh completed - should show updated participant count');
-        }, 2000);
-        
-        // Third refresh to be absolutely sure
-        setTimeout(async () => {
-          await loadTournamentData();
-          console.log('🔄 Third refresh completed - final attempt to sync participant count');
-        }, 5000);
-        
-        // Additional debugging - test the API endpoints directly
-        setTimeout(async () => {
-          try {
-            console.log('🧪 Testing tournament API endpoints...');
-            
-            // Test leaderboard endpoint
-            const testResponse = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournament.id}/leaderboard`);
-            if (testResponse.ok) {
-              const testData = await testResponse.json();
-              console.log('🧪 Direct API test result:', {
-                endpoint: '/leaderboard',
-                totalParticipants: testData.totalParticipants,
-                leaderboardLength: testData.leaderboard?.length,
-                recentParticipants: testData.leaderboard?.slice(0, 3)
-              });
-            } else {
-              console.error('🧪 API test failed:', testResponse.status, testResponse.statusText);
-            }
-            
-            // Test user status endpoint
-            const statusResponse = await fetch(`https://apes-production.up.railway.app/api/tournaments/${tournament.id}/status/${publicKey.toString()}`);
-            if (statusResponse.ok) {
-              const statusData = await statusResponse.json();
-              console.log('🧪 User status test:', statusData);
-            } else {
-              console.error('🧪 Status API test failed:', statusResponse.status);
-            }
-          } catch (testError) {
-            console.error('🧪 API testing failed:', testError);
-          }
-        }, 3000);
-        
-        // Show success message with rewards
-        const pointsMessage = pointsAwarded 
-          ? `💰 Earned ${totalPointsEarned} APES points` 
-          : `💰 ${totalPointsEarned} APES points pending (may take a moment to appear)`;
-          
-        alert(`🎉 Successfully joined tournament!\n${pointsMessage}\n🏆 Good luck in the competition!\n\n📊 Participant count will update shortly.`);
+        alert(`🎉 Successfully joined tournament!\n💰 Earned ${totalPointsEarned} APES points`);
       }
     } catch (error) {
       console.error('Error joining tournament:', error);
@@ -1130,70 +1911,19 @@ const TournamentDetailPage = () => {
     }
   };
 
-  // Check participation when tournament data loads
   useEffect(() => {
     if (tournament && publicKey) {
       checkUserParticipation();
     }
   }, [tournament, publicKey]);
 
-  // Update tournament when assets change
-  useEffect(() => {
-    if (tournamentAssets && participantCount > 0) {
-      const updatedTournament = createTournamentObject(participantCount);
-      if (updatedTournament) {
-        setTournament(updatedTournament);
-      }
-    }
-  }, [tournamentAssets]);
-
-  const addNBAGame = async (gameNumber) => {
-    try {
-      // Create market for NBA Finals game
-      const marketData = {
-        question: `NBA Finals 2025 - Game ${gameNumber}`,
-        description: `Predict the winner of NBA Finals Game ${gameNumber} between Oklahoma City Thunder and Indiana Pacers`,
-        options: ['Oklahoma City Thunder', 'Indiana Pacers'],
-        category: 'Sports',
-        league: 'nba',
-        tournament_type: 'tournament',
-        tournament_id: 'nba-finals-2025',
-        endTime: NBA_FINALS_SERIES.games[gameNumber - 1].date + 'T23:59:59.000Z',
-        minBetAmount: 10,
-        creatorFeeRate: 2.5,
-        assets: {
-          banner: tournament.banner,
-          icon: tournament.banner
-        },
-        optionsMetadata: [
-          { label: 'Oklahoma City Thunder', icon: null },
-          { label: 'Indiana Pacers', icon: null }
-        ]
-      };
-
-              const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(marketData)
-      });
-
-      if (response.ok) {
-        console.log(`✅ Successfully created market for NBA Finals Game ${gameNumber}`);
-        // You could update local state or show a success message
-      } else {
-        console.error(`❌ Failed to create market for Game ${gameNumber}`);
-      }
-    } catch (error) {
-      console.error('Error creating NBA Finals game market:', error);
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Loading tournament...</p>
+        </div>
       </div>
     );
   }
@@ -1205,7 +1935,7 @@ const TournamentDetailPage = () => {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Tournament Not Found</h2>
           <button 
             onClick={() => navigate('/tournaments')}
-            className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
           >
             Back to Tournaments
           </button>
@@ -1217,879 +1947,244 @@ const TournamentDetailPage = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Tournament Header */}
-      <div className="relative">
-        {/* Banner Container with dynamic height */}
-        <div className="relative bg-black">
-          <img 
-            src={tournamentAssets?.assets?.banner || tournament.banner} 
-            alt={tournament.name}
-            className="w-full h-auto max-h-[500px] object-contain mx-auto"
-          />
-          {/* Gradient overlay only at the bottom */}
-          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black via-black/70 to-transparent"></div>
-        </div>
-        
-        {/* Tournament Info Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 pb-8">
-          <div className="max-w-7xl mx-auto px-6">
-            <button 
-              onClick={() => navigate('/tournaments')}
-              className="mb-4 flex items-center gap-2 text-white hover:text-gray-300 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back to Tournaments
-            </button>
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-2 drop-shadow-lg">{tournament.name}</h1>
-            <p className="text-gray-200 text-lg max-w-2xl drop-shadow-md">{tournament.description}</p>
+      <div className="relative bg-white dark:bg-gray-800 shadow-sm">
+        {tournamentId === 'club-world-cup-2025' ? (
+          // Custom Club World Cup Banner with Groups
+          <div className="relative bg-black overflow-hidden">
+            {/* Background pattern */}
+            <div 
+              className="absolute inset-0 opacity-20"
+              style={{
+                backgroundImage: `repeating-linear-gradient(
+                  45deg,
+                  #fbbf24,
+                  #fbbf24 10px,
+                  transparent 10px,
+                  transparent 20px
+                )`
+              }}
+            />
+            
+            {/* Content */}
+            <div className="relative p-6 md:p-10">
+              {/* Header */}
+              <div className="text-center mb-8">
+                <h1 className="text-3xl md:text-5xl font-black text-white mb-2 tracking-tight">FIFA CLUB</h1>
+                <h2 className="text-2xl md:text-4xl font-black text-white tracking-tight">WORLD CUP 2025™</h2>
+              </div>
+              
+              {/* Groups Grid - Production Style */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-7xl mx-auto mb-8">
+                {Object.entries(CLUB_WC_GROUPS).map(([groupLetter, group]) => (
+                  <div key={groupLetter}>
+                    {/* Group Header */}
+                    <div className="text-center mb-3">
+                      <h3 className="text-white text-sm font-black tracking-wider">GROUP {groupLetter}</h3>
+                    </div>
+                    
+                    {/* Teams Grid */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {group.teams.map((team) => {
+                        // Define team colors/styles for visual distinction
+                        const teamInitials = team.split(' ').map(word => word[0]).join('').substring(0, 3);
+                        const teamColor = getTeamColor(team);
+                        
+                        return (
+                          <div key={team} className="relative group cursor-pointer">
+                            <div className={`
+                              aspect-square rounded-lg p-2 
+                              bg-gradient-to-br ${teamColor} 
+                              hover:scale-110 transition-transform duration-200
+                              flex items-center justify-center
+                              border border-gray-700 hover:border-yellow-500
+                            `}>
+                              {tournamentAssets?.team_logos?.[team] ? (
+                                <img 
+                                  src={tournamentAssets.team_logos[team]} 
+                                  alt={team}
+                                  className="w-full h-full object-contain p-1"
+                                  title={team}
+                                />
+                              ) : (
+                                <div className="text-center">
+                                  <div className="text-white font-bold text-sm md:text-base">
+                                    {teamInitials}
+                                  </div>
+                                  <div className="text-white/70 text-[8px] md:text-[10px] mt-0.5 font-medium">
+                                    {team.split(' ')[0]}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            {/* Team name tooltip */}
+                            <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 
+                              bg-gray-900 text-white text-xs px-2 py-1 rounded 
+                              opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                              {team}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Bottom Section */}
+              <div className="text-center">
+                <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+              </div>
+            </div>
+            
+            {/* Navigation and description overlay */}
+            <div className="bg-gradient-to-t from-black via-black/90 to-transparent">
+              <div className="p-6 md:p-8">
+                <div className="max-w-7xl mx-auto">
+                  <button 
+                    onClick={() => navigate('/tournaments')}
+                    className="mb-4 flex items-center gap-2 text-white/90 hover:text-white transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back to Tournaments
+                  </button>
+                  <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{tournament.name}</h1>
+                  <p className="text-white/90 text-lg max-w-3xl">{tournament.description}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          // Default banner for other tournaments
+          <>
+            <div className="relative h-48 md:h-64 lg:h-80 overflow-hidden">
+              <img 
+                src={tournament.banner} 
+                alt={tournament.name}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+            </div>
+            
+            <div className="absolute bottom-0 left-0 right-0 p-6">
+              <div className="max-w-7xl mx-auto">
+                <button 
+                  onClick={() => navigate('/tournaments')}
+                  className="mb-4 flex items-center gap-2 text-white/90 hover:text-white transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Tournaments
+                </button>
+                <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{tournament.name}</h1>
+                <p className="text-white/90 text-lg max-w-3xl">{tournament.description}</p>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Quick Stats Bar */}
+      <div className="bg-gray-900 dark:bg-black border-b border-gray-700">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-6 text-sm">
+              <div className="flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-yellow-500" />
+                <span className="font-medium text-white">
+                  {tournament.prizePool.apes.toLocaleString()} APES + {tournament.prizePool.sol} SOL
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-yellow-500" />
+                <span className="font-medium text-white">
+                  {participantCount}/{tournament.maxParticipants} participants
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-yellow-500" />
+                <span className="font-medium text-white">
+                  Starts {format(parseISO(tournament.startDate), 'MMM d, yyyy')}
+                </span>
+              </div>
+            </div>
+            
+            {/* Join Button */}
+            {connected && publicKey && !participating && (
+              <button
+                onClick={handleJoinTournament}
+                disabled={joining}
+                className="bg-yellow-500 hover:bg-yellow-600 text-black px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {joining ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Joining...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Join Tournament
+                  </>
+                )}
+              </button>
+            )}
+            {connected && publicKey && participating && (
+              <div className="flex items-center gap-2 text-green-400">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="font-medium">Joined</span>
+              </div>
+            )}
+            {!connected && (
+              <span className="text-sm text-gray-400">
+                Connect wallet to join
+              </span>
+            )}
           </div>
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <TabNavigation activeTab={activeTab} setActiveTab={setActiveTab} tournamentId={tournamentId} />
+
+      {/* Tab Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Tournament Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center border-2 border-yellow-200 dark:border-yellow-800">
-            <Trophy className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-            <div className="text-xl font-bold text-gray-900 dark:text-white">
-              {tournament.prizePool.apes.toLocaleString()} APES
-            </div>
-            <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
-              + {tournament.prizePool.sol} SOL
-            </div>
-            <div className="text-gray-600 dark:text-gray-400 text-sm">Total Prize Pool</div>
-            <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">🔥 Enhanced Pool</div>
-          </div>
-          
-          <div className={`bg-white dark:bg-gray-800 rounded-xl p-6 text-center border-2 ${
-            tournament.participants >= tournament.maxParticipants * 0.8 
-              ? 'border-red-200 dark:border-red-800' 
-              : 'border-blue-200 dark:border-blue-800'
-          }`}>
-            <Users className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {tournament.participants.toLocaleString()}
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                /{tournament.maxParticipants.toLocaleString()}
-              </span>
-            </div>
-            <div className="text-gray-600 dark:text-gray-400 text-sm">Participants</div>
-            {tournament.participants >= tournament.maxParticipants * 0.8 && (
-              <div className="text-xs text-red-600 dark:text-red-400 mt-1">⚡ Almost Full!</div>
-            )}
-            {tournament.participants < tournament.maxParticipants * 0.5 && (
-              <div className="text-xs text-green-600 dark:text-green-400 mt-1">🌟 Early Bird Bonus</div>
-            )}
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center">
-            <Target className="w-8 h-8 text-green-500 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {tournament.totalMarkets}
-            </div>
-            <div className="text-gray-600 dark:text-gray-400 text-sm">Total Markets</div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center">
-            <Calendar className="w-8 h-8 text-purple-500 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {Math.ceil((new Date(tournament.startDate) - new Date()) / (1000 * 60 * 60 * 24))}
-            </div>
-            <div className="text-gray-600 dark:text-gray-400 text-sm">Days Until Start</div>
-            {Math.ceil((new Date(tournament.startDate) - new Date()) / (1000 * 60 * 60 * 24)) <= 7 && (
-              <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">⏰ Starting Soon</div>
-            )}
-          </div>
-        </div>
-
-        {/* Join Tournament CTA Section */}
-        {!connected && (
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl p-6 mb-8 border border-purple-200 dark:border-purple-700">
-            <div className="text-center">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                🚀 Connect Wallet to Join Tournament
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Connect your wallet to participate in the FIFA Club World Cup 2025 and earn rewards!
-              </p>
-              <div className="flex items-center justify-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                <span>💰 {tournament.joinReward} APES for joining</span>
-                <span>🎯 {tournament.earlyBirdBonus} bonus points if first 100</span>
-                <span>🏆 Prize pool: {tournament.prizePool.apes.toLocaleString()} APES + {tournament.prizePool.sol} SOL</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Countdown Timer & Join Tournament */}
-        <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-6 mb-8 border border-purple-200 dark:border-purple-700">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
-            <div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                <Clock className="w-6 h-6 text-purple-500" />
-                Tournament Starts In
-              </h3>
-              <CountdownTimer 
-                targetDate={tournament.startDate} 
-                label="⚽ FIFA Club World Cup 2025"
-              />
-            </div>
-            
-            {/* Join Tournament Section */}
-            <div className="text-center">
-              {connected && publicKey ? (
-                participating ? (
-                  <div className="bg-green-100 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
-                    <div className="text-green-800 dark:text-green-200 font-bold mb-2">
-                      ✅ You're In!
-                    </div>
-                    <div className="text-sm text-green-700 dark:text-green-300">
-                      Good luck in the tournament!
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <button
-                      onClick={handleJoinTournament}
-                      disabled={joining}
-                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {joining ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                          Joining...
-                        </div>
-                      ) : (
-                        '🚀 Join Tournament'
-                      )}
-                    </button>
-                    <div className="text-xs text-purple-700 dark:text-purple-300">
-                      💰 {tournament.joinReward} APES instantly + {tournament.earlyBirdBonus} bonus if first 100
-                    </div>
-                  </div>
-                )
-              ) : (
-                <div className="bg-blue-100 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                  <div className="text-blue-800 dark:text-blue-200 font-bold mb-2">
-                    🔗 Connect Wallet
-                  </div>
-                  <div className="text-sm text-blue-700 dark:text-blue-300">
-                    Connect to join the tournament
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <div className="text-center lg:text-right">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4">
-                <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Tournament Fill Status</div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                    <div 
-                      className="bg-gradient-to-r from-purple-500 to-pink-500 h-3 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min((tournament.participants / tournament.maxParticipants) * 100, 100)}%` }}
-                    ></div>
-                  </div>
-                  <span className="text-sm font-bold text-gray-900 dark:text-white">
-                    {Math.round((tournament.participants / tournament.maxParticipants) * 100)}%
-                  </span>
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {tournament.maxParticipants - tournament.participants} spots remaining
-                </div>
-              </div>
-              
-              {tournament.participants < 100 && (
-                <div className="bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200 text-sm font-medium px-3 py-2 rounded-lg">
-                  🌟 Early Bird Bonus Still Available!
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Activity & FOMO */}
-        {recentJoiners.length > 0 && (
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-4 mb-8 border border-green-200 dark:border-green-700">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h4 className="font-bold text-green-800 dark:text-green-200 mb-1">🔥 Recent Joiners</h4>
-                <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-300">
-                  {recentJoiners.map((joiner, index) => (
-                    <span key={index} className="bg-green-100 dark:bg-green-900/50 px-2 py-1 rounded">
-                      {joiner.username}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className="text-right">
-                {connected && publicKey && !participating && (
-                  <button
-                    onClick={handleJoinTournament}
-                    disabled={joining}
-                    className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
-                  >
-                    {joining ? 'Joining...' : 'Join Now'}
-                  </button>
-                )}
-                {!connected && (
-                  <div className="text-sm text-green-600 dark:text-green-400 font-medium">
-                    Connect wallet to join!
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Navigation Tabs */}
-        <div className="border-b border-gray-200 dark:border-gray-700 mb-8">
-          <nav className="flex space-x-8">
-            {['overview', 'bracket', 'markets', 'leaderboard'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm capitalize transition-colors ${
-                  activeTab === tab
-                    ? 'border-purple-500 text-purple-600 dark:text-purple-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* Tab Content */}
         {activeTab === 'overview' && (
-          <div className="space-y-8">
-            {tournament.id === 'club-world-cup-2025' && <ClubWorldCupMatches tournamentAssets={tournamentAssets} />}
-
-            {tournament.id === 'nba-finals-2025' && (
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">NBA Finals 2025 Series</h3>
-                
-                {/* Series Scoreboard */}
-                <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-xl p-6 mb-6 border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-4">
-                                          <div className="text-center flex-1">
-                        <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-2">
-                          <span className="text-blue-600 dark:text-blue-400 font-bold text-xl">OKC</span>
-                        </div>
-                        <div className="text-xl font-bold text-gray-900 dark:text-white">Oklahoma City Thunder</div>
-                        <div className="text-4xl font-bold text-blue-600 mt-2">1</div>
-                      </div>
-                    
-                    <div className="text-center px-8">
-                      <div className="text-gray-500 dark:text-gray-400 text-sm">Best of 7 Series</div>
-                      <div className="text-2xl font-bold text-gray-900 dark:text-white">1 - 1</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Series Tied</div>
-                      <div className="flex gap-1 mt-3 justify-center">
-                        {[1, 2, 3, 4, 5, 6, 7].map((gameNum) => {
-                          const game = NBA_FINALS_SERIES.games[gameNum - 1];
-                          return (
-                            <div
-                              key={gameNum}
-                                                             className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
-                                 game.status === 'completed'
-                                   ? game.winner === 'Oklahoma City Thunder'
-                                     ? 'bg-blue-500 text-white border-blue-500'
-                                     : 'bg-yellow-500 text-white border-yellow-500'
-                                   : game.status === 'live'
-                                   ? 'bg-red-100 text-red-600 border-red-500 animate-pulse'
-                                   : 'bg-gray-100 text-gray-400 border-gray-300 dark:bg-gray-700 dark:border-gray-600'
-                               }`}
-                            >
-                              {gameNum}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    
-                                          <div className="text-center flex-1">
-                        <div className="w-16 h-16 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center mx-auto mb-2">
-                          <span className="text-yellow-600 dark:text-yellow-400 font-bold text-xl">IND</span>
-                        </div>
-                        <div className="text-xl font-bold text-gray-900 dark:text-white">Indiana Pacers</div>
-                        <div className="text-4xl font-bold text-yellow-600 mt-2">1</div>
-                      </div>
-                  </div>
-                </div>
-
-                {/* Game List */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-lg font-bold text-gray-900 dark:text-white">Series Games</h4>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      Game 3 is LIVE • Next: Add Games 4-7 as needed
-                    </div>
-                  </div>
-                  
-                  {NBA_FINALS_SERIES.games.map((game) => (
-                    <div key={game.id} className={`bg-white dark:bg-gray-800 rounded-xl p-6 border-2 transition-all ${
-                      game.status === 'live' 
-                        ? 'border-red-500 shadow-lg' 
-                        : game.status === 'completed'
-                        ? 'border-green-200 dark:border-green-800'
-                        : 'border-gray-200 dark:border-gray-700'
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-6">
-                          <div className="text-center min-w-[80px]">
-                            <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Game {game.id}</div>
-                            <div className={`font-bold text-lg ${
-                              game.status === 'live' ? 'text-red-500 animate-pulse' : 
-                              game.status === 'completed' ? 'text-green-500' : 'text-gray-400'
-                            }`}>
-                              {game.status === 'live' ? '🔴 LIVE' : 
-                               game.status === 'completed' ? '✅ FINAL' : '⏰ UPCOMING'}
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-6">
-                            <div className="text-center">
-                              <div className={`font-bold text-lg ${
-                                game.status === 'completed' && game.winner === 'Oklahoma City Thunder' 
-                                  ? 'text-blue-600 dark:text-blue-400' 
-                                  : 'text-gray-900 dark:text-white'
-                              }`}>
-                                Thunder
-                              </div>
-                              {game.status === 'completed' && game.winner === 'Oklahoma City Thunder' && (
-                                <Crown className="w-5 h-5 text-yellow-500 mx-auto mt-1" />
-                              )}
-                            </div>
-                            
-                            <div className="flex items-center gap-4">
-                              {game.status === 'completed' && (
-                                <div className="bg-gray-100 dark:bg-gray-700 px-4 py-2 rounded-lg">
-                                  <div className="font-bold text-gray-900 dark:text-white">{game.score}</div>
-                                </div>
-                              )}
-                              {game.status !== 'completed' && (
-                                <div className="text-gray-400 font-bold">VS</div>
-                              )}
-                            </div>
-                            
-                            <div className="text-center">
-                              <div className={`font-bold text-lg ${
-                                game.status === 'completed' && game.winner === 'Indiana Pacers' 
-                                  ? 'text-yellow-600 dark:text-yellow-400' 
-                                  : 'text-gray-900 dark:text-white'
-                              }`}>
-                                Pacers
-                              </div>
-                              {game.status === 'completed' && game.winner === 'Indiana Pacers' && (
-                                <Crown className="w-5 h-5 text-yellow-500 mx-auto mt-1" />
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <div className="text-sm font-medium text-gray-600 dark:text-gray-400">{game.date}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-500">{game.venue}</div>
-                            {game.status === 'live' && (
-                              <div className="text-xs text-red-500 font-bold mt-1">⚡ Markets Active</div>
-                            )}
-                          </div>
-                          
-                                                  {game.status === 'upcoming' && game.id > 3 && isAdmin && (
-                          <button
-                            onClick={() => addNBAGame(game.id)}
-                            className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2 font-medium"
-                          >
-                            <Plus className="w-4 h-4" />
-                            Add Game {game.id} Market
-                          </button>
-                        )}
-                          
-                          {game.status === 'upcoming' && game.id <= 3 && (
-                            <div className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-4 py-2 rounded-lg text-sm">
-                              Market Ready
-                            </div>
-                          )}
-                          
-                                                  {(game.status === 'completed' || game.status === 'live') && (
-                          <button 
-                            onClick={() => {
-                              // Link to specific market for Game 3
-                              if (game.id === 3) {
-                                navigate('/markets/9CKNL7Qf9G8n2REVZJNQK9r9pNhziPc5KDGsvCU64wjV');
-                              } else {
-                                navigate('/markets');
-                              }
-                            }}
-                            className="bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 px-4 py-2 rounded-lg text-sm hover:bg-green-200 dark:hover:bg-green-900/40 transition-colors"
-                          >
-                            View Market
-                          </button>
-                        )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Series Info */}
-                <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6">
-                  <h5 className="font-bold text-blue-900 dark:text-blue-100 mb-3">Series Information</h5>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium text-blue-800 dark:text-blue-200">Format:</span>
-                      <span className="ml-2 text-blue-700 dark:text-blue-300">Best of 7 (First to 4 wins)</span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-blue-800 dark:text-blue-200">Current Status:</span>
-                      <span className="ml-2 text-blue-700 dark:text-blue-300">Game 3 Live, Series Tied 1-1</span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-blue-800 dark:text-blue-200">Games Remaining:</span>
-                      <span className="ml-2 text-blue-700 dark:text-blue-300">Up to 5 games (minimum 2)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <OverviewView 
+            tournament={tournament} 
+            markets={markets}
+            participantCount={participantCount}
+            recentJoiners={recentJoiners}
+            tournamentAssets={tournamentAssets}
+          />
         )}
-
-        {activeTab === 'bracket' && tournament.id === 'nba-finals-2025' && (
-          <div>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Series Bracket</h3>
-            
-            {/* NBA Finals Visual Bracket */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-8">
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center gap-8">
-                  <div className="text-center">
-                    <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <span className="text-blue-600 dark:text-blue-400 font-bold text-2xl">OKC</span>
-                    </div>
-                    <div className="font-bold text-gray-900 dark:text-white">Oklahoma City Thunder</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">(Western Champion)</div>
-                  </div>
-                  
-                  <div className="flex-1 max-w-md">
-                    <div className="text-center mb-4">
-                      <Trophy className="w-12 h-12 text-yellow-500 mx-auto mb-2" />
-                      <div className="font-bold text-lg text-gray-900 dark:text-white">NBA Finals 2025</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">Best of 7 Series</div>
-                    </div>
-                    
-                    {/* Series Progress Bar */}
-                    <div className="bg-gray-100 dark:bg-gray-700 rounded-full p-2 mb-4">
-                      <div className="flex justify-between items-center">
-                        <div className="text-sm font-medium text-blue-600 dark:text-blue-400">OKC: 1</div>
-                        <div className="flex gap-1">
-                          {[1, 2, 3, 4, 5, 6, 7].map((gameNum) => {
-                            const game = NBA_FINALS_SERIES.games[gameNum - 1];
-                            return (
-                              <div
-                                key={gameNum}
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                                  game.status === 'completed'
-                                    ? game.winner === 'Oklahoma City Thunder'
-                                      ? 'bg-blue-500 text-white'
-                                      : 'bg-yellow-500 text-white'
-                                    : game.status === 'live'
-                                    ? 'bg-red-500 text-white animate-pulse'
-                                    : 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400'
-                                }`}
-                              >
-                                {gameNum}
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div className="text-sm font-medium text-yellow-600 dark:text-yellow-400">IND: 1</div>
-                      </div>
-                    </div>
-                    
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-gray-900 dark:text-white">1 - 1</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">Series Tied</div>
-                    </div>
-                  </div>
-                  
-                  <div className="text-center">
-                    <div className="w-20 h-20 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <span className="text-yellow-600 dark:text-yellow-400 font-bold text-2xl">IND</span>
-                    </div>
-                    <div className="font-bold text-gray-900 dark:text-white">Indiana Pacers</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">(Eastern Champion)</div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Championship Path */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
-                <div className="text-center">
-                  <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-4">Western Conference</h4>
-                  <div className="space-y-3">
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <div className="font-bold text-blue-700 dark:text-blue-300">Conference Finals</div>
-                      <div className="text-sm text-blue-600 dark:text-blue-400">Thunder def. Nuggets 4-3</div>
-                    </div>
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <div className="font-bold text-blue-700 dark:text-blue-300">Conference Semifinals</div>
-                      <div className="text-sm text-blue-600 dark:text-blue-400">Thunder def. Lakers 4-2</div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="text-center">
-                  <h4 className="font-bold text-yellow-600 dark:text-yellow-400 mb-4">Championship</h4>
-                  <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 p-6 rounded-lg border-2 border-yellow-200 dark:border-yellow-800">
-                    <Crown className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-                    <div className="font-bold text-yellow-700 dark:text-yellow-300">NBA Championship</div>
-                    <div className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">June 5-22, 2025</div>
-                    <div className="text-xs text-yellow-500 dark:text-yellow-500 mt-1">Best of 7</div>
-                  </div>
-                </div>
-                
-                <div className="text-center">
-                  <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-4">Eastern Conference</h4>
-                  <div className="space-y-3">
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                      <div className="font-bold text-yellow-700 dark:text-yellow-300">Conference Finals</div>
-                      <div className="text-sm text-yellow-600 dark:text-yellow-400">Pacers def. Celtics 4-2</div>
-                    </div>
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                      <div className="font-bold text-yellow-700 dark:text-yellow-300">Conference Semifinals</div>
-                      <div className="text-sm text-yellow-600 dark:text-yellow-400">Pacers def. 76ers 4-1</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        
+        {activeTab === 'table' && tournamentId === 'club-world-cup-2025' && (
+          <TableView groups={CLUB_WC_GROUPS} tournamentAssets={tournamentAssets} />
         )}
-
-        {activeTab === 'bracket' && tournament.id === 'club-world-cup-2025' && (
-          <div>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Tournament Bracket</h3>
-            
-            {/* Tournament Phase Selector */}
-            <div className="flex flex-wrap gap-2 mb-8">
-              <button
-                onClick={() => setSelectedGroup('groups')}
-                className={`px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                  selectedGroup === 'groups'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                Group Stage
-              </button>
-              <button
-                onClick={() => setSelectedGroup('knockout')}
-                className={`px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                  selectedGroup === 'knockout'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                <Trophy className="w-4 h-4" />
-                Knockout Phase
-              </button>
-            </div>
-
-            {/* Group Stage View */}
-            {selectedGroup === 'groups' && (
-              <div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {Object.entries(CLUB_WC_GROUPS).map(([groupLetter, groupData]) => (
-                    <div key={groupLetter} className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                      <div className="text-center mb-4">
-                        <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center mx-auto mb-2">
-                          <span className="text-purple-600 dark:text-purple-400 font-bold text-lg">
-                            {groupLetter}
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-gray-900 dark:text-white">Group {groupLetter}</h4>
-                      </div>
-                      
-                      <div className="space-y-3">
-                        {groupData.teams.map((team, index) => (
-                          <div key={team} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                            <div className="w-6 h-6 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-xs font-bold">
-                              {index + 1}
-                            </div>
-                            {tournamentAssets?.team_logos?.[team] && (
-                              <img 
-                                src={tournamentAssets.team_logos[team]} 
-                                alt={team}
-                                className="w-6 h-6 object-contain"
-                              />
-                            )}
-                            <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{team}</span>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                        <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                          {CLUB_WC_ALL_MATCHES.filter(m => m.group === groupLetter).length} matches
-                        </div>
-                        <button
-                          onClick={() => setSelectedGroup(groupLetter)}
-                          className="w-full mt-2 text-xs bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 py-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors"
-                        >
-                          View Details
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Individual Group Detail View */}
-            {Object.keys(CLUB_WC_GROUPS).includes(selectedGroup) && (
-              <div>
-                <div className="flex items-center gap-4 mb-6">
-                  <button
-                    onClick={() => setSelectedGroup('groups')}
-                    className="flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back to All Groups
-                  </button>
-                </div>
-                
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-6">
-                  <h4 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-center">
-                    Group {selectedGroup}
-                  </h4>
-                  
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div>
-                      <h5 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-                        <Users className="w-5 h-5" />
-                        Teams & Standings
-                      </h5>
-                      <div className="space-y-3">
-                        {CLUB_WC_GROUPS[selectedGroup].teams.map((team, index) => (
-                          <div key={team} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                                index === 0 ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
-                                index === 1 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
-                                'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
-                              }`}>
-                                {index + 1}
-                              </div>
-                              {tournamentAssets?.team_logos?.[team] && (
-                                <img 
-                                  src={tournamentAssets.team_logos[team]} 
-                                  alt={team}
-                                  className="w-8 h-8 object-contain"
-                                />
-                              )}
-                              <span className="font-medium text-gray-900 dark:text-white">{team}</span>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-gray-900 dark:text-white">0 pts</div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">0-0-0</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <div className="text-xs text-blue-700 dark:text-blue-300">
-                          <strong>Qualification:</strong> Top 2 teams advance to Round of 16
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h5 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-                        <Calendar className="w-5 h-5" />
-                        Group Matches
-                      </h5>
-                      <div className="space-y-3">
-                        {CLUB_WC_ALL_MATCHES
-                          .filter(match => match.group === selectedGroup)
-                          .map((match) => (
-                            <div key={match.match} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="font-medium text-gray-900 dark:text-white text-sm">
-                                  Match {match.match}
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  {match.date} • {match.time}
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <div className="flex items-center gap-2">
-                                    {tournamentAssets?.team_logos?.[match.home] && (
-                                      <img 
-                                        src={tournamentAssets.team_logos[match.home]} 
-                                        alt={match.home}
-                                        className="w-6 h-6 object-contain"
-                                      />
-                                    )}
-                                    <span className="font-bold text-gray-900 dark:text-white">{match.home}</span>
-                                  </div>
-                                  <span className="text-gray-500 dark:text-gray-400">vs</span>
-                                  <div className="flex items-center gap-2">
-                                    {tournamentAssets?.team_logos?.[match.away] && (
-                                      <img 
-                                        src={tournamentAssets.team_logos[match.away]} 
-                                        alt={match.away}
-                                        className="w-6 h-6 object-contain"
-                                      />
-                                    )}
-                                    <span className="font-bold text-gray-900 dark:text-white">{match.away}</span>
-                                  </div>
-                                </div>
-                                <button 
-                                  onClick={async () => {
-                                    // Find the market for this match
-                                    const question = `${match.home} - ${match.away}`;
-                                    try {
-                                      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=${tournament.id}`);
-                                      if (response.ok) {
-                                        const markets = await response.json();
-                                        const market = markets.find(m => m.question === question);
-                                        if (market) {
-                                          navigate(`/markets/${market.publicKey || market.market_address}`);
-                                        } else {
-                                          alert('Market not yet deployed for this match');
-                                        }
-                                      }
-                                    } catch (error) {
-                                      console.error('Error finding market:', error);
-                                      alert('Error finding market for this match');
-                                    }
-                                  }}
-                                  className="text-xs bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 px-3 py-1 rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors"
-                                >
-                                  View Market
-                                </button>
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                {match.venue}
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Knockout Phase View */}
-            {selectedGroup === 'knockout' && (
-              <div>
-                <div className="text-center mb-8">
-                  <div className="inline-flex items-center gap-4 bg-white dark:bg-gray-800 rounded-xl p-6">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-900 dark:text-white">32</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Teams</div>
-                    </div>
-                    <ChevronRight className="w-6 h-6 text-gray-400" />
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-900 dark:text-white">16</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Round of 16</div>
-                    </div>
-                    <ChevronRight className="w-6 h-6 text-gray-400" />
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-900 dark:text-white">8</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Quarterfinals</div>
-                    </div>
-                    <ChevronRight className="w-6 h-6 text-gray-400" />
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-900 dark:text-white">4</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Semifinals</div>
-                    </div>
-                    <ChevronRight className="w-6 h-6 text-gray-400" />
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-yellow-500">1</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Champion</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-6">
-                  <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-6 text-center">
-                    Knockout Bracket
-                  </h4>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div>
-                      <h5 className="font-bold text-center mb-4 text-gray-700 dark:text-gray-300">Round of 16</h5>
-                      <div className="space-y-2">
-                        {Array.from({ length: 8 }, (_, i) => (
-                          <div key={i} className="bg-gray-50 dark:bg-gray-700 rounded p-3 text-center">
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Match {49 + i}</div>
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              Group Winner vs Runner-up
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h5 className="font-bold text-center mb-4 text-gray-700 dark:text-gray-300">Quarterfinals</h5>
-                      <div className="space-y-4">
-                        {Array.from({ length: 4 }, (_, i) => (
-                          <div key={i} className="bg-gray-50 dark:bg-gray-700 rounded p-3 text-center">
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">QF {i + 1}</div>
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              TBD vs TBD
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h5 className="font-bold text-center mb-4 text-gray-700 dark:text-gray-300">Semifinals</h5>
-                      <div className="space-y-8">
-                        {Array.from({ length: 2 }, (_, i) => (
-                          <div key={i} className="bg-gray-50 dark:bg-gray-700 rounded p-4 text-center">
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">SF {i + 1}</div>
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              TBD vs TBD
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h5 className="font-bold text-center mb-4 text-yellow-600 dark:text-yellow-400">Final</h5>
-                      <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border-2 border-yellow-200 dark:border-yellow-800 rounded-lg p-6 text-center">
-                        <Trophy className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-                        <div className="text-xs text-yellow-600 dark:text-yellow-400 mb-2">July 13, 2025</div>
-                        <div className="font-bold text-gray-900 dark:text-white">
-                          Champion Match
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          MetLife Stadium
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+        
+        {activeTab === 'knockout' && tournamentId === 'club-world-cup-2025' && (
+          <KnockoutView matches={CLUB_WC_ALL_MATCHES} tournamentAssets={tournamentAssets} />
         )}
-
+        
+        {activeTab === 'matches' && (
+          <MatchesView 
+            matches={tournamentId === 'club-world-cup-2025' ? CLUB_WC_ALL_MATCHES : NBA_FINALS_SERIES.games}
+            tournamentAssets={tournamentAssets}
+            tournamentId={tournamentId}
+          />
+        )}
+        
+        {activeTab === 'stats' && (
+          <StatsView tournament={tournament} markets={markets} participantCount={participantCount} />
+        )}
+        
+        {activeTab === 'news' && (
+          <NewsView tournament={tournament} />
+        )}
+        
         {activeTab === 'markets' && (
           <TournamentMarkets tournamentId={tournament.id} />
         )}
-
+        
         {activeTab === 'leaderboard' && (
           <TournamentLeaderboard 
             tournamentId={tournament.id} 
