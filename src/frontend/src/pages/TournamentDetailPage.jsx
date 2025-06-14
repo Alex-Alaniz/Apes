@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { isWalletAuthorized } from '../config/access';
 import { format, parseISO } from 'date-fns';
+import { Helmet } from 'react-helmet-async';
 import {
   Trophy,
   Calendar,
@@ -1946,6 +1947,33 @@ const TournamentDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* OpenGraph Meta Tags */}
+      {tournamentId === 'club-world-cup-2025' && (
+        <Helmet>
+          <title>FIFA Club World Cup 2025 - PRIMAPE Markets</title>
+          <meta name="description" content="Predict winners of the FIFA Club World Cup 2025 matches and compete for amazing prizes! The ultimate club football championship featuring 32 teams from around the world." />
+          
+          {/* OpenGraph tags */}
+          <meta property="og:title" content="FIFA Club World Cup 2025 - PRIMAPE Markets" />
+          <meta property="og:description" content="Predict winners of the FIFA Club World Cup 2025 matches and compete for amazing prizes! The ultimate club football championship featuring 32 teams from around the world." />
+          <meta property="og:image" content="https://i0.wp.com/financefootball.com/wp-content/uploads/2024/12/fifa_club_world_cup_2025.jpg?fit=1366%2C768&ssl=1" />
+          <meta property="og:image:width" content="1366" />
+          <meta property="og:image:height" content="768" />
+          <meta property="og:image:alt" content="FIFA Club World Cup 2025 - All 32 Teams" />
+          <meta property="og:url" content="https://apes.primape.app/tournaments/club-world-cup-2025" />
+          <meta property="og:type" content="website" />
+          <meta property="og:site_name" content="PRIMAPE Markets" />
+          
+          {/* Twitter Card tags */}
+          <meta property="twitter:card" content="summary_large_image" />
+          <meta property="twitter:title" content="FIFA Club World Cup 2025 - PRIMAPE Markets" />
+          <meta property="twitter:description" content="Predict winners of the FIFA Club World Cup 2025 matches and compete for amazing prizes!" />
+          <meta property="twitter:image" content="https://i0.wp.com/financefootball.com/wp-content/uploads/2024/12/fifa_club_world_cup_2025.jpg?fit=1366%2C768&ssl=1" />
+          <meta property="twitter:site" content="@PRIMAPE_APP" />
+          <meta property="twitter:creator" content="@PRIMAPE_APP" />
+        </Helmet>
+      )}
+
       {/* Tournament Header */}
       <div className="relative bg-white dark:bg-gray-800 shadow-sm">
         {tournamentId === 'club-world-cup-2025' ? (
