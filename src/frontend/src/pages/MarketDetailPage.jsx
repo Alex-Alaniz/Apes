@@ -445,7 +445,14 @@ const MarketDetailPage = ({ marketId }) => {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <div className="text-gray-400 text-sm">Total Volume</div>
-                  <div className="text-xl font-bold text-white">{(market.totalVolume || 0).toFixed(2)} APES</div>
+                  <div className="text-xl font-bold text-white">
+                    {(market.totalVolume || 0).toFixed(2)} APES
+                    {market.volumeSource === 'escrow' && (
+                      <div className="text-xs text-green-400 mt-1">
+                        ✅ Real escrow balance
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <div className="text-gray-400 text-sm">Min Bet</div>
@@ -547,6 +554,49 @@ const MarketDetailPage = ({ marketId }) => {
             </div>
           </div>
         </div>
+
+        {/* Admin Controls - Simplified since escrow is now auto-fetched */}
+        {wallet?.publicKey?.toString() === 'APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z' && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+            <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200 mb-2">Admin Controls</h3>
+            {market.volumeSource === 'escrow' && (
+              <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
+                ✅ Volume automatically fetched from escrow: {market.totalVolume.toFixed(2)} APES
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch(
+                      `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets/sync-from-blockchain/${market.publicKey}`,
+                      { method: 'POST' }
+                    );
+                    if (response.ok) {
+                      const result = await response.json();
+                      setToast({
+                        message: `Market synced from blockchain! Volume: ${result.blockchainData?.totalVolume?.toFixed(2)} APES`,
+                        type: 'success'
+                      });
+                      // Reload market data
+                      window.location.reload();
+                    } else {
+                      throw new Error('Sync failed');
+                    }
+                  } catch (error) {
+                    setToast({
+                      message: 'Failed to sync from blockchain',
+                      type: 'error'
+                    });
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                🔄 Sync From Blockchain
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Prediction Modal */}

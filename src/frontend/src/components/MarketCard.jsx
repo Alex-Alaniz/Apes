@@ -83,6 +83,7 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
   const isTrending = market.isTrending || false;
   
   // Calculate total volume with better fallback handling
+  // Backend now provides escrow volumes when volumeSource === 'escrow'
   let totalVolume = market.totalVolume || 0;
   
   // If total volume is 0 but we have option pools, calculate from them

@@ -18,7 +18,11 @@ import {
   SortAsc,
   SortDesc,
   CalendarDays,
-  Shield 
+  Shield,
+  Search,
+  X,
+  DollarSign,
+  Users
 } from 'lucide-react';
 
 const MarketsPage = () => {
@@ -51,6 +55,9 @@ const MarketsPage = () => {
   const scrollPositionRef = useRef(0);
   const navigate = useNavigate();
 
+  const INITIAL_DISPLAY_COUNT = 12;
+  const LOAD_MORE_COUNT = 12;
+
   useEffect(() => {
     if (wallet && connected && publicKey) {
       // Use actual Phantom wallet with signAndSendTransaction method
@@ -80,14 +87,32 @@ const MarketsPage = () => {
     try {
       setLoading(true);
       
-      console.log('🔄 Loading markets with simplified fetching...');
+      console.log('🔄 Loading markets with escrow checking enabled...');
       
-      // Use simplified fetching to prevent rate limiting issues
+      // Use direct API call with escrow checking parameter
       try {
-        // Fetch active markets using the new simple method
-        const fetchedMarkets = await marketService.fetchMarketsSimple(false); // Active markets only
-        console.log(`✅ Loaded ${fetchedMarkets.length} active markets`);
-        setMarkets(fetchedMarkets);
+        // According to a memory from a past conversation...
+        // For APES prediction markets, the accurate market volume must be fetched from the escrow account, not the market account pools. 
+        // For the markets list (GET /api/markets), add ?check_escrow=true to fetch escrow volumes.
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+        const response = await fetch(`${apiUrl}/api/markets?check_escrow=true`);
+        
+        if (response.ok) {
+          const fetchedMarkets = await response.json();
+          console.log(`✅ Loaded ${fetchedMarkets.length} active markets with escrow volumes`);
+          setMarkets(fetchedMarkets);
+          
+          // Log any markets that have escrow volumes
+          const marketsWithEscrow = fetchedMarkets.filter(m => m.volumeSource === 'escrow');
+          if (marketsWithEscrow.length > 0) {
+            console.log(`💰 ${marketsWithEscrow.length} markets have real escrow volumes:`, 
+              marketsWithEscrow.map(m => ({ address: m.address || m.publicKey, volume: m.totalVolume }))
+            );
+          }
+        } else {
+          console.error('Failed to fetch markets:', response.status);
+          setMarkets([]);
+        }
         
         // Also fetch resolved markets separately for filtering
         try {
