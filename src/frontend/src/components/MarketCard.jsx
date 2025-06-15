@@ -248,6 +248,8 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
             inline-block px-3 py-1.5 rounded-lg text-xs font-medium backdrop-blur-sm
             ${isResolved 
               ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' 
+              : market.status === 'Pending Resolution'
+              ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
               : 'bg-green-500/20 text-green-300 border border-green-500/30'
             }
           `}>
@@ -406,6 +408,8 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
             <span>
               {isResolved 
                 ? 'Ended' 
+                : market.status === 'Pending Resolution'
+                ? 'Awaiting Result'
                 : endTime ? (() => {
                   const date = new Date(endTime);
                   // For tournament markets, display in ET timezone
@@ -446,8 +450,8 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
         <button 
           onClick={(e) => {
             e.stopPropagation();
-            if (isResolved) {
-              // For resolved markets, navigate to details
+            if (isResolved || market.status === 'Pending Resolution') {
+              // For resolved or pending resolution markets, navigate to details
               handleViewDetails();
             } else {
               // For active markets, open prediction modal
@@ -458,11 +462,13 @@ const MarketCard = ({ market, onPredict, onClaim, canClaimReward, userPositions:
             w-full py-2.5 rounded-lg font-medium text-sm transition-all flex-shrink-0
             ${isResolved
               ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              : market.status === 'Pending Resolution'
+              ? 'bg-yellow-600/20 text-yellow-300 hover:bg-yellow-600/30 border border-yellow-500/30'
               : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg'
             }
           `}
         >
-          {isResolved ? 'View Results' : 'Place Prediction'}
+          {isResolved ? 'View Results' : market.status === 'Pending Resolution' ? 'Awaiting Resolution' : 'Place Prediction'}
         </button>
       </div>
     </div>

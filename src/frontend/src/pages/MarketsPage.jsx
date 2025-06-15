@@ -341,6 +341,7 @@ const MarketsPage = () => {
       if (sportFilters.status === 'active' && marketStatus !== 'active') return false;
       if (sportFilters.status === 'resolved' && marketStatus !== 'resolved') return false;
       if (sportFilters.status === 'upcoming' && marketStatus !== 'upcoming') return false;
+      if (sportFilters.status === 'pending' && marketStatus !== 'pending resolution') return false;
     }
 
     // Tournament type filter
@@ -388,6 +389,7 @@ const MarketsPage = () => {
 
   const activeCount = allMarkets.filter(m => m.status === 'Active' || m.status === 'active').length;
   const resolvedCount = allMarkets.filter(m => m.status === 'Resolved' || m.status === 'resolved').length;
+  const pendingCount = allMarkets.filter(m => m.status === 'Pending Resolution').length;
 
   // Handler for SportFilter changes
   const handleSportFilterChange = (newFilters) => {
@@ -427,6 +429,7 @@ const MarketsPage = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">PRIMAPE Markets</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               Active markets: {activeCount} | Resolved: {resolvedCount}
+              {pendingCount > 0 && ` | Pending: ${pendingCount}`}
               {markets.some(m => m.isBlockchainResolved) && (
                 <span className="ml-2 text-green-600 dark:text-green-400">🔴 Live blockchain data</span>
               )}

@@ -94,6 +94,7 @@ const TOURNAMENT_TYPES = [
 const MARKET_STATUS_FILTERS = [
   { id: 'all', name: 'All Status', count: 0 },
   { id: 'active', name: 'Active', count: 0 },
+  { id: 'pending', name: 'Pending Resolution', count: 0 },
   { id: 'resolved', name: 'Resolved', count: 0 },
   { id: 'upcoming', name: 'Upcoming', count: 0 }
 ];
@@ -124,7 +125,7 @@ const SportFilter = ({
     const counts = {
       sports: {},
       leagues: {},
-      statuses: { all: markets.length, active: 0, resolved: 0, upcoming: 0 },
+      statuses: { all: markets.length, active: 0, pending: 0, resolved: 0, upcoming: 0 },
       tournamentTypes: { all: markets.length, tournament: 0, league: 0, special: 0 }
     };
 
@@ -132,6 +133,7 @@ const SportFilter = ({
       // Status counts
       const status = market.status?.toLowerCase() || 'active';
       if (status === 'active') counts.statuses.active++;
+      else if (status === 'pending resolution') counts.statuses.pending++;
       else if (status === 'resolved') counts.statuses.resolved++;
       else if (status === 'upcoming') counts.statuses.upcoming++;
 
