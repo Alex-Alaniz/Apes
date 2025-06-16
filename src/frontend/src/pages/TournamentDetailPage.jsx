@@ -1055,6 +1055,18 @@ const StatsView = ({ tournament, markets, participantCount }) => {
   const [topParticipants, setTopParticipants] = useState([]);
   const [loadingStats, setLoadingStats] = useState(true);
   
+  // Debug market data
+  useEffect(() => {
+    if (markets.length > 0) {
+      console.log('📊 Stats View - Market data:', {
+        totalMarkets: markets.length,
+        firstMarket: markets[0],
+        escrowMarkets: markets.filter(m => m.escrowBalance !== null || m.dataSource === 'escrow').length,
+        marketsWithParticipants: markets.filter(m => (m.participantCount || m.participant_count || 0) > 0).length
+      });
+    }
+  }, [markets]);
+  
   // Fetch real leaderboard data
   useEffect(() => {
     const fetchLeaderboardData = async () => {
@@ -1085,9 +1097,15 @@ const StatsView = ({ tournament, markets, participantCount }) => {
   }, [tournament.id]);
   
   // Calculate various stats
-  const totalBetsPlaced = markets.reduce((sum, m) => sum + (m.totalBets || 0), 0);
+  // Calculate total predictions from participant counts across all markets
+  const totalPredictions = markets.reduce((sum, m) => sum + (m.participantCount || m.participant_count || 0), 0);
+  
+  // Use real escrow volumes (totalVolume already contains escrow values when check_escrow=true)
   const totalVolume = markets.reduce((sum, m) => sum + (m.totalVolume || 0), 0);
-  const avgBetSize = totalBetsPlaced > 0 ? totalVolume / totalBetsPlaced : 0;
+  
+  // Calculate average bet size
+  const avgBetSize = totalPredictions > 0 ? totalVolume / totalPredictions : 0;
+  
   const activeMarkets = markets.filter(m => m.status === 'Active' || m.status === 'active').length;
   const resolvedMarkets = markets.filter(m => m.status === 'Resolved' || m.status === 'resolved').length;
   
@@ -1095,6 +1113,18 @@ const StatsView = ({ tournament, markets, participantCount }) => {
   const topMarketsByVolume = [...markets]
     .sort((a, b) => (b.totalVolume || 0) - (a.totalVolume || 0))
     .slice(0, 5);
+  
+  // Show loading state if no markets loaded yet
+  if (markets.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Loading tournament statistics...</p>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="space-y-8">
@@ -1104,7 +1134,7 @@ const StatsView = ({ tournament, markets, participantCount }) => {
           icon={Activity}
           title="Total Volume"
           value={`${totalVolume.toLocaleString()} APES`}
-          subtitle="Across all markets"
+          subtitle="From escrow accounts"
           color="black"
         />
         <StatsCard 
@@ -1117,7 +1147,7 @@ const StatsView = ({ tournament, markets, participantCount }) => {
         <StatsCard 
           icon={Users}
           title="Total Predictions"
-          value={totalBetsPlaced.toLocaleString()}
+          value={totalPredictions.toLocaleString()}
           subtitle={`Avg: ${avgBetSize.toFixed(0)} APES`}
           color="yellow"
         />
@@ -1151,15 +1181,16 @@ const StatsView = ({ tournament, markets, participantCount }) => {
                   </div>
                   <div>
                     <div className="font-medium text-gray-900 dark:text-white">{market.question}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {market.participantCount || 0} participants
+                    <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                      <Users className="w-3 h-3" />
+                      {market.participantCount || market.participant_count || 0} participants
                     </div>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="font-bold text-gray-900 dark:text-white flex items-center gap-1">
                     {(market.totalVolume || 0).toLocaleString()} APES
-                    {market.dataSource === 'escrow' && (
+                    {(market.escrowBalance !== null || market.dataSource === 'escrow') && (
                       <CheckCircle2 className="w-4 h-4 text-green-500" title="Verified from escrow" />
                     )}
                   </div>
