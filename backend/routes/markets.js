@@ -112,16 +112,9 @@ router.get('/', async (req, res) => {
     
     // Transform the data to include calculated fields and real-time blockchain resolution status
     const markets = await Promise.all(result.map(async (market) => {
-      // Calculate option percentages
+      // Calculate option percentages and recalculate option pools based on escrow (if available)
       const optionPercentages = [];
-      if (market.total_volume > 0 && market.option_volumes) {
-        market.option_volumes.forEach(volume => {
-          optionPercentages.push((volume / market.total_volume) * 100);
-        });
-      } else {
-        // Default to even split if no volume
-        market.options.forEach(() => optionPercentages.push(50));
-      }
+      let recalculatedOptionPools = [];
 
       // 🔴 OPTIMIZED: Make blockchain resolution checking optional and non-blocking
       let blockchainResolution = null;
@@ -182,6 +175,59 @@ router.get('/', async (req, res) => {
         } catch (escrowError) {
           // Silently skip escrow check on error
           console.log(`⚠️ Skipping escrow check for ${market.market_address}: ${escrowError.message}`);
+        }
+      }
+      
+      // Calculate option percentages and recalculate option pools
+      if (market.option_volumes && market.option_volumes.length > 0) {
+        const dbVolumeSum = market.option_volumes.reduce((sum, vol) => sum + parseFloat(vol || 0), 0);
+        
+        if (dbVolumeSum > 0) {
+          // Calculate percentages from database volumes
+          market.option_volumes.forEach(volume => {
+            const percentage = (parseFloat(volume || 0) / dbVolumeSum) * 100;
+            optionPercentages.push(percentage);
+          });
+          
+          // 🔥 RECALCULATE option pools if we have escrow data
+          if (escrowBalance !== null && escrowBalance > 0) {
+            optionPercentages.forEach(percentage => {
+              const optionPool = (percentage / 100) * escrowBalance;
+              recalculatedOptionPools.push(optionPool);
+            });
+          } else {
+            recalculatedOptionPools = market.option_volumes.map(v => parseFloat(v || 0));
+          }
+        } else {
+          // Equal distribution if no volumes
+          const equalPercentage = 100 / market.option_volumes.length;
+          market.option_volumes.forEach(() => {
+            optionPercentages.push(equalPercentage);
+          });
+          
+          if (escrowBalance !== null && escrowBalance > 0) {
+            const equalPool = escrowBalance / market.option_volumes.length;
+            market.option_volumes.forEach(() => {
+              recalculatedOptionPools.push(equalPool);
+            });
+          } else {
+            recalculatedOptionPools = market.option_volumes.map(() => 0);
+          }
+        }
+      } else if (market.options && market.options.length > 0) {
+        // Fallback to equal distribution
+        const equalPercentage = 100 / market.options.length;
+        market.options.forEach(() => {
+          optionPercentages.push(equalPercentage);
+        });
+        
+        if (escrowBalance !== null && escrowBalance > 0) {
+          const equalPool = escrowBalance / market.options.length;
+          market.options.forEach(() => {
+            recalculatedOptionPools.push(equalPool);
+          });
+        } else {
+          recalculatedOptionPools = market.options.map(() => 0);
         }
       }
 
@@ -252,7 +298,7 @@ router.get('/', async (req, res) => {
         publicKey: market.market_address,
         endTime: market.resolution_date,
         winningOption: actualResolvedOption,
-        optionPools: market.option_volumes || [],
+        optionPools: recalculatedOptionPools.length > 0 ? recalculatedOptionPools : (market.option_volumes || []), // 🔥 USE RECALCULATED POOLS
         optionPercentages,
         optionProbabilities: optionPercentages, // For backwards compatibility
         assets: finalAssets, // Use updated assets with dynamic icon
@@ -280,7 +326,12 @@ router.get('/', async (req, res) => {
         blockchainStatus: blockchainResolution?.newStatus || actualStatus,
         dataSource: blockchainResolution?.wasResolved ? 'live_blockchain_resolution' : 'database',
         lastResolutionCheck: shouldCheckBlockchain ? new Date().toISOString() : null,
-        blockchainCheckSkipped: !shouldCheckBlockchain
+        blockchainCheckSkipped: !shouldCheckBlockchain,
+        
+        // 🔥 Add escrow metadata
+        escrowBalance: escrowBalance,
+        volumeSource: escrowBalance !== null ? 'escrow' : 'database',
+        originalOptionVolumes: market.option_volumes // Keep original for debugging
       };
 
       // Log first market for debugging
@@ -837,29 +888,70 @@ router.get('/:address', async (req, res) => {
       console.log('⚠️ Error fetching escrow balance:', escrowError.message, '- using database volume');
     }
     
-    // Calculate option percentages with improved logic
+    // Calculate option percentages and recalculate option pools based on escrow total
     const optionPercentages = [];
+    let recalculatedOptionPools = [];
     
     if (market.option_volumes && market.option_volumes.length > 0) {
-      // Try to calculate from option volumes first
-      const volumeSum = market.option_volumes.reduce((sum, vol) => sum + parseFloat(vol || 0), 0);
+      // Try to calculate percentages from database option volumes first
+      const dbVolumeSum = market.option_volumes.reduce((sum, vol) => sum + parseFloat(vol || 0), 0);
       
-      if (volumeSum > 0) {
-        // Calculate from actual volumes
+      if (dbVolumeSum > 0) {
+        // Calculate percentages from database volumes
         market.option_volumes.forEach(volume => {
-          optionPercentages.push((parseFloat(volume || 0) / volumeSum) * 100);
+          const percentage = (parseFloat(volume || 0) / dbVolumeSum) * 100;
+          optionPercentages.push(percentage);
         });
+        
+        // 🔥 RECALCULATE option pools based on REAL escrow total and percentages
+        if (escrowBalance !== null && escrowBalance > 0) {
+          // Use escrow balance to recalculate individual option pools
+          optionPercentages.forEach(percentage => {
+            const optionPool = (percentage / 100) * escrowBalance;
+            recalculatedOptionPools.push(optionPool);
+          });
+          console.log('✅ Recalculated option pools from escrow:', {
+            escrowTotal: escrowBalance,
+            optionPools: recalculatedOptionPools.map(p => p.toFixed(2)),
+            percentages: optionPercentages.map(p => p.toFixed(1) + '%')
+          });
+        } else {
+          // No escrow data, use database values
+          recalculatedOptionPools = market.option_volumes.map(v => parseFloat(v || 0));
+        }
       } else {
         // If volumes are all zero, distribute equally
+        const equalPercentage = 100 / market.option_volumes.length;
         market.option_volumes.forEach(() => {
-          optionPercentages.push(100 / market.option_volumes.length);
+          optionPercentages.push(equalPercentage);
         });
+        
+        // Distribute escrow balance equally if available
+        if (escrowBalance !== null && escrowBalance > 0) {
+          const equalPool = escrowBalance / market.option_volumes.length;
+          market.option_volumes.forEach(() => {
+            recalculatedOptionPools.push(equalPool);
+          });
+        } else {
+          recalculatedOptionPools = market.option_volumes.map(() => 0);
+        }
       }
     } else if (market.options && market.options.length > 0) {
       // Fallback to equal distribution based on number of options
+      const equalPercentage = 100 / market.options.length;
       market.options.forEach(() => {
-        optionPercentages.push(100 / market.options.length);
+        optionPercentages.push(equalPercentage);
       });
+      
+      // Distribute escrow balance equally if available
+      if (escrowBalance !== null && escrowBalance > 0) {
+        const equalPool = escrowBalance / market.options.length;
+        market.options.forEach(() => {
+          recalculatedOptionPools.push(equalPool);
+        });
+      } else {
+        recalculatedOptionPools = market.options.map(() => 0);
+      }
     }
 
     // Parse assets and options_metadata properly
@@ -916,7 +1008,7 @@ router.get('/:address', async (req, res) => {
       publicKey: market.market_address,
       endTime: market.resolution_date,
       winningOption: market.resolved_option,
-      optionPools: market.option_volumes || [],
+      optionPools: recalculatedOptionPools.length > 0 ? recalculatedOptionPools : (market.option_volumes || []), // 🔥 USE RECALCULATED POOLS
       optionPercentages,
       optionProbabilities: optionPercentages,
       assets: finalAssets,
@@ -938,7 +1030,8 @@ router.get('/:address', async (req, res) => {
       // 🔥 Add escrow metadata
       escrowBalance: escrowBalance,
       volumeSource: escrowBalance !== null ? 'escrow' : 'database',
-      lastEscrowCheck: escrowBalance !== null ? new Date().toISOString() : null
+      lastEscrowCheck: escrowBalance !== null ? new Date().toISOString() : null,
+      originalOptionVolumes: market.option_volumes // Keep original for debugging
     };
 
     res.json(transformedMarket);
