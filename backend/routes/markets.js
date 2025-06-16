@@ -65,36 +65,21 @@ router.get('/check-duplicate', async (req, res) => {
 // GET /api/markets - Fetch all markets with enhanced data including assets
 router.get('/', async (req, res) => {
   try {
-    const { tournament_id } = req.query;
-    console.log('🔄 Fetching markets using Supabase...', tournament_id ? `for tournament: ${tournament_id}` : 'all markets');
+    // Extract tournament_id filter if provided
+    const tournament_id = req.query.tournament_id;
     
+    // Check if resolved markets should be included
+    const includeResolved = req.query.include_resolved === 'true';
+    
+    console.log(`📊 Fetching markets with filters:`, { 
+      tournament_id, 
+      include_resolved: includeResolved 
+    });
+    
+    // 🔴 Use Supabase client with better filtering
     let query = supabase
       .from('markets')
-      .select(`
-        market_address,
-        creator,
-        question,
-        description,
-        category,
-        resolution_date,
-        status,
-        min_bet,
-        resolved_option,
-        options,
-        option_volumes,
-        total_volume,
-        poly_id,
-        apechain_market_id,
-        market_type,
-        options_metadata,
-        assets,
-        is_trending,
-        participant_count,
-        tournament_id,
-        tournament_type,
-        created_at,
-        updated_at
-      `)
+      .select('*')
       .not('market_address', 'like', 'test-market%');  // Filter out test markets
     
     // Add tournament filter if provided
@@ -102,21 +87,19 @@ router.get('/', async (req, res) => {
       query = query.eq('tournament_id', tournament_id);
     }
     
-    const { data: result, error } = await query.order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('❌ Supabase query error:', error);
-      throw error;
+    // 🔥 CRITICAL FIX: Include both Active and Resolved markets when requested
+    if (includeResolved) {
+      // Get both Active and Resolved markets
+      query = query.in('status', ['Active', 'Resolved']);
+    } else {
+      // Default to only Active markets
+      query = query.eq('status', 'Active');
     }
     
-    console.log(`📊 Found ${result.length} markets in database${tournament_id ? ` for tournament ${tournament_id}` : ''}`);
+    const { data: result, error } = await query
+      .order('created_at', { ascending: false });
     
-    // If no markets found, return empty array with helpful message
-    if (result.length === 0) {
-      console.log('📭 No active markets found in database - database may be cleared for mainnet');
-      console.log('🔗 Frontend will fallback to live blockchain data or show empty state');
-      return res.json([]);
-    }
+    if (error) throw error;
     
     // Check if blockchain resolution checking is requested
     const shouldCheckBlockchain = req.query.check_blockchain === 'true' || 
@@ -328,7 +311,6 @@ router.get('/', async (req, res) => {
     console.log(`✅ Processed ${markets.length} markets${shouldCheckBlockchain ? ' with blockchain resolution checking' : ' (blockchain checks skipped for performance)'}`);
 
     // Return only active markets for the main endpoint (or include resolved based on query param)
-    const includeResolved = req.query.include_resolved === 'true';
     const finalMarkets = includeResolved ? markets : activeMarkets;
 
     res.json(finalMarkets);
@@ -1962,5 +1944,127 @@ router.post('/sync-from-blockchain/:marketAddress', async (req, res) => {
   }
 });
 
+// 🔥 NEW: POST /api/markets/tournament/:tournamentId/check-resolutions - Check and update tournament market resolutions
+router.post('/tournament/:tournamentId/check-resolutions', async (req, res) => {
+  try {
+    const { tournamentId } = req.params;
+    
+    console.log(`🏆 Checking resolutions for tournament: ${tournamentId}`);
+    
+    // For now, we'll simulate checking match results and updating markets
+    // In production, this would integrate with a sports data API
+    
+    // Get all markets for this tournament
+    const { data: markets, error } = await supabase
+      .from('markets')
+      .select('*')
+      .eq('tournament_id', tournamentId)
+      .in('status', ['Active', 'Pending Resolution']);
+    
+    if (error) throw error;
+    
+    let updatedCount = 0;
+    const updates = [];
+    
+    // Check each market to see if it should be resolved
+    for (const market of markets) {
+      // Check if the match date has passed
+      const matchDate = new Date(market.resolution_date);
+      const now = new Date();
+      
+      if (matchDate < now && market.status === 'Active') {
+        // Match has been played, update to Pending Resolution
+        const { error: updateError } = await supabase
+          .from('markets')
+          .update({ 
+            status: 'Pending Resolution',
+            updated_at: new Date().toISOString()
+          })
+          .eq('market_address', market.market_address);
+        
+        if (!updateError) {
+          updatedCount++;
+          updates.push({
+            market_address: market.market_address,
+            question: market.question,
+            newStatus: 'Pending Resolution'
+          });
+        }
+      }
+      
+      // In production, here we would:
+      // 1. Check actual match results from a sports API
+      // 2. Determine the winner (home win = 0, away win = 1, draw = 2)
+      // 3. Update the market with resolved_option
+    }
+    
+    console.log(`✅ Updated ${updatedCount} markets to Pending Resolution`);
+    
+    res.json({
+      success: true,
+      tournamentId,
+      marketsChecked: markets.length,
+      updatedCount,
+      updates
+    });
+    
+  } catch (error) {
+    console.error('Error checking tournament resolutions:', error);
+    res.status(500).json({ 
+      error: 'Failed to check tournament resolutions',
+      details: error.message 
+    });
+  }
+});
+
+// 🔥 NEW: POST /api/markets/tournament/:tournamentId/simulate-resolution - Simulate resolving a tournament match
+router.post('/tournament/:tournamentId/simulate-resolution', async (req, res) => {
+  try {
+    const { tournamentId } = req.params;
+    const { marketAddress, winningOption } = req.body;
+    
+    if (!marketAddress || winningOption === undefined) {
+      return res.status(400).json({ 
+        error: 'marketAddress and winningOption are required' 
+      });
+    }
+    
+    console.log(`🎯 Simulating resolution for market ${marketAddress} with winner: Option ${winningOption}`);
+    
+    // Update the market as resolved
+    const { data: updatedMarket, error } = await supabase
+      .from('markets')
+      .update({ 
+        status: 'Resolved',
+        resolved_option: winningOption,
+        updated_at: new Date().toISOString()
+      })
+      .eq('market_address', marketAddress)
+      .eq('tournament_id', tournamentId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    console.log(`✅ Market resolved:`, {
+      market_address: marketAddress,
+      question: updatedMarket.question,
+      resolved_option: winningOption,
+      status: 'Resolved'
+    });
+    
+    res.json({
+      success: true,
+      market: updatedMarket
+    });
+    
+  } catch (error) {
+    console.error('Error simulating tournament resolution:', error);
+    res.status(500).json({ 
+      error: 'Failed to simulate resolution',
+      details: error.message 
+    });
+  }
+});
 
 module.exports = router; 

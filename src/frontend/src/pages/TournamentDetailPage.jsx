@@ -323,7 +323,7 @@ const StatsCard = ({ icon: Icon, title, value, subtitle, trend, color = 'yellow'
 };
 
 // Match Card Component (FotMob style)
-const MatchCard = ({ match, tournamentAssets, onViewMarket, timezone = 'ET' }) => {
+const MatchCard = ({ match, tournamentAssets, onViewMarket, markets = [], timezone = 'ET' }) => {
   const navigate = useNavigate();
   
   // Convert match time to the tournament's timezone
@@ -361,20 +361,50 @@ const MatchCard = ({ match, tournamentAssets, onViewMarket, timezone = 'ET' }) =
       onViewMarket(match);
     } else {
       const question = `${match.home} - ${match.away}`;
-      try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=club-world-cup-2025`);
-        if (response.ok) {
-          const markets = await response.json();
-          const market = markets.find(m => m.question === question);
-          if (market) {
-            navigate(`/markets/${market.publicKey || market.market_address}`);
-          } else {
-            alert('Market not yet deployed for this match');
+      console.log('🔍 Looking for market with question:', question);
+      console.log('📊 Available markets:', markets.map(m => ({ question: m.question, status: m.status })));
+      
+      // 🔥 FIX: Look for market regardless of status (Active, Resolved, Pending Resolution)
+      const market = markets.find(m => m.question === question);
+      
+      if (market) {
+        console.log('✅ Found market:', market.publicKey || market.market_address, 'Status:', market.status);
+        
+        // Navigate to market regardless of status - let the market page handle display
+        navigate(`/markets/${market.publicKey || market.market_address}`);
+      } else {
+        console.log('❌ Market not found in passed markets, trying API...');
+        // If market not in passed array, try fetching from API as fallback
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=club-world-cup-2025&include_resolved=true&check_escrow=true`);
+          if (response.ok) {
+            const allMarkets = await response.json();
+            console.log('📡 API returned markets:', allMarkets.map(m => ({ question: m.question, status: m.status })));
+            const foundMarket = allMarkets.find(m => m.question === question);
+            if (foundMarket) {
+              console.log('✅ Found market via API:', foundMarket.publicKey || foundMarket.market_address, 'Status:', foundMarket.status);
+              
+              // Navigate to market regardless of status
+              navigate(`/markets/${foundMarket.publicKey || foundMarket.market_address}`);
+            } else {
+              // Better error message to distinguish between not deployed vs other issues
+              console.log('❌ Market not found for question:', question);
+              
+              // Check if it's a past match date
+              const matchDate = new Date(match.date);
+              const today = new Date();
+              
+              if (matchDate < today) {
+                alert('This match has already been played. The market may be pending resolution or not yet deployed.');
+              } else {
+                alert('Market not yet deployed for this match. Please check back later.');
+              }
+            }
           }
+        } catch (error) {
+          console.error('Error finding market:', error);
+          alert('Error finding market for this match');
         }
-      } catch (error) {
-        console.error('Error finding market:', error);
-        alert('Error finding market for this match');
       }
     }
   };
@@ -447,84 +477,190 @@ const MatchCard = ({ match, tournamentAssets, onViewMarket, timezone = 'ET' }) =
 };
 
 // Table Component for Group Standings
-const TableView = ({ groups, tournamentAssets }) => {
+const TableView = ({ groups, tournamentAssets, markets = [] }) => {
+  // 🔥 FIX: Calculate standings dynamically based on resolved markets
+  const calculateStandings = (groupLetter, teams) => {
+    console.log(`📊 Calculating standings for Group ${groupLetter}`);
+    console.log('Available markets:', markets.length);
+    
+    // Initialize standings for each team
+    const standings = teams.map(team => ({
+      team,
+      played: 0,
+      won: 0,
+      drawn: 0,
+      lost: 0,
+      gf: 0,
+      ga: 0,
+      gd: 0,
+      points: 0
+    }));
+
+    // Get group stage matches for this group
+    const groupMatches = CLUB_WC_ALL_MATCHES.filter(
+      match => match.group === groupLetter && match.round === 'Group Stage'
+    );
+    
+    console.log(`Group ${groupLetter} matches:`, groupMatches.map(m => `${m.home} - ${m.away}`));
+
+    // Process each match that has a resolved market
+    groupMatches.forEach(match => {
+      const marketQuestion = `${match.home} - ${match.away}`;
+      const market = markets.find(m => 
+        m.question === marketQuestion && 
+        (m.status === 'Resolved' || m.status === 'resolved') &&
+        m.resolved_option !== null && m.resolved_option !== undefined
+      );
+
+      console.log(`Looking for market: "${marketQuestion}"`);
+      if (market) {
+        console.log(`✅ Found resolved market: ${marketQuestion}, resolved_option: ${market.resolved_option}, status: ${market.status}`);
+      } else {
+        // Also check for pending resolution markets
+        const pendingMarket = markets.find(m => 
+          m.question === marketQuestion && 
+          m.status === 'Pending Resolution'
+        );
+        if (pendingMarket) {
+          console.log(`⏳ Market in Pending Resolution: ${marketQuestion}`);
+        } else {
+          console.log(`❌ No resolved market found for: ${marketQuestion}`);
+        }
+      }
+
+      if (market && market.resolved_option !== null && market.resolved_option !== undefined) {
+        // Find teams in standings
+        const homeTeamIndex = standings.findIndex(s => s.team === match.home);
+        const awayTeamIndex = standings.findIndex(s => s.team === match.away);
+
+        if (homeTeamIndex !== -1 && awayTeamIndex !== -1) {
+          // Both teams played
+          standings[homeTeamIndex].played++;
+          standings[awayTeamIndex].played++;
+
+          // Determine result based on resolved option
+          // For group stage: option 0 = home win, option 1 = away win, option 2 = draw
+          if (market.resolved_option === 0) {
+            // Home win
+            standings[homeTeamIndex].won++;
+            standings[homeTeamIndex].points += 3;
+            standings[awayTeamIndex].lost++;
+            console.log(`🏆 ${match.home} won against ${match.away}`);
+          } else if (market.resolved_option === 1) {
+            // Away win
+            standings[awayTeamIndex].won++;
+            standings[awayTeamIndex].points += 3;
+            standings[homeTeamIndex].lost++;
+            console.log(`🏆 ${match.away} won against ${match.home}`);
+          } else if (market.resolved_option === 2) {
+            // Draw
+            standings[homeTeamIndex].drawn++;
+            standings[homeTeamIndex].points += 1;
+            standings[awayTeamIndex].drawn++;
+            standings[awayTeamIndex].points += 1;
+            console.log(`🤝 Draw between ${match.home} and ${match.away}`);
+          }
+
+          // TODO: Update goals for/against when score data is available
+          // For now, we'll leave them as 0
+        }
+      }
+    });
+
+    // Sort standings by points, then goal difference, then goals for
+    standings.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.gd !== a.gd) return b.gd - a.gd;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return a.team.localeCompare(b.team);
+    });
+
+    console.log(`Final standings for Group ${groupLetter}:`, standings);
+    return standings;
+  };
+
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {Object.entries(groups).map(([groupLetter, groupData]) => (
-          <div key={groupLetter} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="font-bold text-gray-900 dark:text-white">Group {groupLetter}</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium">#</th>
-                    <th className="px-4 py-3 text-left font-medium">Team</th>
-                    <th className="px-4 py-3 text-center font-medium">P</th>
-                    <th className="px-4 py-3 text-center font-medium">W</th>
-                    <th className="px-4 py-3 text-center font-medium">D</th>
-                    <th className="px-4 py-3 text-center font-medium">L</th>
-                    <th className="px-4 py-3 text-center font-medium">GF</th>
-                    <th className="px-4 py-3 text-center font-medium">GA</th>
-                    <th className="px-4 py-3 text-center font-medium">GD</th>
-                    <th className="px-4 py-3 text-center font-medium">Pts</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupData.standings.map((team, index) => (
-                    <tr key={team.team} className={`border-t border-gray-100 dark:border-gray-700 ${
-                      index < 2 ? 'bg-green-50 dark:bg-green-900/10' : ''
-                    }`}>
-                      <td className="px-4 py-3 text-sm">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                          index < 2 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                        }`}>
-                          {index + 1}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {tournamentAssets?.team_logos?.[team.team] && (
-                            <img 
-                              src={tournamentAssets.team_logos[team.team]} 
-                              alt={team.team}
-                              className="w-6 h-6 rounded-full object-cover"
-                            />
-                          )}
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">{team.team}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.played}</td>
-                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.won}</td>
-                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.drawn}</td>
-                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.lost}</td>
-                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.gf}</td>
-                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.ga}</td>
-                      <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">
-                        <span className={team.gd > 0 ? 'text-green-600' : team.gd < 0 ? 'text-red-600' : ''}>
-                          {team.gd > 0 ? '+' : ''}{team.gd}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center text-sm font-bold text-gray-900 dark:text-white">{team.points}</td>
+        {Object.entries(groups).map(([groupLetter, groupData]) => {
+          // Calculate current standings based on resolved markets
+          const currentStandings = calculateStandings(groupLetter, groupData.teams);
+          
+          return (
+            <div key={groupLetter} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="font-bold text-gray-900 dark:text-white">Group {groupLetter}</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium">#</th>
+                      <th className="px-4 py-3 text-left font-medium">Team</th>
+                      <th className="px-4 py-3 text-center font-medium">P</th>
+                      <th className="px-4 py-3 text-center font-medium">W</th>
+                      <th className="px-4 py-3 text-center font-medium">D</th>
+                      <th className="px-4 py-3 text-center font-medium">L</th>
+                      <th className="px-4 py-3 text-center font-medium">GF</th>
+                      <th className="px-4 py-3 text-center font-medium">GA</th>
+                      <th className="px-4 py-3 text-center font-medium">GD</th>
+                      <th className="px-4 py-3 text-center font-medium">Pts</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {currentStandings.map((team, index) => (
+                      <tr key={team.team} className={`border-t border-gray-100 dark:border-gray-700 ${
+                        index < 2 ? 'bg-green-50 dark:bg-green-900/10' : ''
+                      }`}>
+                        <td className="px-4 py-3 text-sm">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                            index < 2 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                          }`}>
+                            {index + 1}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {tournamentAssets?.team_logos?.[team.team] && (
+                              <img 
+                                src={tournamentAssets.team_logos[team.team]} 
+                                alt={team.team}
+                                className="w-6 h-6 rounded-full object-cover"
+                              />
+                            )}
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">{team.team}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.played}</td>
+                        <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.won}</td>
+                        <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.drawn}</td>
+                        <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.lost}</td>
+                        <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.gf}</td>
+                        <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{team.ga}</td>
+                        <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">
+                          <span className={team.gd > 0 ? 'text-green-600' : team.gd < 0 ? 'text-red-600' : ''}>
+                            {team.gd > 0 ? '+' : ''}{team.gd}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm font-bold text-gray-900 dark:text-white">{team.points}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="p-3 bg-gray-50 dark:bg-gray-700/50 text-xs text-gray-500 dark:text-gray-400">
+                Top 2 teams advance to Round of 16
+              </div>
             </div>
-            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 text-xs text-gray-500 dark:text-gray-400">
-              Top 2 teams advance to Round of 16
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 };
 
 // Matches View with Filtering
-const MatchesView = ({ matches, tournamentAssets, tournamentId }) => {
+const MatchesView = ({ matches, tournamentAssets, tournamentId, markets }) => {
   const [filterBy, setFilterBy] = useState('date');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRound, setSelectedRound] = useState('all');
@@ -707,6 +843,7 @@ const MatchesView = ({ matches, tournamentAssets, tournamentId }) => {
                   key={match.match} 
                   match={match} 
                   tournamentAssets={tournamentAssets}
+                  markets={markets}
                 />
               ))}
             </div>
@@ -999,6 +1136,9 @@ const StatsView = ({ tournament, markets, participantCount }) => {
           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-green-600" />
             Top Markets by Volume
+            <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-2">
+              (from escrow accounts)
+            </span>
           </h3>
         </div>
         <div className="p-6">
@@ -1012,13 +1152,16 @@ const StatsView = ({ tournament, markets, participantCount }) => {
                   <div>
                     <div className="font-medium text-gray-900 dark:text-white">{market.question}</div>
                     <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {market.totalBets || 0} predictions
+                      {market.participantCount || 0} participants
                     </div>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold text-gray-900 dark:text-white">
+                  <div className="font-bold text-gray-900 dark:text-white flex items-center gap-1">
                     {(market.totalVolume || 0).toLocaleString()} APES
+                    {market.dataSource === 'escrow' && (
+                      <CheckCircle2 className="w-4 h-4 text-green-500" title="Verified from escrow" />
+                    )}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
                     {market.status}
@@ -1330,7 +1473,8 @@ const TournamentMarkets = ({ tournamentId }) => {
   useEffect(() => {
     const loadTournamentMarkets = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=${tournamentId}`);
+        // 🔥 FIX: Include resolved markets and check escrow for accurate volumes
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=${tournamentId}&include_resolved=true&check_escrow=true`);
         if (response.ok) {
           const data = await response.json();
           setMarkets(data);
@@ -1808,7 +1952,8 @@ const TournamentDetailPage = () => {
 
   const loadTournamentMarkets = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=${tournamentId}`);
+      // 🔥 FIX: Include resolved markets and check escrow for accurate volumes
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/markets?tournament_id=${tournamentId}&include_resolved=true&check_escrow=true`);
       if (response.ok) {
         const data = await response.json();
         setMarkets(data);
@@ -2170,6 +2315,34 @@ const TournamentDetailPage = () => {
         </div>
       </div>
 
+      {/* Admin Panel - Only show for admins */}
+      {isAdmin && tournamentId === 'club-world-cup-2025' && (
+        <div className="bg-yellow-900/20 border-b border-yellow-600/30">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Shield className="w-5 h-5 text-yellow-500" />
+                <span className="text-sm font-medium text-yellow-200">Admin Tools</span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => navigate('/admin')}
+                  className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  Admin Dashboard
+                </button>
+                <button
+                  onClick={() => navigate('/admin/tournament')}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  Manage Tournament
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tab Navigation */}
       <TabNavigation activeTab={activeTab} setActiveTab={setActiveTab} tournamentId={tournamentId} />
 
@@ -2186,7 +2359,7 @@ const TournamentDetailPage = () => {
         )}
         
         {activeTab === 'table' && tournamentId === 'club-world-cup-2025' && (
-          <TableView groups={CLUB_WC_GROUPS} tournamentAssets={tournamentAssets} />
+          <TableView groups={CLUB_WC_GROUPS} tournamentAssets={tournamentAssets} markets={markets} />
         )}
         
         {activeTab === 'knockout' && tournamentId === 'club-world-cup-2025' && (
@@ -2198,6 +2371,7 @@ const TournamentDetailPage = () => {
             matches={tournamentId === 'club-world-cup-2025' ? CLUB_WC_ALL_MATCHES : NBA_FINALS_SERIES.games}
             tournamentAssets={tournamentAssets}
             tournamentId={tournamentId}
+            markets={markets}
           />
         )}
         

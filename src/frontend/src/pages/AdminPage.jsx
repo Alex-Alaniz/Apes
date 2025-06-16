@@ -254,6 +254,7 @@ const AdminPage = () => {
   const filteredMarkets = markets.filter(market => {
     if (filter === 'active') return market.status === 'Active';
     if (filter === 'resolved') return market.status === 'Resolved';
+    if (filter === 'pending') return market.status === 'Pending Resolution';
     return true;
   });
 
@@ -369,6 +370,16 @@ const AdminPage = () => {
             Active ({markets.filter(m => m.status === 'Active').length})
           </button>
           <button
+            onClick={() => setFilter('pending')}
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+              filter === 'pending' 
+                ? 'bg-purple-600 text-white' 
+                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+            }`}
+          >
+            Pending ({markets.filter(m => m.status === 'Pending Resolution').length})
+          </button>
+          <button
             onClick={() => setFilter('resolved')}
             className={`px-4 py-2 rounded-lg font-medium transition-all ${
               filter === 'resolved' 
@@ -405,6 +416,7 @@ const AdminPage = () => {
                       <p>Market ID: <span className="font-mono">{market.publicKey.slice(0, 16)}...</span></p>
                       <p>Status: <span className={`font-medium ${
                         market.status === 'Active' ? 'text-green-400' : 
+                        market.status === 'Pending Resolution' ? 'text-yellow-400' :
                         market.status === 'Resolved' ? 'text-blue-400' : 'text-gray-400'
                       }`}>{market.status}</span></p>
                       <p>Total Volume: {(market.totalVolume || 0).toFixed(2)} APES</p>
@@ -437,10 +449,12 @@ const AdminPage = () => {
                 </div>
 
                 {/* Resolution and Sync Section */}
-                {market.status === 'Active' && (
+                {(market.status === 'Active' || market.status === 'Pending Resolution') && (
                   <div className="border-t border-gray-700 pt-4">
                     <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-sm font-medium text-gray-400">Resolve Market</h4>
+                      <h4 className="text-sm font-medium text-gray-400">
+                        {market.status === 'Pending Resolution' ? 'Market Awaiting Resolution' : 'Resolve Market'}
+                      </h4>
                       <button
                         onClick={() => handleManualSync(market.publicKey)}
                         disabled={syncingMarket[market.publicKey]}
