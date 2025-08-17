@@ -105,14 +105,24 @@ const CS2ParlayTournamentPage = () => {
     const selectionCount = Object.keys(selectedMatches).length;
     if (selectionCount < 2) return 0;
     
-    const baseMultiplier = tournament?.base_multiplier || 1.8;
-    const increment = tournament?.multiplier_increment || 0.5;
-    return baseMultiplier + (increment * (selectionCount - 1));
+    // Ensure we always have valid numbers
+    const baseMultiplier = parseFloat(tournament?.base_multiplier) || 1.8;
+    const increment = parseFloat(tournament?.multiplier_increment) || 0.5;
+    const result = baseMultiplier + (increment * (selectionCount - 1));
+    
+    // Return a valid number, never NaN
+    return isNaN(result) ? 0 : result;
+  };
+
+  const formatMultiplier = () => {
+    const multiplier = calculateMultiplier();
+    return isNaN(multiplier) ? '0.00' : multiplier.toFixed(2);
   };
 
   const calculatePotentialPayout = () => {
     const multiplier = calculateMultiplier();
-    return (stakeAmount * multiplier).toFixed(2);
+    const payout = stakeAmount * multiplier;
+    return isNaN(payout) ? '0.00' : payout.toFixed(2);
   };
 
   const placeParlayBet = async () => {
@@ -531,7 +541,7 @@ const CS2ParlayTournamentPage = () => {
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Multiplier</span>
                       <span className="text-green-400">
-                        {calculateMultiplier().toFixed(2)}x
+                        {formatMultiplier()}x
                       </span>
                     </div>
                     <div className="flex justify-between font-semibold">
