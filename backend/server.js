@@ -144,17 +144,27 @@ async function startServer() {
     const tweetCacheService = require('./services/tweetCacheService');
     console.log('✅ Tweet cache service initialized');
 
-    // Initialize treasury monitoring service
-    console.log('🔄 Initializing treasury monitoring service...');
-    const treasuryMonitoringService = require('./services/treasuryMonitoringService');
-    await treasuryMonitoringService.initialize();
-    console.log('✅ Treasury monitoring service initialized');
+    // Initialize treasury monitoring service (optional - graceful fallback)
+    try {
+      console.log('🔄 Initializing treasury monitoring service...');
+      const treasuryMonitoringService = require('./services/treasuryMonitoringService');
+      await treasuryMonitoringService.initialize();
+      console.log('✅ Treasury monitoring service initialized');
+    } catch (error) {
+      console.log('⚠️ Treasury monitoring service not available:', error.message);
+      console.log('💡 Run treasury migration to enable risk management features');
+    }
 
-    // Initialize parlay payout service
-    console.log('🔄 Initializing parlay payout service...');
-    const parlayPayoutService = require('./services/parlayPayoutService');
-    await parlayPayoutService.initialize();
-    console.log('✅ Parlay payout service initialized');
+    // Initialize parlay payout service (optional - graceful fallback)
+    try {
+      console.log('🔄 Initializing parlay payout service...');
+      const parlayPayoutService = require('./services/parlayPayoutService');
+      await parlayPayoutService.initialize();
+      console.log('✅ Parlay payout service initialized');
+    } catch (error) {
+      console.log('⚠️ Parlay payout service not available:', error.message);
+      console.log('💡 Treasury monitoring required for automated payouts');
+    }
 
     // Start blockchain sync service ONLY ONCE
     try {

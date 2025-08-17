@@ -2,8 +2,14 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
-const treasuryMonitoringService = require('../services/treasuryMonitoringService');
-const parlayPayoutService = require('../services/parlayPayoutService');
+// Optional services - graceful fallback if not available
+let treasuryMonitoringService, parlayPayoutService;
+try {
+  treasuryMonitoringService = require('../services/treasuryMonitoringService');
+  parlayPayoutService = require('../services/parlayPayoutService');
+} catch (error) {
+  console.log('⚠️ Treasury services not available - basic parlay mode only');
+}
 
 // Authorized admin wallets
 const AUTHORIZED_WALLETS = [
