@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
+const treasuryMonitoringService = require('../services/treasuryMonitoringService');
+const parlayPayoutService = require('../services/parlayPayoutService');
 
 // Authorized admin wallets
 const AUTHORIZED_WALLETS = [
@@ -446,6 +448,180 @@ router.post('/:tournamentId/matches', async (req, res) => {
   } catch (error) {
     console.error('Error adding CS2 matches:', error);
     res.status(500).json({ error: 'Failed to add matches' });
+  }
+});
+
+// ADMIN ENDPOINTS
+
+// Resolve a match (admin only)
+router.put('/:tournamentId/matches/:matchId/resolve', async (req, res) => {
+  try {
+    const { tournamentId, matchId } = req.params;
+    const { winningTeam, adminAddress } = req.body;
+    
+    // Admin authorization check
+    if (!AUTHORIZED_WALLETS.includes(adminAddress)) {
+      return res.status(403).json({ error: 'Unauthorized - Admin access required' });
+    }
+    
+    const result = await parlayPayoutService.resolveMatch(matchId, winningTeam, adminAddress);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Error resolving match:', error);
+    res.status(500).json({ error: 'Failed to resolve match' });
+  }
+});
+
+// Get treasury health dashboard (admin only)
+router.get('/admin/treasury-health', async (req, res) => {
+  try {
+    const { adminAddress } = req.query;
+    
+    // Admin authorization check
+    if (!AUTHORIZED_WALLETS.includes(adminAddress)) {
+      return res.status(403).json({ error: 'Unauthorized - Admin access required' });
+    }
+    
+    const dashboard = await treasuryMonitoringService.getRiskDashboard();
+    const payoutStats = await parlayPayoutService.getPayoutStats();
+    
+    res.json({
+      treasury: dashboard,
+      payouts: payoutStats,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error fetching treasury health:', error);
+    res.status(500).json({ error: 'Failed to fetch treasury health' });
+  }
+});
+
+// Update risk controls (admin only)
+router.put('/admin/risk-controls', async (req, res) => {
+  try {
+    const { adminAddress, controlName, controlValue } = req.body;
+    
+    // Admin authorization check
+    if (!AUTHORIZED_WALLETS.includes(adminAddress)) {
+      return res.status(403).json({ error: 'Unauthorized - Admin access required' });
+    }
+    
+    await db.query(`
+      UPDATE risk_controls 
+      SET control_value = $1, updated_by = $2, updated_at = NOW()
+      WHERE control_name = $3
+    `, [controlValue, adminAddress, controlName]);
+    
+    res.json({ 
+      success: true, 
+      message: `Risk control ${controlName} updated to ${controlValue}` 
+    });
+    
+  } catch (error) {
+    console.error('Error updating risk controls:', error);
+    res.status(500).json({ error: 'Failed to update risk controls' });
+  }
+});
+
+// Emergency pause toggle (admin only)
+router.post('/admin/emergency-pause', async (req, res) => {
+  try {
+    const { adminAddress, paused } = req.body;
+    
+    // Admin authorization check
+    if (!AUTHORIZED_WALLETS.includes(adminAddress)) {
+      return res.status(403).json({ error: 'Unauthorized - Admin access required' });
+    }
+    
+    await db.query(`
+      UPDATE risk_controls 
+      SET control_value = $1, updated_by = $2, updated_at = NOW()
+      WHERE control_name = 'emergency_pause'
+    `, [paused ? 1 : 0, adminAddress]);
+    
+    res.json({ 
+      success: true, 
+      message: `Emergency pause ${paused ? 'activated' : 'deactivated'}`,
+      paused
+    });
+    
+  } catch (error) {
+    console.error('Error toggling emergency pause:', error);
+    res.status(500).json({ error: 'Failed to toggle emergency pause' });
+  }
+});
+
+// Get recent risk events (admin only)
+router.get('/admin/risk-events', async (req, res) => {
+  try {
+    const { adminAddress } = req.query;
+    const limit = parseInt(req.query.limit) || 50;
+    
+    // Admin authorization check
+    if (!AUTHORIZED_WALLETS.includes(adminAddress)) {
+      return res.status(403).json({ error: 'Unauthorized - Admin access required' });
+    }
+    
+    const events = await db.query(`
+      SELECT * FROM risk_events 
+      ORDER BY triggered_at DESC 
+      LIMIT $1
+    `, [limit]);
+    
+    res.json(events.rows);
+    
+  } catch (error) {
+    console.error('Error fetching risk events:', error);
+    res.status(500).json({ error: 'Failed to fetch risk events' });
+  }
+});
+
+// Get pending payouts (admin only)
+router.get('/admin/pending-payouts', async (req, res) => {
+  try {
+    const { adminAddress } = req.query;
+    
+    // Admin authorization check
+    if (!AUTHORIZED_WALLETS.includes(adminAddress)) {
+      return res.status(403).json({ error: 'Unauthorized - Admin access required' });
+    }
+    
+    const payouts = await db.query(`
+      SELECT pp.*, pb.bet_id, pb.user_address, pb.stake_amount, pb.total_multiplier
+      FROM parlay_payouts pp
+      JOIN parlay_bets pb ON pp.bet_id = pb.bet_id
+      WHERE pp.payout_status IN ('pending', 'processing')
+      ORDER BY pp.created_at ASC
+    `);
+    
+    res.json(payouts.rows);
+    
+  } catch (error) {
+    console.error('Error fetching pending payouts:', error);
+    res.status(500).json({ error: 'Failed to fetch pending payouts' });
+  }
+});
+
+// PUBLIC ENDPOINTS
+
+// Get risk status (public - for UI warnings)
+router.get('/risk-status', async (req, res) => {
+  try {
+    const pauseCheck = await db.query(`SELECT should_pause_betting() as should_pause`);
+    const dashboard = await treasuryMonitoringService.getRiskDashboard();
+    
+    res.json({
+      bettingPaused: pauseCheck.rows[0]?.should_pause || false,
+      riskLevel: dashboard.riskLevel,
+      exposureRatio: dashboard.exposureRatio,
+      treasuryStatus: dashboard.riskLevel === 'LOW' ? 'healthy' : 'warning'
+    });
+    
+  } catch (error) {
+    console.error('Error fetching risk status:', error);
+    res.status(500).json({ error: 'Failed to fetch risk status' });
   }
 });
 

@@ -144,6 +144,18 @@ async function startServer() {
     const tweetCacheService = require('./services/tweetCacheService');
     console.log('✅ Tweet cache service initialized');
 
+    // Initialize treasury monitoring service
+    console.log('🔄 Initializing treasury monitoring service...');
+    const treasuryMonitoringService = require('./services/treasuryMonitoringService');
+    await treasuryMonitoringService.initialize();
+    console.log('✅ Treasury monitoring service initialized');
+
+    // Initialize parlay payout service
+    console.log('🔄 Initializing parlay payout service...');
+    const parlayPayoutService = require('./services/parlayPayoutService');
+    await parlayPayoutService.initialize();
+    console.log('✅ Parlay payout service initialized');
+
     // Start blockchain sync service ONLY ONCE
     try {
       const syncService = require('./services/syncService');
