@@ -4,10 +4,30 @@ const dotenv = require('dotenv');
 const pool = require('./config/database');
 const { testConnection } = require('./config/database');
 
+// 🔒 SECURITY MIDDLEWARE IMPORTS
+const {
+  generalLimiter,
+  adminLimiter,
+  authLimiter,
+  marketActionLimiter,
+  securityHeaders,
+  requestLogger,
+  validateWalletAddress,
+  sanitizeInputs,
+  securityErrorHandler
+} = require('./middleware/security');
+
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+
+// 🔒 APPLY SECURITY MIDDLEWARE FIRST
+app.use(securityHeaders);
+
+// Apply rate limiting
+app.use('/api/admin', adminLimiter);
+app.use(generalLimiter);
 
 // Enhanced CORS configuration
 const corsOptions = {
@@ -24,7 +44,12 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Set JSON payload limit for security
+
+// Security logging middleware
+app.use(requestLogger);
+app.use(validateWalletAddress);
+app.use(sanitizeInputs);
 
 // Routes
 const userRoutes = require('./routes/users');
@@ -36,6 +61,7 @@ const tournamentRoutes = require('./routes/tournaments');
 const leaderboardRoutes = require('./routes/leaderboard');
 const adminRoutes = require('./routes/admin');
 const marketCreatorsRoutes = require('./routes/marketCreators');
+const parlayTournamentRoutes = require('./routes/parlayTournaments');
 
 app.use('/api/users', userRoutes);
 app.use('/api/predictions', predictionRoutes);
@@ -46,6 +72,7 @@ app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/market-creators', marketCreatorsRoutes);
+app.use('/api/parlay-tournaments', parlayTournamentRoutes);
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
@@ -91,6 +118,9 @@ app.get('/', (req, res) => {
     docs: '/api/docs' 
   });
 });
+
+// Security error handler (must come before generic error handler)
+app.use(securityErrorHandler);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

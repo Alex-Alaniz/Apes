@@ -2160,4 +2160,187 @@ router.post('/tournament/:tournamentId/simulate-resolution', async (req, res) =>
   }
 });
 
+// 🔥 NEW: GET /api/markets/:address/participants - Get all participants and claim status for a market
+router.get('/:address/participants', async (req, res) => {
+  try {
+    const { address } = req.params;
+    
+    console.log(`👥 Getting all participants for market: ${address}`);
+    
+    // First check if market exists and get its details
+    const marketQuery = `
+      SELECT 
+        market_address, 
+        question, 
+        status, 
+        resolved_option, 
+        options,
+        resolution_date
+      FROM markets 
+      WHERE market_address = $1
+    `;
+    
+    const marketResult = await db.query(marketQuery, [address]);
+    
+    if (marketResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Market not found' });
+    }
+    
+    const market = marketResult.rows[0];
+    
+    // Get all participants from prediction_history
+    const participantsQuery = `
+      SELECT DISTINCT 
+        ph.wallet_address,
+        ph.option_index,
+        ph.option_text,
+        ph.amount,
+        ph.predicted_at,
+        ph.is_winner,
+        ph.payout_amount,
+        ph.claimed,
+        ph.claimed_at,
+        ph.transaction_signature,
+        CASE 
+          WHEN ph.is_winner = true AND ph.claimed = false THEN 'pending_claim'
+          WHEN ph.is_winner = true AND ph.claimed = true THEN 'claimed'
+          WHEN ph.is_winner = false THEN 'lost'
+          ELSE 'active'
+        END as claim_status
+      FROM prediction_history ph
+      WHERE ph.market_pubkey = $1
+      ORDER BY ph.predicted_at DESC
+    `;
+    
+    const participantsResult = await db.query(participantsQuery, [address]);
+    
+    // Also check predictions table for additional data
+    const predictionsQuery = `
+      SELECT 
+        user_address as wallet_address,
+        option_index,
+        amount,
+        timestamp as predicted_at,
+        claimed,
+        claim_timestamp as claimed_at,
+        payout,
+        transaction_signature
+      FROM predictions
+      WHERE market_address = $1
+    `;
+    
+    let predictionsData = [];
+    try {
+      const predictionsResult = await db.query(predictionsQuery, [address]);
+      predictionsData = predictionsResult.rows;
+    } catch (predError) {
+      console.log('Note: predictions table query failed:', predError.message);
+    }
+    
+    // Merge data from both sources
+    const participantMap = new Map();
+    
+    // Process prediction_history data
+    participantsResult.rows.forEach(row => {
+      const key = `${row.wallet_address}-${row.option_index}`;
+      participantMap.set(key, {
+        ...row,
+        source: 'prediction_history'
+      });
+    });
+    
+    // Merge predictions table data
+    predictionsData.forEach(row => {
+      const key = `${row.wallet_address}-${row.option_index}`;
+      if (!participantMap.has(key)) {
+        // Determine if this is a winner based on market resolved_option
+        const isWinner = market.status === 'Resolved' && market.resolved_option === row.option_index;
+        participantMap.set(key, {
+          ...row,
+          is_winner: isWinner,
+          claim_status: isWinner && !row.claimed ? 'pending_claim' : 
+                       isWinner && row.claimed ? 'claimed' : 
+                       !isWinner ? 'lost' : 'active',
+          option_text: market.options && market.options[row.option_index] ? 
+                      market.options[row.option_index] : `Option ${row.option_index}`,
+          source: 'predictions'
+        });
+      }
+    });
+    
+    // Convert map to array
+    const allParticipants = Array.from(participantMap.values());
+    
+    // Calculate summary statistics
+    const totalParticipants = new Set(allParticipants.map(p => p.wallet_address)).size;
+    const totalVolume = allParticipants.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
+    const pendingClaims = allParticipants.filter(p => p.claim_status === 'pending_claim');
+    const claimedRewards = allParticipants.filter(p => p.claim_status === 'claimed');
+    
+    // Group by option
+    const participantsByOption = {};
+    allParticipants.forEach(p => {
+      const optionKey = `option_${p.option_index}`;
+      if (!participantsByOption[optionKey]) {
+        participantsByOption[optionKey] = {
+          option_index: p.option_index,
+          option_text: p.option_text,
+          participants: [],
+          total_amount: 0,
+          unique_wallets: new Set()
+        };
+      }
+      participantsByOption[optionKey].participants.push(p);
+      participantsByOption[optionKey].total_amount += parseFloat(p.amount || 0);
+      participantsByOption[optionKey].unique_wallets.add(p.wallet_address);
+    });
+    
+    // Convert sets to counts
+    Object.keys(participantsByOption).forEach(key => {
+      participantsByOption[key].unique_participants = participantsByOption[key].unique_wallets.size;
+      delete participantsByOption[key].unique_wallets;
+    });
+    
+    console.log(`✅ Found ${totalParticipants} unique participants for market ${address}`);
+    console.log(`   - ${pendingClaims.length} pending claims`);
+    console.log(`   - ${claimedRewards.length} claimed rewards`);
+    
+    res.json({
+      success: true,
+      market: {
+        address: market.market_address,
+        question: market.question,
+        status: market.status,
+        resolved_option: market.resolved_option,
+        resolution_date: market.resolution_date,
+        options: market.options
+      },
+      summary: {
+        total_participants: totalParticipants,
+        total_predictions: allParticipants.length,
+        total_volume: totalVolume,
+        pending_claims_count: pendingClaims.length,
+        claimed_rewards_count: claimedRewards.length,
+        pending_claims_value: pendingClaims.reduce((sum, p) => sum + parseFloat(p.payout_amount || p.amount || 0), 0)
+      },
+      participants_by_option: participantsByOption,
+      all_participants: allParticipants,
+      pending_claims: pendingClaims.map(p => ({
+        wallet_address: p.wallet_address,
+        option: p.option_text,
+        amount: p.amount,
+        predicted_at: p.predicted_at,
+        estimated_payout: p.payout_amount || p.amount
+      }))
+    });
+    
+  } catch (error) {
+    console.error('Error fetching market participants:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch market participants',
+      details: error.message 
+    });
+  }
+});
+
 module.exports = router; 

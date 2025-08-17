@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
+import CS2ParlayBanner from '../components/CS2ParlayBanner';
 // import MarketCard from '../components/MarketCard';
 
 const HomePage = () => {
@@ -76,6 +77,13 @@ const HomePage = () => {
               )}
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* CS2 Parlay Tournament Banner */}
+      <section className="py-8 bg-gray-100 dark:bg-gray-900">
+        <div className="container mx-auto px-4">
+          <CS2ParlayBanner />
         </div>
       </section>
 

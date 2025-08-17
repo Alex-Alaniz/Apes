@@ -24,6 +24,7 @@ import TwitterCallback from './pages/TwitterCallback';
 import ProfilePage from './pages/ProfilePage';
 import PublicProfilePage from './pages/PublicProfilePage';
 import DebugApiPage from './pages/DebugApiPage';
+import CS2ParlayTournamentPage from './pages/CS2ParlayTournamentPage';
 import { Toaster } from 'react-hot-toast';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
@@ -74,6 +75,7 @@ function App() {
                   <Route path="/create-market" element={<CreateMarketPage />} />
                   <Route path="/tournaments" element={<TournamentsPage />} />
                   <Route path="/tournaments/:tournamentId" element={<TournamentDetailPage />} />
+                  <Route path="/parlay/:tournamentId" element={<CS2ParlayTournamentPage />} />
                   <Route path="/leaderboard" element={<LeaderboardPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/profile/:walletAddress" element={<PublicProfilePage />} />

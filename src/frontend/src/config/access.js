@@ -1,55 +1,135 @@
-// Access Control Configuration
-// For production, these should be set via environment variables
+// Secure Access Control Configuration
+// Admin authentication is now handled server-side for security
 
-// Default authorized wallets (sync with backend)
-const DEFAULT_AUTHORIZED_WALLETS = [
-  'APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z', // PRIMAPE Treasury
-  'APESxbwPNyJW62vSY83zENJwoL2gXJ8HbpXfkBGfnghe', // Community Treasury
-  '4FxpxY3RRN4GQnSTTdZe2MEpRQCdTVnV3mX9Yf46vKoS', // Devnet deployer/treasury
-  'XgkAtCrgMcz63WBm6LR1uqEKDDJM4q6tLxRH7Dg6nSe', // New admin wallet
-];
+import { useState, useEffect } from 'react';
 
-// CRITICAL: Always include this wallet regardless of env configuration
-const ALWAYS_AUTHORIZED = 'XgkAtCrgMcz63WBm6LR1uqEKDDJM4q6tLxRH7Dg6nSe';
+// Cache for admin status to avoid repeated API calls
+let adminStatusCache = new Map();
+let cacheTimestamp = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-// Get authorized wallets from environment or use defaults
-export const getAuthorizedWallets = () => {
-  // Check for environment variable
-  const envWallets = import.meta.env?.VITE_AUTHORIZED_WALLETS;
-  
-  if (envWallets) {
-    // Parse comma-separated list
-    const walletList = envWallets.split(',').map(wallet => wallet.trim());
-    
-    // ENSURE critical wallet is always included
-    if (!walletList.includes(ALWAYS_AUTHORIZED)) {
-      walletList.push(ALWAYS_AUTHORIZED);
-    }
-    
-    console.log('📋 Using authorized wallets from env (+ critical wallet):', walletList);
-    return walletList;
+/**
+ * Securely check if a wallet is authorized for admin access
+ * This now queries the backend API instead of checking hardcoded wallets
+ * @param {string} walletAddress - The wallet address to check
+ * @returns {Promise<boolean>} - Whether the wallet is authorized
+ */
+export const isWalletAuthorized = async (walletAddress) => {
+  if (!walletAddress) {
+    console.log('🔐 No wallet address provided for authorization check');
+    return false;
   }
-  
-  // Return defaults
-  console.log('📋 Using default authorized wallets:', DEFAULT_AUTHORIZED_WALLETS);
-  return DEFAULT_AUTHORIZED_WALLETS;
-};
 
-// Check if a wallet is authorized
-export const isWalletAuthorized = (walletAddress) => {
-  if (!walletAddress) return false;
-  
   const walletStr = walletAddress.toString();
-  const authorizedWallets = getAuthorizedWallets();
   
-  // Debug logging
-  console.log('🔐 Checking wallet authorization:');
-  console.log('   Wallet to check:', walletStr);
-  console.log('   Authorized wallets:', authorizedWallets);
-  console.log('   Is authorized:', authorizedWallets.includes(walletStr));
-  
-  return authorizedWallets.includes(walletStr);
+  // Check cache first
+  const now = Date.now();
+  if (now - cacheTimestamp < CACHE_DURATION && adminStatusCache.has(walletStr)) {
+    const cached = adminStatusCache.get(walletStr);
+    console.log('🔐 Using cached admin status for:', walletStr, '- Authorized:', cached);
+    return cached;
+  }
+
+  try {
+    console.log('🔐 Checking admin authorization for wallet:', walletStr);
+    
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+    const response = await fetch(`${apiUrl}/api/admin/check-authorization`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-wallet-address': walletStr,
+      },
+    });
+
+    if (!response.ok) {
+      console.warn('🔐 Admin authorization check failed:', response.status);
+      return false;
+    }
+
+    const data = await response.json();
+    const isAuthorized = data.authorized === true;
+
+    // Cache the result
+    adminStatusCache.set(walletStr, isAuthorized);
+    cacheTimestamp = now;
+
+    console.log('🔐 Admin authorization result:', {
+      wallet: walletStr,
+      authorized: isAuthorized,
+      role: data.role || 'user'
+    });
+
+    return isAuthorized;
+
+  } catch (error) {
+    console.error('🔐 Error checking admin authorization:', error);
+    return false;
+  }
 };
 
-// Export for components that need the list
-export const AUTHORIZED_WALLETS = getAuthorizedWallets(); 
+/**
+ * React hook for admin authorization checking
+ * @param {string} walletAddress - The wallet address to check
+ * @returns {Object} - { isAuthorized, isLoading, error }
+ */
+export const useAdminAuthorization = (walletAddress) => {
+  const [authState, setAuthState] = useState({
+    isAuthorized: false,
+    isLoading: true,
+    error: null
+  });
+
+  useEffect(() => {
+    if (!walletAddress) {
+      setAuthState({
+        isAuthorized: false,
+        isLoading: false,
+        error: null
+      });
+      return;
+    }
+
+    const checkAuthorization = async () => {
+      try {
+        setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
+        const authorized = await isWalletAuthorized(walletAddress);
+        setAuthState({
+          isAuthorized: authorized,
+          isLoading: false,
+          error: null
+        });
+      } catch (error) {
+        console.error('🔐 Admin authorization hook error:', error);
+        setAuthState({
+          isAuthorized: false,
+          isLoading: false,
+          error: error.message
+        });
+      }
+    };
+
+    checkAuthorization();
+  }, [walletAddress]);
+
+  return authState;
+};
+
+/**
+ * Clear the admin authorization cache
+ * Call this when admin permissions might have changed
+ */
+export const clearAdminCache = () => {
+  adminStatusCache.clear();
+  cacheTimestamp = 0;
+  console.log('🔐 Admin authorization cache cleared');
+};
+
+/**
+ * Legacy compatibility function
+ * @deprecated Use isWalletAuthorized() instead
+ */
+export const getAuthorizedWallets = () => {
+  console.warn('🔐 getAuthorizedWallets() is deprecated for security reasons. Use isWalletAuthorized() instead.');
+  return []; // Return empty array instead of exposing admin wallets
+}; 

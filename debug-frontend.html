@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Frontend</title>
+</head>
+<body>
+    <h1>Frontend Debug Helper</h1>
+    <p>Open your browser console (F12) at http://localhost:3000 and check for errors.</p>
+    
+    <h2>Common Issues:</h2>
+    <ol>
+        <li><strong>Backend not running:</strong> Start it with: <code>cd backend && npm run dev</code></li>
+        <li><strong>Network errors:</strong> Check if requests to localhost:5001 are failing</li>
+        <li><strong>JavaScript errors:</strong> Look for red error messages in console</li>
+    </ol>
+    
+    <h2>Quick Test:</h2>
+    <button onclick="testBackend()">Test Backend Connection</button>
+    <div id="result"></div>
+    
+    <script>
+        async function testBackend() {
+            try {
+                const response = await fetch('http://localhost:5001/health');
+                const data = await response.json();
+                document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('result').innerHTML = '<p style="color: red;">Backend not running! Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

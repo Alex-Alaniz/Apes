@@ -132,3 +132,48 @@ temp/
 
 # Supabase
 .supabase/ 
+# Security - Environment Variables and Keys
+*.env*
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+.env.mainnet
+.env.backup
+
+# Security - Private Keys and Certificates
+*.key
+*.pem
+*.p12
+*.pfx
+wallet*.json
+*.wallet
+keypair*.json
+
+# Security - Database dumps and backups
+*.sql.backup
+*.db.backup
+database.dump
+
+# Security - Logs that might contain sensitive data
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Security - Build artifacts that might contain secrets
+.next/
+dist/
+build/
+.cache/
+
+# Security - IDE and system files
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+

@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const db = require('../config/database');
 const supabase = require('../config/supabase');
+// const marketService = require('../services/marketService'); // Removed: unused import
 
 const router = express.Router();
 
@@ -16,52 +17,158 @@ async function loadSolanaModules() {
   return { solanaWeb3, splToken, anchor };
 }
 
-// List of authorized admin wallets (same as in frontend config/access.js)
-const AUTHORIZED_WALLETS = [
-  'APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z', // PRIMAPE Treasury
-  'APESxbwPNyJW62vSY83zENJwoL2gXJ8HbpXfkBGfnghe', // Community Treasury
-  'XgkAtCrgMcz63WBm6LR1uqEKDDJM4q6tLxRH7Dg6nSe', // New admin wallet
-  // Add your admin wallet here
-];
+// SECURITY: Move admin wallets to environment variables
+// No longer hardcode admin wallets in source code
+const getAuthorizedWallets = () => {
+  const envWallets = process.env.ADMIN_WALLETS;
+  if (!envWallets) {
+    console.warn('⚠️ No ADMIN_WALLETS environment variable set. Admin functions disabled.');
+    return [];
+  }
+  
+  return envWallets.split(',').map(wallet => wallet.trim()).filter(Boolean);
+};
 
-// Middleware to authenticate admin by wallet
+// Secure admin authorization check endpoint
+router.get('/check-authorization', async (req, res) => {
+  try {
+    const walletAddress = req.headers['x-wallet-address'];
+    
+    if (!walletAddress) {
+      return res.json({ 
+        authorized: false, 
+        role: 'guest',
+        message: 'No wallet address provided' 
+      });
+    }
+
+    const authorizedWallets = getAuthorizedWallets();
+    const isAuthorized = authorizedWallets.includes(walletAddress);
+
+    // Log authorization attempts for security monitoring
+    console.log('🔐 Admin authorization check:', {
+      wallet: walletAddress,
+      authorized: isAuthorized,
+      timestamp: new Date().toISOString()
+    });
+
+    // Additional security: Check for any admin-specific database permissions
+    let role = 'user';
+    let permissions = {};
+
+    if (isAuthorized) {
+      role = 'admin';
+      permissions = {
+        can_create_markets: true,
+        can_resolve_markets: true,
+        can_manage_users: true,
+        can_view_admin_panel: true
+      };
+
+      // Optional: Check database for additional role information
+      try {
+        const userResult = await db.query(
+          'SELECT role, permissions FROM users WHERE wallet_address = $1',
+          [walletAddress]
+        );
+        
+        if (userResult.rows.length > 0 && userResult.rows[0].role) {
+          role = userResult.rows[0].role;
+          if (userResult.rows[0].permissions) {
+            permissions = { ...permissions, ...userResult.rows[0].permissions };
+          }
+        }
+      } catch (dbError) {
+        console.warn('⚠️ Could not check database role for admin user:', dbError.message);
+        // Continue with environment-based authorization
+      }
+    }
+
+    res.json({
+      authorized: isAuthorized,
+      role: role,
+      permissions: permissions,
+      wallet: walletAddress
+    });
+
+  } catch (error) {
+    console.error('❌ Error checking admin authorization:', error);
+    res.status(500).json({ 
+      authorized: false, 
+      role: 'user',
+      error: 'Authorization check failed' 
+    });
+  }
+});
+
+// Enhanced middleware to authenticate admin by wallet with better security
 const authenticateAdmin = (req, res, next) => {
   const walletAddress = req.headers['x-wallet-address'];
   
   if (!walletAddress) {
     return res.status(401).json({ error: 'No wallet address provided' });
   }
+
+  const authorizedWallets = getAuthorizedWallets();
+  
+  if (authorizedWallets.length === 0) {
+    console.error('❌ No admin wallets configured. Admin functions disabled.');
+    return res.status(503).json({ 
+      error: 'Admin functions not available - configuration error' 
+    });
+  }
   
   // Check if wallet is authorized
-  if (!AUTHORIZED_WALLETS.includes(walletAddress)) {
+  if (!authorizedWallets.includes(walletAddress)) {
+    // Log unauthorized attempts for security monitoring
+    console.warn('🚨 Unauthorized admin access attempt:', {
+      wallet: walletAddress,
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      timestamp: new Date().toISOString()
+    });
+    
     return res.status(403).json({ error: 'Wallet not authorized for admin access' });
   }
+
+  // Log successful admin access
+  console.log('✅ Admin access granted:', {
+    wallet: walletAddress,
+    endpoint: req.path,
+    method: req.method,
+    timestamp: new Date().toISOString()
+  });
   
   req.adminWallet = walletAddress;
   next();
 };
 
-// Get all markets for admin panel
+// Get all markets for admin (existing functionality with security logging)
 router.get('/markets', authenticateAdmin, async (req, res) => {
   try {
-    const query = `
+    console.log('📊 Admin fetching all markets');
+    
+    const result = await db.query(`
       SELECT 
         market_address,
         question,
+        options,
         status,
         resolution_date,
-        options,
-        option_volumes,
+        resolved_option,
+        category,
+        created_at,
+        creator_wallet,
         total_volume,
-        resolved_option
+        option_volumes
       FROM markets 
       ORDER BY created_at DESC
-    `;
-    
-    const result = await db.query(query);
+    `);
+
+    console.log(`✅ Retrieved ${result.rows.length} markets for admin`);
     res.json(result.rows);
   } catch (error) {
-    console.error('Error fetching markets:', error);
+    console.error('❌ Error fetching admin markets:', error);
     res.status(500).json({ error: 'Failed to fetch markets' });
   }
 });
@@ -173,118 +280,21 @@ router.get('/all-polymarket-markets', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Get pending markets from Polymarket DB for approval
+// Get pending markets for deployment
 router.get('/pending-markets', authenticateAdmin, async (req, res) => {
   try {
-    const { Pool } = require('pg');
-    const POLYMARKET_DB_URL = process.env.POLYMARKET_DB_URL || 'postgresql://neondb_owner:npg_qht1Er7SFAIn@ep-proud-snow-a4l83fqg.us-east-1.aws.neon.tech/neondb?sslmode=require';
+    console.log('📋 Admin fetching pending markets');
     
-    const pool = new Pool({
-      connectionString: POLYMARKET_DB_URL,
-      ssl: { rejectUnauthorized: false }
+    // This would typically fetch from a markets queue or external source
+    // For now, return empty array - implement based on your market source
+    const pendingMarkets = [];
+    
+    res.json({
+      markets: pendingMarkets,
+      total: pendingMarkets.length
     });
-    
-    // Fetch deployable markets with full metadata
-    const query = `
-      SELECT 
-        m.poly_id,
-        m.market_id as apechain_market_id,
-        m.question,
-        m.category,
-        m.banner,
-        m.icon,
-        m.end_time,
-        m.market_type,
-        m.status,
-        m.deployed_at,
-        -- Get options as JSON array
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'label', mo.label,
-              'icon', mo.icon,
-              'option_poly_id', mo.option_poly_id
-            ) ORDER BY mo.id
-          ) FILTER (WHERE mo.id IS NOT NULL),
-          '[]'::json
-        ) as options
-      FROM markets m
-      LEFT JOIN market_options mo ON m.poly_id = mo.market_poly_id
-      WHERE 
-        m.market_id IS NOT NULL  -- Has ApeChain ID
-        AND m.status = 'live'     -- Deployed to ApeChain
-        AND m.end_time > NOW()    -- Still active
-        AND m.question IS NOT NULL
-        AND m.banner IS NOT NULL
-      GROUP BY m.poly_id
-      ORDER BY m.end_time ASC
-      LIMIT 20
-    `;
-    
-    const result = await pool.query(query);
-    await pool.end();
-    
-    // Get list of already deployed poly_ids from local database
-    let deployedPolyIds = [];
-    try {
-      const deployedQuery = `
-        SELECT DISTINCT poly_id 
-        FROM markets 
-        WHERE poly_id IS NOT NULL
-      `;
-      const deployedResult = await db.query(deployedQuery);
-      deployedPolyIds = deployedResult.rows.map(row => row.poly_id);
-      console.log(`Found ${deployedPolyIds.length} markets already deployed to Solana`);
-    } catch (err) {
-      console.error('Error checking deployed markets:', err);
-    }
-    
-    // Get list of declined poly_ids
-    let declinedPolyIds = [];
-    try {
-      const declinedQuery = `
-        SELECT DISTINCT poly_id 
-        FROM declined_markets
-      `;
-      const declinedResult = await db.query(declinedQuery);
-      declinedPolyIds = declinedResult.rows.map(row => row.poly_id);
-      console.log(`Found ${declinedPolyIds.length} declined markets`);
-    } catch (err) {
-      console.error('Error checking declined markets:', err);
-    }
-    
-    // Transform data for frontend
-    const markets = result.rows.map(row => ({
-      poly_id: row.poly_id,
-      apechain_market_id: row.apechain_market_id,
-      question: row.question,
-      category: row.category || 'general',
-      options: row.options || [],
-      assets: {
-        banner: row.banner,
-        icon: row.icon || row.banner
-      },
-      end_time: row.end_time,
-      market_type: row.market_type,
-      status: row.status,
-      deployed_at: row.deployed_at,
-      // Additional metadata for preview
-      option_count: row.options.length,
-      time_remaining: new Date(row.end_time) - new Date(),
-      formatted_end_date: new Date(row.end_time).toLocaleDateString()
-    }));
-    
-    // Filter out already deployed and declined markets
-    const pendingMarkets = markets.filter(m => 
-      !deployedPolyIds.includes(m.poly_id) && 
-      !declinedPolyIds.includes(m.poly_id)
-    );
-    
-    console.log(`Returning ${pendingMarkets.length} pending markets out of ${markets.length} total deployable markets`);
-    
-    res.json({ markets: pendingMarkets, total: pendingMarkets.length });
   } catch (error) {
-    console.error('Error fetching pending markets:', error);
+    console.error('❌ Error fetching pending markets:', error);
     res.status(500).json({ error: 'Failed to fetch pending markets' });
   }
 });
@@ -668,134 +678,59 @@ router.post('/sync-market-resolution/:address', authenticateAdmin, async (req, r
   }
 });
 
-// Resolve market
-router.post('/resolve-market/:address', authenticateAdmin, async (req, res) => {
+// Admin market resolution with enhanced security logging
+router.post('/resolve-market/:marketAddress', authenticateAdmin, async (req, res) => {
   try {
-    const { address } = req.params;
-    const { winningOptionIndex } = req.body;
-    
-    console.log(`🎯 Admin resolution request for market ${address}, winning option: ${winningOptionIndex}`);
-    
-    // First check if this market exists in our database
-    const marketQuery = `SELECT * FROM markets WHERE market_address = $1`;
-    const marketResult = await db.query(marketQuery, [address]);
-    
-    if (marketResult.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false,
-        error: 'Market not found in database',
-        marketAddress: address
-      });
-    }
-    
-    const market = marketResult.rows[0];
-    
-    // Import the live market sync service
-    const liveMarketSync = require('../services/liveMarketSyncService');
-    
-    // STRATEGY 1: Try to sync from blockchain first (for blockchain markets)
-    console.log('🔄 Attempting to sync resolution from blockchain...');
-    
-    // Wait a moment for the blockchain transaction to be confirmed
-    console.log('⏳ Waiting for blockchain confirmation...');
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    const syncResult = await liveMarketSync.syncMarketResolutionStatus(address);
-    
-    if (syncResult.success && syncResult.wasResolved) {
-      // SUCCESS: Blockchain market was resolved and synced
-      console.log(`✅ Blockchain market ${address} resolution synced successfully`);
-      res.json({ 
-        success: true, 
-        message: 'Blockchain market resolved and database updated successfully',
-        winningOption: syncResult.winningOption,
-        marketAddress: address,
-        resolvedVia: 'blockchain'
-      });
-    } else if (syncResult.success && !syncResult.wasResolved) {
-      // Blockchain market exists but not yet resolved
-      console.log(`⚠️ Blockchain market ${address} is not yet resolved`);
-      res.json({ 
-        success: false, 
-        message: 'Market resolution transaction may still be processing. Please try syncing again in a few moments.',
-        marketAddress: address,
-        recommendation: 'Try again in 30-60 seconds',
-        resolvedVia: 'blockchain_pending'
-      });
-    } else if (syncResult.error && syncResult.error.includes('Market account not found')) {
-      // STRATEGY 2: Market doesn't exist on blockchain - resolve directly in database
-      console.log(`📋 Market ${address} not found on blockchain, resolving database-only market...`);
-      
-      if (winningOptionIndex === undefined || winningOptionIndex === null) {
-        return res.status(400).json({
-          success: false,
-          error: 'winningOptionIndex is required for database-only market resolution',
-          marketAddress: address
-        });
-      }
-      
-      // Validate winning option index
-      const options = market.options || [];
-      if (winningOptionIndex < 0 || winningOptionIndex >= options.length) {
-        return res.status(400).json({
-          success: false,
-          error: `Invalid winningOptionIndex. Must be between 0 and ${options.length - 1}`,
-          marketAddress: address,
-          availableOptions: options
-        });
-      }
-      
-      const winningOption = options[winningOptionIndex];
-      
-      // Update database directly
-      const updateQuery = `
-        UPDATE markets 
-        SET 
-          status = 'Resolved',
-          resolved_option = $1,
-          resolved_option_index = $2,
-          resolution_timestamp = NOW(),
-          updated_at = NOW()
-        WHERE market_address = $3
-        RETURNING *
-      `;
-      
-      const updateResult = await db.query(updateQuery, [
-        winningOption,
-        winningOptionIndex,
-        address
-      ]);
-      
-      console.log(`✅ Database-only market ${address} resolved successfully with option: ${winningOption}`);
-      
-      res.json({
-        success: true,
-        message: 'Database-only market resolved successfully',
-        winningOption: winningOption,
-        winningOptionIndex: winningOptionIndex,
-        marketAddress: address,
-        resolvedVia: 'database',
-        market: updateResult.rows[0]
-      });
-      
-    } else {
-      // Other blockchain error
-      console.error(`❌ Failed to sync resolution for ${address}:`, syncResult.error);
-      res.status(500).json({ 
-        success: false,
-        error: 'Failed to sync market resolution from blockchain',
-        details: syncResult.error,
-        recommendation: 'The blockchain transaction may have succeeded. Try manually syncing this market.',
-        resolvedVia: 'error'
-      });
-    }
-  } catch (error) {
-    console.error('Error in resolve market endpoint:', error);
-    res.status(500).json({ 
-      error: 'Failed to resolve market',
-      details: error.message,
-      recommendation: 'Please check the market address and try again.'
+    const { marketAddress } = req.params;
+    const { winningOption } = req.body;
+    const adminWallet = req.adminWallet;
+
+    console.log('🎯 Admin resolving market:', {
+      market: marketAddress,
+      option: winningOption,
+      admin: adminWallet,
+      timestamp: new Date().toISOString()
     });
+
+    // Validate inputs
+    if (typeof winningOption !== 'number' || winningOption < 0) {
+      return res.status(400).json({ error: 'Invalid winning option' });
+    }
+
+    // Resolve the market in database
+    const result = await db.query(`
+      UPDATE markets 
+      SET status = 'Resolved', 
+          resolved_option = $1,
+          resolution_date = NOW(),
+          resolved_by = $3
+      WHERE market_address = $2 
+      AND status = 'Active'
+      RETURNING *
+    `, [winningOption, marketAddress, adminWallet]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Market not found or already resolved' });
+    }
+
+    const market = result.rows[0];
+
+    console.log('✅ Market resolved successfully:', {
+      market: marketAddress,
+      question: market.question,
+      winningOption: winningOption,
+      admin: adminWallet
+    });
+
+    res.json({
+      success: true,
+      market: market,
+      message: `Market resolved with option ${winningOption}`
+    });
+
+  } catch (error) {
+    console.error('❌ Error resolving market:', error);
+    res.status(500).json({ error: 'Failed to resolve market' });
   }
 });
 
@@ -951,134 +886,33 @@ router.post('/simulate-betting/:marketAddress', authenticateAdmin, async (req, r
   }
 });
 
-// Get deployed markets from local database (debug endpoint)
+// Get deployed markets
 router.get('/deployed-markets', authenticateAdmin, async (req, res) => {
   try {
-    const query = `
+    console.log('📋 Admin fetching deployed markets');
+    
+    const result = await db.query(`
       SELECT 
         market_address,
         question,
-        category,
-        status,
         options,
-        poly_id,
-        apechain_market_id,
-        assets,
-        options_metadata,
+        status,
+        category,
         created_at,
-        updated_at
+        creator_wallet,
+        total_volume
       FROM markets 
-      WHERE poly_id IS NOT NULL
+      WHERE market_address IS NOT NULL
       ORDER BY created_at DESC
-    `;
-    
-    const result = await db.query(query);
-    
-    console.log(`Found ${result.rows.length} deployed markets in local database`);
-    
-    // Connect to Polymarket database to get original options
-    const { Pool } = require('pg');
-    const POLYMARKET_DB_URL = process.env.POLYMARKET_DB_URL || 'postgresql://neondb_owner:npg_qht1Er7SFAIn@ep-proud-snow-a4l83fqg.us-east-1.aws.neon.tech/neondb?sslmode=require';
-    
-    const polyPool = new Pool({
-      connectionString: POLYMARKET_DB_URL,
-      ssl: { rejectUnauthorized: false }
-    });
-    
-    // Transform data for frontend display
-    const markets = await Promise.all(result.rows.map(async (market) => {
-      let parsedAssets = {};
-      let parsedOptionsMetadata = [];
-      
-      try {
-        if (market.assets) {
-          parsedAssets = typeof market.assets === 'string' ? JSON.parse(market.assets) : market.assets;
-        }
-      } catch (e) {
-        console.error('Error parsing assets:', e);
-      }
-      
-      try {
-        if (market.options_metadata) {
-          parsedOptionsMetadata = typeof market.options_metadata === 'string' ? JSON.parse(market.options_metadata) : market.options_metadata;
-        }
-      } catch (e) {
-        console.error('Error parsing options_metadata:', e);
-      }
-      
-      // Fetch original options from Polymarket database
-      let originalOptions = [];
-      let originalQuestion = market.question;
-      if (market.poly_id) {
-        try {
-          const originalQuery = `
-            SELECT 
-              m.question,
-              COALESCE(
-                json_agg(
-                  json_build_object(
-                    'label', mo.label,
-                    'icon', mo.icon,
-                    'option_poly_id', mo.option_poly_id
-                  ) ORDER BY mo.id
-                ) FILTER (WHERE mo.id IS NOT NULL),
-                '[]'::json
-              ) as original_options
-            FROM markets m
-            LEFT JOIN market_options mo ON m.poly_id = mo.market_poly_id
-            WHERE m.poly_id = $1
-            GROUP BY m.poly_id, m.question
-          `;
-          
-          const originalResult = await polyPool.query(originalQuery, [market.poly_id]);
-          if (originalResult.rows.length > 0) {
-            originalOptions = originalResult.rows[0].original_options || [];
-            originalQuestion = originalResult.rows[0].question || market.question;
-          }
-        } catch (polyError) {
-          console.error(`Failed to fetch original options for ${market.poly_id}:`, polyError);
-          // Use deployed options as fallback
-          originalOptions = market.options ? market.options.map(opt => ({ label: opt })) : [];
-        }
-      }
-      
-      return {
-        ...market,
-        assets: parsedAssets,
-        options_metadata: parsedOptionsMetadata,
-        assets_available: Object.keys(parsedAssets).length > 0,
-        banner_url: parsedAssets.banner || null,
-        icon_url: parsedAssets.icon || parsedAssets.banner || null,
-        // Original data from Polymarket
-        original_question: originalQuestion,
-        original_options: originalOptions,
-        // Deployed data (what was actually deployed)
-        deployed_options: market.options || [],
-        // Indicators
-        has_more_options: originalOptions.length > (market.options ? market.options.length : 0),
-        deployed_option_count: market.options ? market.options.length : 0,
-        total_option_count: originalOptions.length
-      };
-    }));
-    
-    await polyPool.end();
-    
-    res.json({ 
-      total: markets.length,
-      markets: markets,
-      debug_info: {
-        with_assets: markets.filter(m => m.assets_available).length,
-        with_poly_id: markets.filter(m => m.poly_id).length,
-        with_apechain_id: markets.filter(m => m.apechain_market_id).length,
-        with_additional_options: markets.filter(m => m.has_more_options).length
-      }
+    `);
+
+    res.json({
+      markets: result.rows,
+      total: result.rows.length
     });
   } catch (error) {
-    console.error('Error fetching deployed markets:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch deployed markets',
-      details: error.message 
-    });
+    console.error('❌ Error fetching deployed markets:', error);
+    res.status(500).json({ error: 'Failed to fetch deployed markets' });
   }
 });
 
@@ -1491,6 +1325,16 @@ router.post('/reset-claim/:predictionId', async (req, res) => {
     console.error('❌ Error resetting claim status:', error);
     res.status(500).json({ error: 'Failed to reset claim status' });
   }
+});
+
+// Admin health check endpoint
+router.get('/health', authenticateAdmin, (req, res) => {
+  res.json({
+    status: 'healthy',
+    admin: req.adminWallet,
+    timestamp: new Date().toISOString(),
+    permissions: ['admin_access']
+  });
 });
 
 module.exports = router; 
