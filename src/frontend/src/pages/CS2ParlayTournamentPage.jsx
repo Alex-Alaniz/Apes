@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
-import { Trophy, Users, DollarSign, Target, AlertCircle, Check, X } from 'lucide-react';
+import { Trophy, Users, DollarSign, Target, AlertCircle, Check, X, Calendar } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import parlayService from '../services/parlayService';
+import TeamLogo from '../components/TeamLogo';
 
 const CS2ParlayTournamentPage = () => {
   const { tournamentId } = useParams();
@@ -260,6 +261,17 @@ const CS2ParlayTournamentPage = () => {
                 Matches
               </button>
               <button
+                onClick={() => setActiveTab('schedule')}
+                className={`pb-2 px-4 flex items-center gap-2 ${
+                  activeTab === 'schedule' 
+                    ? 'text-green-400 border-b-2 border-green-400' 
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                Schedule
+              </button>
+              <button
                 onClick={() => {
                   setActiveTab('my-bets');
                   fetchUserBets();
@@ -314,10 +326,10 @@ const CS2ParlayTournamentPage = () => {
                         }`}
                         disabled={match.status !== 'scheduled'}
                       >
-                        <img 
-                          src={match.team_a_logo || '/api/placeholder/100/100'} 
-                          alt={match.team_a}
-                          className="w-16 h-16 mx-auto mb-2 object-contain"
+                        <TeamLogo 
+                          team={match.team_a}
+                          logoUrl={match.team_a_logo}
+                          size="w-16 h-16"
                         />
                         <div className="font-semibold">{match.team_a}</div>
                         <div className="text-sm text-gray-400 mt-1">
@@ -334,10 +346,10 @@ const CS2ParlayTournamentPage = () => {
                         }`}
                         disabled={match.status !== 'scheduled'}
                       >
-                        <img 
-                          src={match.team_b_logo || '/api/placeholder/100/100'} 
-                          alt={match.team_b}
-                          className="w-16 h-16 mx-auto mb-2 object-contain"
+                        <TeamLogo 
+                          team={match.team_b}
+                          logoUrl={match.team_b_logo}
+                          size="w-16 h-16"
                         />
                         <div className="font-semibold">{match.team_b}</div>
                         <div className="text-sm text-gray-400 mt-1">
@@ -356,6 +368,66 @@ const CS2ParlayTournamentPage = () => {
                         </span>
                       </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'schedule' && (
+              <div className="space-y-6">
+                {/* Group matches by date */}
+                {Object.entries(
+                  matches.reduce((acc, match) => {
+                    const date = new Date(match.match_date).toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    });
+                    if (!acc[date]) acc[date] = [];
+                    acc[date].push(match);
+                    return acc;
+                  }, {})
+                ).map(([date, dayMatches]) => (
+                  <div key={date} className="bg-gray-900 rounded-lg p-6 border border-gray-800">
+                    <h3 className="text-xl font-bold mb-4 text-green-400">{date}</h3>
+                    <div className="space-y-3">
+                      {dayMatches
+                        .sort((a, b) => new Date(a.match_date) - new Date(b.match_date))
+                        .map((match) => (
+                          <div 
+                            key={match.match_id}
+                            className="bg-black/50 rounded-lg p-4 flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="text-sm text-gray-400 w-16">
+                                {new Date(match.match_date).toLocaleTimeString('en-US', {
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <TeamLogo team={match.team_a} logoUrl={match.team_a_logo} size="w-8 h-8" />
+                                <span className="font-medium">{match.team_a}</span>
+                              </div>
+                              <span className="text-gray-500">vs</span>
+                              <div className="flex items-center gap-2">
+                                <TeamLogo team={match.team_b} logoUrl={match.team_b_logo} size="w-8 h-8" />
+                                <span className="font-medium">{match.team_b}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm text-gray-400">{match.round}</span>
+                              <span className="text-sm text-gray-400">Bo{match.best_of}</span>
+                              {match.status === 'completed' && (
+                                <span className="text-sm text-green-400">
+                                  {match.winner === 'team_a' ? match.team_a : match.team_b} won
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 ))}
               </div>
