@@ -4,7 +4,8 @@
   "description": "Backend API for Solana Prediction Market Platform",
   "main": "server.js",
   "scripts": {
-    "start": "node server-minimal.js",
+    "start": "node server-debug.js",
+    "start-minimal": "node server-minimal.js",
     "start-full": "node server.js",
     "dev": "nodemon server.js",
     "db:create": "node scripts/createDb.js",
