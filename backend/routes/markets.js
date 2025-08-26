@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/database');
 const supabase = require('../config/supabase');
 const liveMarketSync = require('../services/liveMarketSyncService');
+const DailyCryptoPredictionsService = require('../services/dailyCryptoPredictions');
 const { Connection, PublicKey } = require('@solana/web3.js');
 
 // GET /api/markets/check-duplicate - Check if a market already exists
@@ -2338,6 +2339,102 @@ router.get('/:address/participants', async (req, res) => {
     console.error('Error fetching market participants:', error);
     res.status(500).json({ 
       error: 'Failed to fetch market participants',
+      details: error.message 
+    });
+  }
+});
+
+// POST /api/markets/daily-crypto - Create daily crypto prediction markets
+router.post('/daily-crypto', async (req, res) => {
+  try {
+    console.log('🚀 Creating daily crypto prediction markets...');
+    
+    const service = new DailyCryptoPredictionsService();
+    
+    // Check if markets already exist for today
+    const existingMarkets = await service.getDailyMarketsForToday();
+    
+    if (existingMarkets.length > 0 && !req.body.force) {
+      return res.status(409).json({
+        error: 'Daily crypto markets already exist for today',
+        existingMarkets: existingMarkets.map(m => ({
+          market_address: m.market_address,
+          question: m.question,
+          created_at: m.created_at
+        })),
+        message: 'Use force=true to create anyway'
+      });
+    }
+    
+    // Create new daily markets
+    const newMarkets = await service.createAllDailyMarkets();
+    
+    res.json({
+      success: true,
+      message: `Created ${newMarkets.length} daily crypto prediction markets`,
+      markets: newMarkets
+    });
+    
+  } catch (error) {
+    console.error('Error creating daily crypto markets:', error);
+    res.status(500).json({ 
+      error: 'Failed to create daily crypto markets',
+      details: error.message 
+    });
+  }
+});
+
+// GET /api/markets/daily-crypto - Get today's daily crypto prediction markets
+router.get('/daily-crypto', async (req, res) => {
+  try {
+    const service = new DailyCryptoPredictionsService();
+    const todayMarkets = await service.getDailyMarketsForToday();
+    
+    if (todayMarkets.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No daily crypto markets found for today',
+        markets: []
+      });
+    }
+    
+    // Get full market details
+    const marketAddresses = todayMarkets.map(m => m.market_address);
+    const marketDetails = await db.query(`
+      SELECT 
+        market_address,
+        creator,
+        question,
+        description,
+        category,
+        resolution_date,
+        status,
+        options,
+        option_volumes,
+        total_volume,
+        resolved_option,
+        min_bet,
+        market_type,
+        is_trending,
+        assets,
+        options_metadata,
+        created_at,
+        updated_at
+      FROM markets 
+      WHERE market_address = ANY($1)
+      ORDER BY created_at DESC
+    `, [marketAddresses]);
+    
+    res.json({
+      success: true,
+      count: marketDetails.rows.length,
+      markets: marketDetails.rows
+    });
+    
+  } catch (error) {
+    console.error('Error fetching daily crypto markets:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch daily crypto markets',
       details: error.message 
     });
   }

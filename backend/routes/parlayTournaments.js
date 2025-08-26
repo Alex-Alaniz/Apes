@@ -113,7 +113,19 @@ router.get('/:tournamentId/matches', async (req, res) => {
 router.post('/:tournamentId/bet', async (req, res) => {
   try {
     const { tournamentId } = req.params;
-    const { userAddress, selections, stakeAmount } = req.body;
+    const { 
+      userAddress, 
+      selections, 
+      stakeAmount, 
+      transactionSignature,
+      betId: providedBetId,
+      multiplier: providedMultiplier,
+      potentialPayout: providedPayout,
+      burnAmount,
+      claimBurnAmount,
+      netPayout,
+      implementationType 
+    } = req.body;
     
     if (!userAddress || !selections || !stakeAmount) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -155,30 +167,36 @@ router.post('/:tournamentId/bet', async (req, res) => {
       return res.status(400).json({ error: 'Invalid match selections' });
     }
     
-    // Calculate multiplier
+    // Calculate multiplier (corrected: base for 2 selections, increment for each additional)
     const baseMultiplier = parseFloat(tournament.base_multiplier);
     const increment = parseFloat(tournament.multiplier_increment);
-    const totalMultiplier = baseMultiplier + (increment * (selections.length - 1));
+    const totalMultiplier = baseMultiplier + (increment * (selections.length - 2));
     const potentialPayout = stakeAmount * totalMultiplier;
     
-    // Create bet
-    const betId = uuidv4();
+    // Create bet (use provided betId for database implementation or generate new one)
+    const betId = providedBetId || uuidv4();
     
     // Begin transaction
     await db.query('BEGIN');
     
     try {
-      // Insert parlay bet
+      // Insert parlay bet (use provided payout if available, otherwise calculate)
+      const finalPayout = providedPayout || potentialPayout;
+      
       await db.query(`
         INSERT INTO parlay_bets (
           bet_id, tournament_id, user_address, selections, 
           selection_count, stake_amount, total_multiplier, 
-          potential_payout, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          potential_payout, status, transaction_signature,
+          implementation_type, is_simulated, burn_amount,
+          claim_burn_amount, net_payout
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       `, [
         betId, tournamentId, userAddress, JSON.stringify(selections),
         selections.length, stakeAmount, totalMultiplier,
-        potentialPayout, 'pending'
+        finalPayout, 'pending', transactionSignature || null,
+        implementationType || 'solana', implementationType === 'database',
+        burnAmount || 0, claimBurnAmount || 0, netPayout || finalPayout
       ]);
       
       // Insert individual selections
