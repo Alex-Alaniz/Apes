@@ -1337,4 +1337,217 @@ router.get('/health', authenticateAdmin, (req, res) => {
   });
 });
 
+// GET /admin/pending-crypto-markets - Get markets awaiting approval
+router.get('/pending-crypto-markets', async (req, res) => {
+  try {
+    const walletAddress = req.headers['x-wallet-address'];
+    
+    if (!isAuthorized(walletAddress)) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    // Check if table exists first
+    const tableExistsQuery = `
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'pending_crypto_markets'
+      );
+    `;
+    
+    const tableExists = await db.query(tableExistsQuery);
+    
+    if (!tableExists.rows[0].exists) {
+      return res.json({
+        success: true,
+        markets: [],
+        counts: { pending: 0, approved: 0, deployed: 0, rejected: 0 },
+        message: 'Oracle table not found - run migration to enable approval workflow'
+      });
+    }
+
+    const query = `
+      SELECT 
+        id, crypto_symbol, crypto_name, current_price, change_24h, volume_24h,
+        opportunity_score, price_ranges, market_question, market_description,
+        reasons, status, created_by, reviewed_by, review_notes,
+        deployed_market_address, deployed_transaction_signature,
+        created_at, updated_at, reviewed_at, deployed_at
+      FROM pending_crypto_markets
+      ORDER BY 
+        CASE status 
+          WHEN 'pending' THEN 1 
+          WHEN 'approved' THEN 2 
+          WHEN 'deployed' THEN 3 
+          WHEN 'rejected' THEN 4 
+        END,
+        created_at DESC
+    `;
+
+    const result = await db.query(query);
+    
+    res.json({
+      success: true,
+      markets: result.rows,
+      counts: {
+        pending: result.rows.filter(m => m.status === 'pending').length,
+        approved: result.rows.filter(m => m.status === 'approved').length,
+        deployed: result.rows.filter(m => m.status === 'deployed').length,
+        rejected: result.rows.filter(m => m.status === 'rejected').length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching pending crypto markets:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch pending crypto markets',
+      details: error.message 
+    });
+  }
+});
+
+// POST /admin/run-crypto-oracle - Manually trigger oracle scan
+router.post('/run-crypto-oracle', async (req, res) => {
+  try {
+    const walletAddress = req.headers['x-wallet-address'];
+    
+    if (!isAuthorized(walletAddress)) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const DailyCryptoOracle = require('../services/dailyCryptoOracle');
+    const oracle = new DailyCryptoOracle();
+    
+    const result = await oracle.runDailyOracle();
+    
+    res.json(result);
+
+  } catch (error) {
+    console.error('Error running crypto oracle:', error);
+    res.status(500).json({ 
+      error: 'Failed to run crypto oracle',
+      details: error.message 
+    });
+  }
+});
+
+// POST /admin/deploy-crypto-market/:marketId - Approve and deploy market
+router.post('/deploy-crypto-market/:marketId', async (req, res) => {
+  try {
+    const walletAddress = req.headers['x-wallet-address'];
+    const { marketId } = req.params;
+    
+    if (!isAuthorized(walletAddress)) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    // Get pending market details
+    const marketQuery = 'SELECT * FROM pending_crypto_markets WHERE id = $1 AND status = $2';
+    const marketResult = await db.query(marketQuery, [marketId, 'pending']);
+    
+    if (marketResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Pending market not found' });
+    }
+
+    const pendingMarket = marketResult.rows[0];
+
+    // Create on-chain market using DailyCryptoPredictionsService
+    const DailyCryptoPredictionsService = require('../services/dailyCryptoPredictions');
+    const cryptoService = new DailyCryptoPredictionsService();
+
+    // Initialize service
+    await cryptoService.initialize();
+
+    // Create market data structure
+    const marketData = {
+      symbol: pendingMarket.crypto_symbol,
+      name: pendingMarket.crypto_name,
+      current_price: parseFloat(pendingMarket.current_price)
+    };
+
+    // Create on-chain market
+    const onChainMarket = await cryptoService.createDailyMarket(marketData, marketData.current_price);
+
+    // Update pending market status
+    const updateQuery = `
+      UPDATE pending_crypto_markets 
+      SET 
+        status = 'deployed',
+        reviewed_by = $1,
+        deployed_market_address = $2,
+        deployed_transaction_signature = $3,
+        reviewed_at = CURRENT_TIMESTAMP,
+        deployed_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4
+      RETURNING *
+    `;
+
+    await db.query(updateQuery, [
+      walletAddress,
+      onChainMarket.market_address,
+      onChainMarket.transaction_signature,
+      marketId
+    ]);
+
+    res.json({
+      success: true,
+      message: `${pendingMarket.crypto_symbol} market deployed successfully`,
+      market_address: onChainMarket.market_address,
+      transaction_signature: onChainMarket.transaction_signature
+    });
+
+  } catch (error) {
+    console.error('Error deploying crypto market:', error);
+    res.status(500).json({ 
+      error: 'Failed to deploy crypto market',
+      details: error.message 
+    });
+  }
+});
+
+// POST /admin/reject-crypto-market/:marketId - Reject market opportunity
+router.post('/reject-crypto-market/:marketId', async (req, res) => {
+  try {
+    const walletAddress = req.headers['x-wallet-address'];
+    const { marketId } = req.params;
+    const { reason } = req.body;
+    
+    if (!isAuthorized(walletAddress)) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const updateQuery = `
+      UPDATE pending_crypto_markets 
+      SET 
+        status = 'rejected',
+        reviewed_by = $1,
+        review_notes = $2,
+        reviewed_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3 AND status = 'pending'
+      RETURNING crypto_symbol
+    `;
+
+    const result = await db.query(updateQuery, [walletAddress, reason || 'No reason provided', marketId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Pending market not found' });
+    }
+
+    res.json({
+      success: true,
+      message: `${result.rows[0].crypto_symbol} market rejected`,
+      reason
+    });
+
+  } catch (error) {
+    console.error('Error rejecting crypto market:', error);
+    res.status(500).json({ 
+      error: 'Failed to reject crypto market',
+      details: error.message 
+    });
+  }
+});
+
 module.exports = router; 

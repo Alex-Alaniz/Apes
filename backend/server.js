@@ -195,6 +195,22 @@ async function startServer() {
       console.log('⚠️ Market monitoring service error:', monitorError.message);
     }
 
+    // Start daily crypto cron service (optional - graceful fallback)
+    try {
+      const DailyCronService = require('./services/dailyCronService');
+      if (!global.dailyCronStarted) {
+        const dailyCronService = new DailyCronService();
+        dailyCronService.start();
+        global.dailyCronStarted = true;
+        console.log('✅ Daily crypto cron service started - oracle scans at 11:30 PM UTC daily');
+      } else {
+        console.log('⚠️ Daily cron service already running');
+      }
+    } catch (cronError) {
+      console.log('⚠️ Daily cron service not available:', cronError.message);
+      console.log('💡 Manual market creation still available via /daily-crypto page');
+    }
+
     // Start the server
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT}`);

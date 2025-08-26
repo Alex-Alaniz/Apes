@@ -19,12 +19,14 @@ import AdminPage from './pages/AdminPage';
 import AdminMarketAssetsPage from './pages/AdminMarketAssetsPage';
 import AdminMarketDeploymentPage from './pages/AdminMarketDeploymentPage';
 import AdminTournamentPage from './pages/AdminTournamentPage';
+import AdminCryptoMarketsPage from './pages/AdminCryptoMarketsPage';
 import EngageToEarnPage from './pages/EngageToEarnPage';
 import TwitterCallback from './pages/TwitterCallback';
 import ProfilePage from './pages/ProfilePage';
 import PublicProfilePage from './pages/PublicProfilePage';
 import DebugApiPage from './pages/DebugApiPage';
 import CS2ParlayTournamentPage from './pages/CS2ParlayTournamentPage';
+import DailyCryptoPredictionsPage from './pages/DailyCryptoPredictionsPage';
 import { Toaster } from 'react-hot-toast';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
@@ -76,12 +78,14 @@ function App() {
                   <Route path="/tournaments" element={<TournamentsPage />} />
                   <Route path="/tournaments/:tournamentId" element={<TournamentDetailPage />} />
                   <Route path="/parlay/:tournamentId" element={<CS2ParlayTournamentPage />} />
+                  <Route path="/daily-crypto" element={<DailyCryptoPredictionsPage />} />
                   <Route path="/leaderboard" element={<LeaderboardPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/profile/:walletAddress" element={<PublicProfilePage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/assets" element={<AdminMarketAssetsPage />} />
                   <Route path="/admin/deploy-markets" element={<AdminMarketDeploymentPage />} />
+                  <Route path="/admin/crypto-markets" element={<AdminCryptoMarketsPage />} />
                   <Route path="/admin/tournament" element={<AdminTournamentPage />} />
                   <Route path="/engage-to-earn" element={<EngageToEarnPage />} />
                   <Route path="/auth/twitter/callback" element={<TwitterCallback />} />

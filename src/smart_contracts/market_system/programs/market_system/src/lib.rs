@@ -243,6 +243,206 @@ pub struct CancelMarket<'info> {
     pub authority: Signer<'info>,
 }
 
+// ============================================================================
+// PARLAY CONTEXT STRUCTS
+// ============================================================================
+
+#[derive(Accounts)]
+#[instruction(tournament_id: [u8; 32])]
+pub struct CreateParlayTournament<'info> {
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + ParlayTournament::LEN,
+        seeds = [b"parlay_tournament", tournament_id.as_ref()],
+        bump
+    )]
+    pub tournament: Account<'info, ParlayTournament>,
+    #[account(
+        seeds = [b"platform_state"],
+        bump,
+    )]
+    pub platform_state: Account<'info, PlatformState>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(seeds = [b"access_control"], bump)]
+    pub access_control: Account<'info, AccessControl>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(match_id: [u8; 32])]
+pub struct CreateParlayMatch<'info> {
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + ParlayMatch::LEN,
+        seeds = [b"parlay_match", tournament.key().as_ref(), match_id.as_ref()],
+        bump
+    )]
+    pub parlay_match: Account<'info, ParlayMatch>,
+    #[account(
+        mut,
+        seeds = [b"parlay_tournament", tournament.tournament_id.as_ref()],
+        bump,
+        constraint = tournament.authority == authority.key() @ ErrorCode::Unauthorized
+    )]
+    pub tournament: Account<'info, ParlayTournament>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(bet_id: [u8; 32])]
+pub struct PlaceParlayBet<'info> {
+    #[account(
+        init,
+        payer = user,
+        space = 8 + ParlayBet::LEN,
+        seeds = [b"parlay_bet", tournament.key().as_ref(), user.key().as_ref(), bet_id.as_ref()],
+        bump
+    )]
+    pub parlay_bet: Account<'info, ParlayBet>,
+    #[account(
+        mut,
+        seeds = [b"parlay_tournament", tournament.tournament_id.as_ref()],
+        bump,
+        constraint = tournament.status == TournamentStatus::Active @ ErrorCode::TournamentNotActive
+    )]
+    pub tournament: Account<'info, ParlayTournament>,
+    #[account(
+        seeds = [b"platform_state"],
+        bump,
+    )]
+    pub platform_state: Account<'info, PlatformState>,
+    #[account(mut)]
+    pub user: Signer<'info>,
+    #[account(
+        mut,
+        constraint = user_token_account.owner == user.key() @ ErrorCode::Unauthorized,
+        constraint = user_token_account.mint == platform_state.token_mint @ ErrorCode::InvalidMint
+    )]
+    pub user_token_account: Account<'info, TokenAccount>,
+    #[account(
+        init,
+        payer = user,
+        seeds = [b"parlay_escrow", parlay_bet.key().as_ref()],
+        bump,
+        token::mint = token_mint,
+        token::authority = parlay_escrow,
+    )]
+    pub parlay_escrow: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        constraint = burn_token_account.mint == platform_state.token_mint @ ErrorCode::InvalidMint
+    )]
+    pub burn_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        constraint = treasury_token_account.mint == platform_state.token_mint @ ErrorCode::InvalidMint
+    )]
+    pub treasury_token_account: Account<'info, TokenAccount>,
+    /// CHECK: Token mint for the tournament
+    pub token_mint: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct CreateParlaySelection<'info> {
+    #[account(
+        init,
+        payer = user,
+        space = 8 + ParlaySelection::LEN,
+        seeds = [b"parlay_selection", parlay_bet.key().as_ref(), parlay_match.key().as_ref()],
+        bump
+    )]
+    pub parlay_selection: Account<'info, ParlaySelection>,
+    #[account(
+        mut,
+        seeds = [b"parlay_bet", tournament.key().as_ref(), user.key().as_ref(), parlay_bet.bet_id.as_ref()],
+        bump,
+        constraint = parlay_bet.user == user.key() @ ErrorCode::Unauthorized
+    )]
+    pub parlay_bet: Account<'info, ParlayBet>,
+    #[account(
+        seeds = [b"parlay_match", tournament.key().as_ref(), parlay_match.match_id.as_ref()],
+        bump
+    )]
+    pub parlay_match: Account<'info, ParlayMatch>,
+    #[account(
+        seeds = [b"parlay_tournament", tournament.tournament_id.as_ref()],
+        bump
+    )]
+    pub tournament: Account<'info, ParlayTournament>,
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ResolveParlayMatch<'info> {
+    #[account(
+        mut,
+        seeds = [b"parlay_match", tournament.key().as_ref(), parlay_match.match_id.as_ref()],
+        bump,
+        constraint = parlay_match.status == MatchStatus::Scheduled || parlay_match.status == MatchStatus::Live @ ErrorCode::InvalidMatch
+    )]
+    pub parlay_match: Account<'info, ParlayMatch>,
+    #[account(
+        seeds = [b"parlay_tournament", tournament.tournament_id.as_ref()],
+        bump,
+        constraint = tournament.authority == authority.key() @ ErrorCode::Unauthorized
+    )]
+    pub tournament: Account<'info, ParlayTournament>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimParlayReward<'info> {
+    #[account(
+        mut,
+        seeds = [b"parlay_bet", tournament.key().as_ref(), user.key().as_ref(), parlay_bet.bet_id.as_ref()],
+        bump,
+        constraint = parlay_bet.user == user.key() @ ErrorCode::Unauthorized,
+        constraint = parlay_bet.status == ParlayStatus::Won @ ErrorCode::ParlayNotEligible,
+        constraint = !parlay_bet.payout_claimed @ ErrorCode::AlreadyClaimed
+    )]
+    pub parlay_bet: Account<'info, ParlayBet>,
+    #[account(
+        seeds = [b"parlay_tournament", tournament.tournament_id.as_ref()],
+        bump
+    )]
+    pub tournament: Account<'info, ParlayTournament>,
+    #[account(
+        seeds = [b"platform_state"],
+        bump,
+    )]
+    pub platform_state: Account<'info, PlatformState>,
+    #[account(mut)]
+    pub user: Signer<'info>,
+    #[account(
+        mut,
+        constraint = user_token_account.owner == user.key() @ ErrorCode::Unauthorized,
+        constraint = user_token_account.mint == platform_state.token_mint @ ErrorCode::InvalidMint
+    )]
+    pub user_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        seeds = [b"parlay_escrow", parlay_bet.key().as_ref()],
+        bump,
+    )]
+    pub parlay_escrow: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        constraint = burn_token_account.mint == platform_state.token_mint @ ErrorCode::InvalidMint
+    )]
+    pub burn_token_account: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
 #[derive(Accounts)]
 #[instruction(option_index: u8)]
 pub struct EmergencyWithdraw<'info> {
@@ -948,6 +1148,369 @@ pub mod market_system {
         
         Ok(())
     }
+
+    // ============================================================================
+    // PARLAY SYSTEM INSTRUCTIONS
+    // ============================================================================
+
+    pub fn create_parlay_tournament(
+        ctx: Context<CreateParlayTournament>,
+        tournament_id: [u8; 32],
+        tournament_id_len: u8,
+        name: [u8; 100],
+        name_len: u8,
+        start_date: i64,
+        end_date: i64,
+        min_selections: u8,
+        max_selections: u8,
+        base_multiplier: u64,  // e.g., 1800 = 1.8x
+        multiplier_increment: u64, // e.g., 500 = 0.5x
+        max_exposure: u64,
+    ) -> Result<()> {
+        let access_control = &ctx.accounts.access_control;
+        let authority = ctx.accounts.authority.key();
+        
+        // Check authorization - admin or market creator
+        require!(
+            authority == access_control.admin || access_control.market_creators.contains(&authority),
+            ErrorCode::Unauthorized
+        );
+        
+        let tournament = &mut ctx.accounts.tournament;
+        let platform_state = &ctx.accounts.platform_state;
+        
+        // Security validations
+        require!(!platform_state.is_paused, ErrorCode::PlatformPaused);
+        require!(min_selections >= 2, ErrorCode::InsufficientParlaySelections);
+        require!(max_selections <= 10, ErrorCode::InvalidParlaySelections);
+        require!(min_selections <= max_selections, ErrorCode::InvalidParlaySelections);
+        require!(start_date < end_date, ErrorCode::InvalidResolutionDate);
+        require!(base_multiplier >= 1000, ErrorCode::InvalidAmount); // At least 1.0x
+        require!(multiplier_increment <= 1000, ErrorCode::InvalidAmount); // Max 1.0x increment
+        
+        // Validate string lengths
+        security_checks::validate_string_length(tournament_id_len as usize, 32)?;
+        security_checks::validate_string_length(name_len as usize, 100)?;
+        
+        // Initialize tournament
+        tournament.tournament_id = [0u8; 32];
+        tournament.tournament_id[..tournament_id_len as usize].copy_from_slice(&tournament_id[..tournament_id_len as usize]);
+        tournament.tournament_id_len = tournament_id_len;
+        
+        tournament.name = [0u8; 100];
+        tournament.name[..name_len as usize].copy_from_slice(&name[..name_len as usize]);
+        tournament.name_len = name_len;
+        
+        tournament.authority = authority;
+        tournament.token_mint = platform_state.token_mint;
+        tournament.treasury = platform_state.treasury;
+        tournament.status = TournamentStatus::Active;
+        tournament.start_date = start_date;
+        tournament.end_date = end_date;
+        tournament.min_selections = min_selections;
+        tournament.max_selections = max_selections;
+        tournament.base_multiplier = base_multiplier;
+        tournament.multiplier_increment = multiplier_increment;
+        tournament.total_volume = 0;
+        tournament.total_participants = 0;
+        tournament.total_parlays = 0;
+        tournament.max_exposure = max_exposure;
+        tournament.current_exposure = 0;
+        
+        msg!("Parlay tournament created: {}", String::from_utf8_lossy(&tournament.name[..name_len as usize]));
+        msg!("Tournament ID: {}", String::from_utf8_lossy(&tournament.tournament_id[..tournament_id_len as usize]));
+        msg!("Base multiplier: {}x", base_multiplier as f64 / 1000.0);
+        msg!("Increment: {}x", multiplier_increment as f64 / 1000.0);
+        
+        Ok(())
+    }
+
+    pub fn create_parlay_match(
+        ctx: Context<CreateParlayMatch>,
+        match_id: [u8; 32],
+        match_id_len: u8,
+        market_string: [u8; 50],
+        market_string_len: u8,
+        team_a: [u8; 50],
+        team_a_len: u8,
+        team_b: [u8; 50],
+        team_b_len: u8,
+        match_date: i64,
+    ) -> Result<()> {
+        let parlay_match = &mut ctx.accounts.parlay_match;
+        let tournament = &ctx.accounts.tournament;
+        
+        // Validate string lengths
+        security_checks::validate_string_length(match_id_len as usize, 32)?;
+        security_checks::validate_string_length(market_string_len as usize, 50)?;
+        security_checks::validate_string_length(team_a_len as usize, 50)?;
+        security_checks::validate_string_length(team_b_len as usize, 50)?;
+        
+        // Validate match is within tournament period
+        require!(
+            match_date >= tournament.start_date && match_date <= tournament.end_date,
+            ErrorCode::InvalidResolutionDate
+        );
+        
+        // Initialize match
+        parlay_match.tournament_id = tournament.tournament_id;
+        
+        parlay_match.match_id = [0u8; 32];
+        parlay_match.match_id[..match_id_len as usize].copy_from_slice(&match_id[..match_id_len as usize]);
+        parlay_match.match_id_len = match_id_len;
+        
+        parlay_match.market_string = [0u8; 50];
+        parlay_match.market_string[..market_string_len as usize].copy_from_slice(&market_string[..market_string_len as usize]);
+        parlay_match.market_string_len = market_string_len;
+        
+        parlay_match.team_a = [0u8; 50];
+        parlay_match.team_a[..team_a_len as usize].copy_from_slice(&team_a[..team_a_len as usize]);
+        parlay_match.team_a_len = team_a_len;
+        
+        parlay_match.team_b = [0u8; 50];
+        parlay_match.team_b[..team_b_len as usize].copy_from_slice(&team_b[..team_b_len as usize]);
+        parlay_match.team_b_len = team_b_len;
+        
+        parlay_match.match_date = match_date;
+        parlay_match.status = MatchStatus::Scheduled;
+        parlay_match.winner = None;
+        parlay_match.resolution_date = None;
+        
+        msg!("Parlay match created: {} vs {}", 
+             String::from_utf8_lossy(&team_a[..team_a_len as usize]),
+             String::from_utf8_lossy(&team_b[..team_b_len as usize]));
+        msg!("Match ID: {}", String::from_utf8_lossy(&match_id[..match_id_len as usize]));
+        msg!("Market string: {}", String::from_utf8_lossy(&market_string[..market_string_len as usize]));
+        
+        Ok(())
+    }
+
+    pub fn place_parlay_bet(
+        ctx: Context<PlaceParlayBet>,
+        bet_id: [u8; 32],
+        bet_id_len: u8,
+        stake_amount: u64,
+        selection_count: u8, // Number of selections (will be created separately)
+    ) -> Result<()> {
+        let parlay_bet = &mut ctx.accounts.parlay_bet;
+        let tournament = &mut ctx.accounts.tournament;
+        let platform_state = &ctx.accounts.platform_state;
+        
+        // Security validations
+        require!(!platform_state.is_paused, ErrorCode::PlatformPaused);
+        require!(tournament.status == TournamentStatus::Active, ErrorCode::TournamentNotActive);
+        
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time >= tournament.start_date, ErrorCode::TournamentNotActive);
+        require!(current_time <= tournament.end_date, ErrorCode::TournamentNotActive);
+        
+        // Validate selections count
+        require!(
+            selection_count >= tournament.min_selections,
+            ErrorCode::InsufficientParlaySelections
+        );
+        require!(
+            selection_count <= tournament.max_selections,
+            ErrorCode::InvalidParlaySelections
+        );
+        
+        // Validate bet amount
+        security_checks::validate_bet_amount(stake_amount, 10 * 1_000_000)?; // Min 10 APES
+        
+        // Calculate multiplier using tournament settings
+        let total_multiplier = tournament.base_multiplier + 
+            (tournament.multiplier_increment * (selection_count.saturating_sub(1)) as u64);
+        
+        // Calculate potential payout
+        let potential_payout = security_checks::safe_mul(stake_amount, total_multiplier)?
+            .checked_div(1000)
+            .ok_or(ErrorCode::CalculationError)?;
+        
+        // Check exposure limits
+        let new_exposure = tournament.current_exposure
+            .checked_add(potential_payout)
+            .ok_or(ErrorCode::CalculationError)?;
+        require!(new_exposure <= tournament.max_exposure, ErrorCode::PoolOverflow);
+        
+        // Calculate fees using same rates as regular betting
+        let burn_amount = security_checks::safe_div(
+            security_checks::safe_mul(stake_amount, platform_state.bet_burn_rate)?,
+            10000
+        )?;
+        
+        let platform_fee = security_checks::safe_div(
+            security_checks::safe_mul(stake_amount, platform_state.platform_fee_rate)?,
+            10000
+        )?;
+        
+        let net_amount = security_checks::safe_sub(
+            security_checks::safe_sub(stake_amount, burn_amount)?,
+            platform_fee
+        )?;
+        
+        // Transfer tokens
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_token_account.to_account_info(),
+                    to: ctx.accounts.parlay_escrow.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            net_amount,
+        )?;
+        
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_token_account.to_account_info(),
+                    to: ctx.accounts.burn_token_account.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            burn_amount,
+        )?;
+        
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_token_account.to_account_info(),
+                    to: ctx.accounts.treasury_token_account.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            platform_fee,
+        )?;
+        
+        // Initialize parlay bet
+        parlay_bet.bet_id = [0u8; 32];
+        parlay_bet.bet_id[..bet_id_len as usize].copy_from_slice(&bet_id[..bet_id_len as usize]);
+        parlay_bet.bet_id_len = bet_id_len;
+        parlay_bet.tournament_id = tournament.tournament_id;
+        parlay_bet.user = ctx.accounts.user.key();
+        parlay_bet.stake_amount = stake_amount;
+        parlay_bet.potential_payout = potential_payout;
+        parlay_bet.total_multiplier = total_multiplier;
+        parlay_bet.selection_count = selection_count;
+        parlay_bet.placed_at = current_time;
+        parlay_bet.status = ParlayStatus::Pending;
+        parlay_bet.resolved_at = None;
+        parlay_bet.payout_claimed = false;
+        
+        // Update tournament stats
+        tournament.total_volume = tournament.total_volume
+            .checked_add(stake_amount)
+            .ok_or(ErrorCode::CalculationError)?;
+        tournament.total_parlays = tournament.total_parlays
+            .checked_add(1)
+            .ok_or(ErrorCode::CalculationError)?;
+        tournament.current_exposure = new_exposure;
+        
+        msg!("Parlay bet placed!");
+        msg!("Bet ID: {}", String::from_utf8_lossy(&bet_id[..bet_id_len as usize]));
+        msg!("Stake: {} APES", stake_amount as f64 / 1_000_000.0);
+        msg!("Selections: {}", selection_count);
+        msg!("Multiplier: {}x", total_multiplier as f64 / 1000.0);
+        msg!("Potential payout: {} APES", potential_payout as f64 / 1_000_000.0);
+        msg!("Burn: {} APES", burn_amount as f64 / 1_000_000.0);
+        
+        Ok(())
+    }
+
+    pub fn resolve_parlay_match(
+        ctx: Context<ResolveParlayMatch>,
+        winner: u8, // 0 = team_a, 1 = team_b
+    ) -> Result<()> {
+        let parlay_match = &mut ctx.accounts.parlay_match;
+        
+        // Validate winner
+        require!(winner <= 1, ErrorCode::InvalidOptionIndex);
+        
+        // Update match status
+        parlay_match.status = MatchStatus::Completed;
+        parlay_match.winner = Some(winner);
+        parlay_match.resolution_date = Some(Clock::get()?.unix_timestamp);
+        
+        let team_a_str = String::from_utf8_lossy(&parlay_match.team_a[..parlay_match.team_a_len as usize]);
+        let team_b_str = String::from_utf8_lossy(&parlay_match.team_b[..parlay_match.team_b_len as usize]);
+        let winner_name = if winner == 0 { &team_a_str } else { &team_b_str };
+        
+        msg!("Match resolved: {} vs {}", team_a_str, team_b_str);
+        msg!("Winner: {}", winner_name);
+        msg!("Match ID: {}", String::from_utf8_lossy(&parlay_match.match_id[..parlay_match.match_id_len as usize]));
+        
+        Ok(())
+    }
+
+    pub fn claim_parlay_reward(ctx: Context<ClaimParlayReward>) -> Result<()> {
+        let parlay_bet = &mut ctx.accounts.parlay_bet;
+        let platform_state = &ctx.accounts.platform_state;
+        
+        // Calculate claim burn fee
+        let burn_amount = security_checks::safe_div(
+            security_checks::safe_mul(parlay_bet.potential_payout, platform_state.claim_burn_rate)?,
+            10000
+        )?;
+        
+        let net_payout = security_checks::safe_sub(parlay_bet.potential_payout, burn_amount)?;
+        
+        // Ensure escrow has enough balance
+        let escrow_balance = ctx.accounts.parlay_escrow.amount;
+        require!(
+            parlay_bet.potential_payout <= escrow_balance,
+            ErrorCode::InsufficientEscrowBalance
+        );
+        
+        // Transfer payout to user
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.parlay_escrow.to_account_info(),
+                    to: ctx.accounts.user_token_account.to_account_info(),
+                    authority: ctx.accounts.parlay_escrow.to_account_info(),
+                },
+                &[&[
+                    b"parlay_escrow",
+                    parlay_bet.key().as_ref(),
+                    &[ctx.bumps.parlay_escrow],
+                ]],
+            ),
+            net_payout,
+        )?;
+        
+        // Transfer burn amount
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.parlay_escrow.to_account_info(),
+                    to: ctx.accounts.burn_token_account.to_account_info(),
+                    authority: ctx.accounts.parlay_escrow.to_account_info(),
+                },
+                &[&[
+                    b"parlay_escrow",
+                    parlay_bet.key().as_ref(),
+                    &[ctx.bumps.parlay_escrow],
+                ]],
+            ),
+            burn_amount,
+        )?;
+        
+        // Mark as claimed
+        parlay_bet.payout_claimed = true;
+        
+        msg!("Parlay reward claimed!");
+        msg!("User: {}", parlay_bet.user);
+        msg!("Payout: {} APES", parlay_bet.potential_payout as f64 / 1_000_000.0);
+        msg!("Burn: {} APES", burn_amount as f64 / 1_000_000.0);
+        msg!("Net payout: {} APES", net_payout as f64 / 1_000_000.0);
+        
+        Ok(())
+    }
 }
 
 #[error_code]
@@ -996,4 +1559,172 @@ pub enum ErrorCode {
     InsufficientEscrowBalance,
     #[msg("Market is not cancelled")]
     MarketNotCancelled,
+    #[msg("Tournament not found")]
+    TournamentNotFound,
+    #[msg("Tournament not active")]
+    TournamentNotActive,
+    #[msg("Invalid parlay selections")]
+    InvalidParlaySelections,
+    #[msg("Insufficient selections for parlay")]
+    InsufficientParlaySelections,
+    #[msg("Parlay already resolved")]
+    ParlayAlreadyResolved,
+    #[msg("Match not found")]
+    MatchNotFound,
+    #[msg("Invalid tournament")]
+    InvalidTournament,
+    #[msg("Parlay not eligible for payout")]
+    ParlayNotEligible,
+    #[msg("Invalid match")]
+    InvalidMatch,
+}
+
+// ============================================================================
+// PARLAY SYSTEM EXTENSION
+// ============================================================================
+
+#[account]
+pub struct ParlayTournament {
+    pub tournament_id: [u8; 32],        // Tournament identifier
+    pub tournament_id_len: u8,          // Actual length
+    pub name: [u8; 100],                // Tournament name
+    pub name_len: u8,                   // Actual length
+    pub authority: Pubkey,              // Tournament authority
+    pub token_mint: Pubkey,             // APES token mint
+    pub treasury: Pubkey,               // Treasury account
+    pub status: TournamentStatus,       // Active/Completed/Cancelled
+    pub start_date: i64,                // Tournament start
+    pub end_date: i64,                  // Tournament end
+    pub min_selections: u8,             // Minimum selections for parlay (default 2)
+    pub max_selections: u8,             // Maximum selections for parlay (default 10)
+    pub base_multiplier: u64,           // Base multiplier (1.8x = 1800)
+    pub multiplier_increment: u64,      // Increment per selection (0.5x = 500)
+    pub total_volume: u64,              // Total betting volume
+    pub total_participants: u64,        // Total unique bettors
+    pub total_parlays: u64,             // Total parlay bets
+    pub max_exposure: u64,              // Maximum exposure limit
+    pub current_exposure: u64,          // Current exposure
+}
+
+impl ParlayTournament {
+    pub const LEN: usize = 32 + // tournament_id
+                           1 +  // tournament_id_len
+                           100 + // name
+                           1 +  // name_len
+                           32 + // authority
+                           32 + // token_mint
+                           32 + // treasury
+                           33 + // status (enum with padding)
+                           8 +  // start_date
+                           8 +  // end_date
+                           1 +  // min_selections
+                           1 +  // max_selections
+                           8 +  // base_multiplier
+                           8 +  // multiplier_increment
+                           8 +  // total_volume
+                           8 +  // total_participants
+                           8 +  // total_parlays
+                           8 +  // max_exposure
+                           8;   // current_exposure
+}
+
+#[account]
+pub struct ParlayMatch {
+    pub tournament_id: [u8; 32],        // Parent tournament
+    pub match_id: [u8; 32],             // Unique match identifier
+    pub match_id_len: u8,               // Actual length
+    pub market_string: [u8; 50],        // Market identifier for betting
+    pub market_string_len: u8,          // Actual length
+    pub team_a: [u8; 50],               // Team A name
+    pub team_a_len: u8,                 // Actual length
+    pub team_b: [u8; 50],               // Team B name
+    pub team_b_len: u8,                 // Actual length
+    pub match_date: i64,                // Match date/time
+    pub status: MatchStatus,            // Scheduled/Live/Completed
+    pub winner: Option<u8>,             // 0 = team_a, 1 = team_b
+    pub resolution_date: Option<i64>,   // When match was resolved
+}
+
+impl ParlayMatch {
+    pub const LEN: usize = 32 + // tournament_id
+                           32 + // match_id
+                           1 +  // match_id_len
+                           50 + // market_string
+                           1 +  // market_string_len
+                           50 + // team_a
+                           1 +  // team_a_len
+                           50 + // team_b
+                           1 +  // team_b_len
+                           8 +  // match_date
+                           33 + // status (enum with padding)
+                           2 +  // winner (Option<u8>)
+                           9;   // resolution_date (Option<i64>)
+}
+
+#[account]
+pub struct ParlayBet {
+    pub bet_id: [u8; 32],               // Unique bet identifier
+    pub bet_id_len: u8,                 // Actual length
+    pub tournament_id: [u8; 32],        // Parent tournament
+    pub user: Pubkey,                   // Bettor
+    pub stake_amount: u64,              // Bet amount in APES
+    pub potential_payout: u64,          // Potential payout
+    pub total_multiplier: u64,          // Total multiplier (e.g., 2800 = 2.8x)
+    pub selection_count: u8,            // Number of selections
+    pub placed_at: i64,                 // Timestamp
+    pub status: ParlayStatus,           // Pending/Won/Lost
+    pub resolved_at: Option<i64>,       // When parlay was resolved
+    pub payout_claimed: bool,           // Whether payout was claimed
+}
+
+impl ParlayBet {
+    pub const LEN: usize = 32 + // bet_id
+                           1 +  // bet_id_len
+                           32 + // tournament_id
+                           32 + // user
+                           8 +  // stake_amount
+                           8 +  // potential_payout
+                           8 +  // total_multiplier
+                           1 +  // selection_count
+                           8 +  // placed_at
+                           33 + // status (enum with padding)
+                           9 +  // resolved_at (Option<i64>)
+                           1;   // payout_claimed
+}
+
+#[account]
+pub struct ParlaySelection {
+    pub bet_id: [u8; 32],               // Parent bet
+    pub match_id: [u8; 32],             // Selected match
+    pub selected_team: u8,              // 0 = team_a, 1 = team_b
+    pub is_correct: Option<bool>,       // Whether selection was correct
+}
+
+impl ParlaySelection {
+    pub const LEN: usize = 32 + // bet_id
+                           32 + // match_id
+                           1 +  // selected_team
+                           2;   // is_correct (Option<bool>)
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, Debug)]
+pub enum TournamentStatus {
+    Active,
+    Completed,
+    Cancelled,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, Debug)]
+pub enum MatchStatus {
+    Scheduled,
+    Live,
+    Completed,
+    Cancelled,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, Debug)]
+pub enum ParlayStatus {
+    Pending,
+    Won,
+    Lost,
 }

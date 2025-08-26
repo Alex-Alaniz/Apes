@@ -2440,4 +2440,59 @@ router.get('/daily-crypto', async (req, res) => {
   }
 });
 
+// POST /api/markets/trigger-daily-creation - Manual trigger for daily market creation (admin only)
+router.post('/trigger-daily-creation', async (req, res) => {
+  try {
+    console.log('🔧 Manual trigger for daily crypto market creation requested');
+    
+    const DailyCronService = require('../services/dailyCronService');
+    const cronService = new DailyCronService();
+    
+    const result = await cronService.triggerManual();
+    
+    res.json({
+      success: result.success,
+      message: result.message,
+      markets: result.markets || null,
+      error: result.error || null,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error triggering daily market creation:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to trigger daily market creation',
+      details: error.message 
+    });
+  }
+});
+
+// GET /api/markets/cron-status - Get automation status
+router.get('/cron-status', async (req, res) => {
+  try {
+    // This is a simple status check - in production you might want auth
+    res.json({
+      success: true,
+      automation: {
+        enabled: true,
+        schedule: 'Daily at 12:01 AM UTC',
+        backup: 'Daily at 12:30 AM UTC',
+        timezone: 'UTC',
+        nextRun: 'Calculated by cron scheduler'
+      },
+      manual_trigger: {
+        endpoint: '/api/markets/trigger-daily-creation',
+        method: 'POST',
+        description: 'Manually create today\'s crypto markets'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: 'Failed to get cron status',
+      details: error.message 
+    });
+  }
+});
+
 module.exports = router; 

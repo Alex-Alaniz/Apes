@@ -26,13 +26,19 @@ const CS2ParlayTournamentPage = () => {
   const [leaderboard, setLeaderboard] = useState([]);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-  
-  // Debug environment variables
-  console.log('Environment check:', {
-    VITE_API_URL: import.meta.env.VITE_API_URL,
-    API_URL: API_URL,
-    all_env: import.meta.env
-  });
+
+  // Initialize parlay service when wallet connects
+  useEffect(() => {
+    if (connected && wallet && connection) {
+      parlayService.initialize(connection, wallet)
+        .then(() => {
+          console.log('✅ ParlayService initialized successfully');
+        })
+        .catch(error => {
+          console.error('❌ Failed to initialize ParlayService:', error);
+        });
+    }
+  }, [connected, wallet, connection]);
 
   useEffect(() => {
     if (tournamentId) {
@@ -109,7 +115,8 @@ const CS2ParlayTournamentPage = () => {
     // Ensure we always have valid numbers
     const baseMultiplier = parseFloat(tournament?.base_multiplier) || 1.8;
     const increment = parseFloat(tournament?.multiplier_increment) || 0.5;
-    const result = baseMultiplier + (increment * (selectionCount - 1));
+    // Base multiplier for 2 selections, then add increment for each additional
+    const result = baseMultiplier + (increment * (selectionCount - 2));
     
     // Return a valid number, never NaN
     return isNaN(result) ? 0 : result;
@@ -144,13 +151,10 @@ const CS2ParlayTournamentPage = () => {
 
     setPlacingBet(true);
     try {
-      // Initialize parlay service
-      await parlayService.initialize(connection, wallet);
-      
       // Validate selections
       parlayService.validateSelections(selections, matches);
       
-      // Place bet with APES token transfer
+      // Place bet using Anchor framework (same as regular market betting)
       const result = await parlayService.placeParlayBet(
         wallet,
         tournamentId,
@@ -159,8 +163,33 @@ const CS2ParlayTournamentPage = () => {
       );
 
       if (result.success) {
-        toast.success(`Parlay bet placed! Potential payout: ${result.potentialPayout} APES`);
-        toast.success(`Transaction: ${result.signature.substring(0, 8)}...`);
+        // Show transaction confirmation
+        toast.success(`🎯 Parlay Bet Confirmed!`, {
+          duration: 4000,
+          style: {
+            background: '#10B981',
+            color: 'white',
+          }
+        });
+        
+        // Show bet details
+        toast.success(`💰 ${result.selections} selections • ${result.multiplier.toFixed(2)}x multiplier • ${result.potentialPayout.toFixed(2)} APES potential payout`, {
+          duration: 6000,
+          style: {
+            background: '#059669',
+            color: 'white',
+          }
+        });
+        
+        // Show transaction ID
+        toast.success(`📝 Transaction: ${result.signature}`, {
+          duration: 8000,
+          style: {
+            background: '#047857',
+            color: 'white',
+          }
+        });
+        
         setSelectedMatches({});
         fetchUserBets();
       }
@@ -438,10 +467,42 @@ const CS2ParlayTournamentPage = () => {
                 {userBets.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
                     <Trophy className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <p>No bets placed yet</p>
+                    <p>No parlays placed yet</p>
+                    <p className="text-sm mt-2">Place your first parlay bet to get started!</p>
                   </div>
                 ) : (
-                  userBets.map((bet) => (
+                  <>
+                    {/* Betting Summary */}
+                    <div className="bg-gradient-to-r from-green-900/20 to-gray-900/20 rounded-lg p-4 border border-green-800/30">
+                      <h3 className="text-lg font-semibold mb-2 text-green-400">Your Parlay Portfolio</h3>
+                      <div className="grid grid-cols-4 gap-4 text-center">
+                        <div>
+                          <div className="text-2xl font-bold text-white">{userBets.length}</div>
+                          <div className="text-xs text-gray-400">Total Parlays</div>
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-green-400">
+                            {userBets.filter(bet => bet.status === 'won').length}
+                          </div>
+                          <div className="text-xs text-gray-400">Won</div>
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-red-400">
+                            {userBets.filter(bet => bet.status === 'lost').length}
+                          </div>
+                          <div className="text-xs text-gray-400">Lost</div>
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-yellow-400">
+                            {userBets.filter(bet => bet.status === 'pending').length}
+                          </div>
+                          <div className="text-xs text-gray-400">Pending</div>
+                        </div>
+                      </div>
+                    </div>
+                  
+                    {/* Individual Bets */}
+                    {userBets.map((bet) => (
                     <div 
                       key={bet.bet_id}
                       className="bg-gray-900 rounded-lg p-6 border border-gray-800"
@@ -506,7 +567,8 @@ const CS2ParlayTournamentPage = () => {
                         </div>
                       </div>
                     </div>
-                  ))
+                    ))}
+                  </>
                 )}
               </div>
             )}

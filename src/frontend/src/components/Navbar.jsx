@@ -41,6 +41,9 @@ const Navbar = () => {
             <Link to="/tournaments" className={`${isActive('/tournaments')} transition-colors`}>
               Tournaments
             </Link>
+            <Link to="/daily-crypto" className={`${isActive('/daily-crypto')} transition-colors flex items-center gap-1`}>
+              <span>🔮</span> Daily Crypto
+            </Link>
             <Link to="/leaderboard" className={`${isActive('/leaderboard')} transition-colors`}>
               Leaderboard
             </Link>
