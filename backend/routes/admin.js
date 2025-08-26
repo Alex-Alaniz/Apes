@@ -1415,6 +1415,7 @@ router.post('/run-crypto-oracle', async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
+    // Dynamic import to avoid startup issues
     const DailyCryptoOracle = require('../services/dailyCryptoOracle');
     const oracle = new DailyCryptoOracle();
     

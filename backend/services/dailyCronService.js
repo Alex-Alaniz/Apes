@@ -1,5 +1,4 @@
 const cron = require('node-cron');
-const DailyCryptoPredictionsService = require('./dailyCryptoPredictions');
 
 /**
  * Daily Cron Service
@@ -7,7 +6,6 @@ const DailyCryptoPredictionsService = require('./dailyCryptoPredictions');
  */
 class DailyCronService {
     constructor() {
-        this.cryptoService = new DailyCryptoPredictionsService();
         this.isRunning = false;
     }
 
@@ -58,6 +56,7 @@ class DailyCronService {
         try {
             console.log('🔮 Running automated oracle scan for market opportunities...');
 
+            // Dynamic import to avoid circular dependencies at startup
             const DailyCryptoOracle = require('./dailyCryptoOracle');
             const oracle = new DailyCryptoOracle();
 
@@ -95,8 +94,12 @@ class DailyCronService {
             const today = new Date().toISOString().split('T')[0];
             console.log(`🌅 Starting daily market creation for ${today}`);
 
+            // Dynamic import to avoid startup issues
+            const DailyCryptoPredictionsService = require('./dailyCryptoPredictions');
+            const cryptoService = new DailyCryptoPredictionsService();
+
             // Check if markets already exist for today
-            const existingMarkets = await this.cryptoService.getDailyMarketsForToday();
+            const existingMarkets = await cryptoService.getDailyMarketsForToday();
             
             if (existingMarkets.length > 0) {
                 console.log(`✅ Daily markets already exist for ${today} (${existingMarkets.length} markets)`);
@@ -108,7 +111,7 @@ class DailyCronService {
             }
 
             // Create new markets
-            const newMarkets = await this.cryptoService.createAllDailyMarkets();
+            const newMarkets = await cryptoService.createAllDailyMarkets();
             
             console.log(`🎯 Successfully created ${newMarkets.length} daily crypto markets`);
             console.log(`📊 Markets: ${newMarkets.map(m => m.crypto).join(', ')}`);
@@ -192,7 +195,11 @@ class DailyCronService {
      */
     async createDailyMarketsBackup() {
         try {
-            const existingMarkets = await this.cryptoService.getDailyMarketsForToday();
+            // Dynamic import to avoid startup issues
+            const DailyCryptoPredictionsService = require('./dailyCryptoPredictions');
+            const cryptoService = new DailyCryptoPredictionsService();
+
+            const existingMarkets = await cryptoService.getDailyMarketsForToday();
             
             if (existingMarkets.length >= 3) {
                 console.log('✅ Daily markets already exist - backup not needed');
