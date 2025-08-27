@@ -387,6 +387,47 @@ app.get('/api/markets/daily-crypto', async (req, res) => {
   }
 });
 
+// Create daily crypto markets (POST to same endpoint as GET)
+app.post('/api/markets/daily-crypto', async (req, res) => {
+  try {
+    console.log('🚀 Creating daily crypto prediction markets...');
+    
+    // Use the force queue endpoint logic
+    const DailyCryptoOracle = require('./services/dailyCryptoOracle');
+    const oracle = new DailyCryptoOracle();
+    
+    // Get market analysis
+    const analysis = await oracle.analyzeMarketOpportunities();
+    
+    if (analysis.success && analysis.opportunities.length > 0) {
+      // Force all opportunities to be recommended
+      analysis.opportunities.forEach(opp => {
+        opp.recommended = opp.score >= 3;
+      });
+      
+      const queueResult = await oracle.queueForApproval(analysis.opportunities);
+      
+      res.json({
+        success: true,
+        message: `Queued ${queueResult.queued_markets} crypto markets`,
+        markets: queueResult.markets || [],
+        pending: true
+      });
+    } else {
+      res.json({
+        success: false,
+        error: 'No market opportunities found today'
+      });
+    }
+  } catch (error) {
+    console.error('Error creating daily crypto markets:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Deploy pending crypto markets on-chain
 app.post('/api/markets/deploy-crypto', async (req, res) => {
   try {
@@ -461,6 +502,15 @@ app.post('/api/markets/deploy-crypto', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// Legacy routes for compatibility (frontend might be calling these)
+app.get('/daily-crypto', (req, res) => {
+  res.redirect('/api/markets/daily-crypto');
+});
+
+app.post('/daily-crypto', (req, res) => {
+  res.redirect(307, '/api/markets/daily-crypto');
 });
 
 // Start server
