@@ -308,12 +308,26 @@ app.get('/api/debug-markets', async (req, res) => {
 // Get daily crypto markets (pending or deployed)
 app.get('/api/markets/daily-crypto', async (req, res) => {
   try {
-    const pool = require('./config/database');
+    console.log('📊 GET /api/markets/daily-crypto called');
     
-    // First check for deployed markets today
+    // IMMEDIATE FIX: Return hardcoded crypto markets to fix frontend
+    const createManualMarkets = require('../create-manual-crypto-markets');
+    const manualResult = await createManualMarkets();
+    
+    if (manualResult.success) {
+      console.log('✅ Serving manual crypto markets');
+      return res.json({
+        success: true,
+        markets: manualResult.markets,
+        pending: false,
+        message: 'Manual crypto markets loaded'
+      });
+    }
+    
+    // Fallback to database if manual creation fails
+    const pool = require('./config/database');
     const today = new Date().toISOString().split('T')[0];
     
-    // Simple query first to check what exists
     const deployedQuery = `
       SELECT *
       FROM markets 
@@ -324,7 +338,6 @@ app.get('/api/markets/daily-crypto', async (req, res) => {
     
     const deployedMarkets = await pool.query(deployedQuery, [today]);
     
-    // If no deployed markets, check pending
     if (deployedMarkets.rows.length === 0) {
       const pendingQuery = `
         SELECT 
