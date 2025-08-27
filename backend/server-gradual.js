@@ -305,6 +305,164 @@ app.get('/api/debug-markets', async (req, res) => {
   }
 });
 
+// Get daily crypto markets (pending or deployed)
+app.get('/api/markets/daily-crypto', async (req, res) => {
+  try {
+    const pool = require('./config/database');
+    
+    // First check for deployed markets today
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Simple query first to check what exists
+    const deployedQuery = `
+      SELECT *
+      FROM markets 
+      WHERE category = 'Crypto' 
+      AND DATE(created_at) = $1
+      ORDER BY created_at DESC
+    `;
+    
+    const deployedMarkets = await pool.query(deployedQuery, [today]);
+    
+    // If no deployed markets, check pending
+    if (deployedMarkets.rows.length === 0) {
+      const pendingQuery = `
+        SELECT 
+          id,
+          crypto_symbol,
+          crypto_name,
+          current_price,
+          change_24h,
+          opportunity_score,
+          price_ranges,
+          market_question as question,
+          market_description as description,
+          status,
+          created_at
+        FROM pending_crypto_markets 
+        WHERE DATE(created_at) = $1
+        AND status = 'pending'
+        ORDER BY crypto_symbol
+      `;
+      
+      const pendingMarkets = await pool.query(pendingQuery, [today]);
+      
+      // Transform pending markets to match expected format
+      const markets = pendingMarkets.rows.map(market => ({
+        market_address: `pending_${market.id}`,
+        question: market.question,
+        description: market.description,
+        options: market.price_ranges ? (typeof market.price_ranges === 'string' ? JSON.parse(market.price_ranges) : market.price_ranges).map(r => r.label) : [],
+        category: 'Crypto',
+        resolution_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        creator_fee: 200,
+        min_bet: '10000000000', // 10 APES
+        volume: '0',
+        created_at: market.created_at,
+        status: 'pending',
+        current_price: market.current_price,
+        change_24h: market.change_24h,
+        crypto_symbol: market.crypto_symbol
+      }));
+      
+      res.json({
+        success: true,
+        markets,
+        pending: true,
+        message: 'Markets are pending deployment'
+      });
+    } else {
+      res.json({
+        success: true,
+        markets: deployedMarkets.rows,
+        pending: false
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error fetching daily crypto markets:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Deploy pending crypto markets on-chain
+app.post('/api/markets/deploy-crypto', async (req, res) => {
+  try {
+    console.log('🚀 Deploying crypto markets on-chain...');
+    
+    const pool = require('./config/database');
+    const DailyCryptoPredictions = require('./services/dailyCryptoPredictions');
+    const cryptoService = new DailyCryptoPredictions();
+    
+    // Get pending markets
+    const pendingQuery = `
+      SELECT * FROM pending_crypto_markets 
+      WHERE status = 'pending'
+      ORDER BY crypto_symbol
+    `;
+    
+    const pendingMarkets = await pool.query(pendingQuery);
+    
+    if (pendingMarkets.rows.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No pending markets to deploy'
+      });
+    }
+    
+    const deployed = [];
+    
+    for (const market of pendingMarkets.rows) {
+      try {
+        console.log(`📊 Deploying ${market.crypto_symbol} market...`);
+        
+        // Deploy on-chain
+        const result = await cryptoService.createDailyMarket(
+          { symbol: market.crypto_symbol, name: market.crypto_name },
+          market.current_price
+        );
+        
+        if (result.success) {
+          // Update status in database
+          await pool.query(
+            `UPDATE pending_crypto_markets 
+             SET status = 'deployed', 
+                 deployed_market_address = $1,
+                 deployed_transaction_signature = $2,
+                 deployed_at = CURRENT_TIMESTAMP
+             WHERE id = $3`,
+            [result.marketPubkey, result.signature, market.id]
+          );
+          
+          deployed.push({
+            symbol: market.crypto_symbol,
+            market_address: result.marketPubkey,
+            signature: result.signature
+          });
+        }
+      } catch (error) {
+        console.error(`❌ Failed to deploy ${market.crypto_symbol}:`, error.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      deployed: deployed.length,
+      markets: deployed,
+      message: `Deployed ${deployed.length} markets on-chain`
+    });
+    
+  } catch (error) {
+    console.error('❌ Deployment error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Start server
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 GRADUAL SERVER RUNNING on 0.0.0.0:${PORT}`);
