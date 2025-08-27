@@ -310,18 +310,72 @@ app.get('/api/markets/daily-crypto', async (req, res) => {
   try {
     console.log('📊 GET /api/markets/daily-crypto called');
     
-    // IMMEDIATE FIX: Return hardcoded crypto markets to fix frontend
-    const createManualMarkets = require('../create-manual-crypto-markets');
-    const manualResult = await createManualMarkets();
-    
-    if (manualResult.success) {
+    // IMMEDIATE FIX: Create manual crypto markets inline
+    try {
+      const axios = require('axios');
+      
+      // Get current prices
+      const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true');
+      const data = response.data;
+      
+      const btcPrice = data.bitcoin.usd;
+      const ethPrice = data.ethereum.usd;
+      const solPrice = data.solana.usd;
+      
+      console.log(`💰 Current prices: BTC $${btcPrice}, ETH $${ethPrice}, SOL $${solPrice}`);
+      
+      // Create simple up/down markets
+      const markets = [
+        {
+          market_address: `manual_btc_${Date.now()}`,
+          question: `Will Bitcoin be above $${Math.round(btcPrice)} at 11:59 PM UTC today?`,
+          description: `Bitcoin price prediction. Current: $${btcPrice.toFixed(2)}. Resolves at market close.`,
+          options: ['Yes', 'No'],
+          category: 'Crypto',
+          resolution_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          creator_fee: 200,
+          min_bet: '10000000000',
+          volume: '0',
+          current_price: btcPrice,
+          crypto_symbol: 'BTC'
+        },
+        {
+          market_address: `manual_eth_${Date.now() + 1}`,
+          question: `Will Ethereum be above $${Math.round(ethPrice)} at 11:59 PM UTC today?`,
+          description: `Ethereum price prediction. Current: $${ethPrice.toFixed(2)}. Resolves at market close.`,
+          options: ['Yes', 'No'],
+          category: 'Crypto',
+          resolution_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          creator_fee: 200,
+          min_bet: '10000000000',
+          volume: '0',
+          current_price: ethPrice,
+          crypto_symbol: 'ETH'
+        },
+        {
+          market_address: `manual_sol_${Date.now() + 2}`,
+          question: `Will Solana be above $${Math.round(solPrice)} at 11:59 PM UTC today?`,
+          description: `Solana price prediction. Current: $${solPrice.toFixed(2)}. Resolves at market close.`,
+          options: ['Yes', 'No'],
+          category: 'Crypto',
+          resolution_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          creator_fee: 200,
+          min_bet: '10000000000',
+          volume: '0',
+          current_price: solPrice,
+          crypto_symbol: 'SOL'
+        }
+      ];
+      
       console.log('✅ Serving manual crypto markets');
       return res.json({
         success: true,
-        markets: manualResult.markets,
+        markets,
         pending: false,
         message: 'Manual crypto markets loaded'
       });
+    } catch (manualError) {
+      console.error('❌ Manual market creation failed:', manualError);
     }
     
     // Fallback to database if manual creation fails
