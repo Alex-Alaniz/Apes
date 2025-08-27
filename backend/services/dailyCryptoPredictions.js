@@ -69,8 +69,16 @@ class DailyCryptoPredictionsService {
                 throw new Error('DEPLOYER_PRIVATE_KEY not found in environment');
             }
             
-            // Decode base64 private key
-            const privateKeyBytes = Buffer.from(deployerPrivateKey, 'base64');
+            // Handle different private key formats
+            let privateKeyBytes;
+            if (deployerPrivateKey.startsWith('[') && deployerPrivateKey.endsWith(']')) {
+                // JSON array format
+                const keyArray = JSON.parse(deployerPrivateKey);
+                privateKeyBytes = new Uint8Array(keyArray);
+            } else {
+                // Assume base64 format
+                privateKeyBytes = Buffer.from(deployerPrivateKey, 'base64');
+            }
             this.adminWallet = Keypair.fromSecretKey(privateKeyBytes);
             
             // Set up Anchor provider
