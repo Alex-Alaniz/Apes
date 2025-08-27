@@ -71,14 +71,30 @@ class DailyCryptoPredictionsService {
             
             // Handle different private key formats
             let privateKeyBytes;
+            
             if (deployerPrivateKey.startsWith('[') && deployerPrivateKey.endsWith(']')) {
-                // JSON array format
+                // JSON array format: [1,2,3,...]
+                console.log('🔑 Using JSON array private key format');
                 const keyArray = JSON.parse(deployerPrivateKey);
                 privateKeyBytes = new Uint8Array(keyArray);
+            } else if (deployerPrivateKey.length === 128) {
+                // Hex format (128 hex chars = 64 bytes)
+                console.log('🔑 Using hex private key format');
+                privateKeyBytes = Buffer.from(deployerPrivateKey, 'hex');
             } else {
-                // Assume base64 format
-                privateKeyBytes = Buffer.from(deployerPrivateKey, 'base64');
+                // Base64 format
+                console.log('🔑 Using base64 private key format');
+                const keyBuffer = Buffer.from(deployerPrivateKey, 'base64');
+                
+                // Solana requires exactly 64 bytes
+                if (keyBuffer.length !== 64) {
+                    throw new Error(`Invalid private key length: ${keyBuffer.length} bytes (expected 64 bytes). Current key format may be incorrect.`);
+                }
+                
+                privateKeyBytes = keyBuffer;
             }
+            
+            console.log(`🔑 Private key bytes length: ${privateKeyBytes.length}`);
             this.adminWallet = Keypair.fromSecretKey(privateKeyBytes);
             
             // Set up Anchor provider
