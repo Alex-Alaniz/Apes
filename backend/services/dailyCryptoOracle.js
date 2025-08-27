@@ -1,10 +1,6 @@
 const axios = require('axios');
-const { Pool } = require('pg');
-require('dotenv').config();
-
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL
-});
+// Use the existing configured database pool instead of creating new one
+const pool = require('../config/database');
 
 /**
  * Daily Crypto Oracle Service
@@ -314,13 +310,6 @@ class DailyCryptoOracle {
                             volume_24h, opportunity_score, price_ranges, market_question,
                             market_description, reasons, status, created_by, created_at
                         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
-                        ON CONFLICT (crypto_symbol, DATE(created_at)) 
-                        DO UPDATE SET 
-                            current_price = EXCLUDED.current_price,
-                            change_24h = EXCLUDED.change_24h,
-                            volume_24h = EXCLUDED.volume_24h,
-                            opportunity_score = EXCLUDED.opportunity_score,
-                            updated_at = CURRENT_TIMESTAMP
                         RETURNING id, crypto_symbol
                     `;
 
