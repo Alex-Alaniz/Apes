@@ -146,23 +146,21 @@ app.get('/api/mobile/markets', async (req, res) => {
     
     // Process mobile-approved markets
     const mobileMarkets = result.rows.map(market => ({
-      publicKey: market.publicKey,
-      marketAccount: market.marketAccount,
+      publicKey: market.market_address,
+      marketAccount: market.market_address,
       question: market.question,
       options: market.options,
-      resolutionDate: market.resolutionDate,
-      creatorFeeRate: market.creatorFeeRate,
-      minBetAmount: market.minBetAmount,
-      status: { active: {} }, // Convert to expected format
-      winningOption: market.winningOption,
-      optionPools: [
-        market.option_a_volume || 0,
-        market.option_b_volume || 0
-      ],
-      totalPool: market.totalPool || 0,
-      marketId: market.marketId,
+      resolutionDate: market.resolution_date,
+      creatorFeeRate: 200, // Default 2%
+      minBetAmount: 1000000, // Default 1 APES
+      tokenMint: '9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts',
+      status: { active: {} },
+      winningOption: null,
+      optionPools: [0, 0],
+      totalPool: parseFloat(market.total_volume || 0),
+      marketId: market.market_address,
       category: market.category || 'crypto',
-      participantCount: market.participantCount || 0,
+      participantCount: 0,
       dataSource: 'mobile_approved'
     }));
     
