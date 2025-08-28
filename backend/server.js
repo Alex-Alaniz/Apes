@@ -40,8 +40,9 @@ const corsOptions = {
     process.env.CORS_ORIGIN
   ].filter(Boolean),
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-wallet-address'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-wallet-address', 'X-Wallet-Address'],
+  exposedHeaders: ['RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset'],
 };
 
 app.use(cors(corsOptions));
@@ -63,6 +64,9 @@ const leaderboardRoutes = require('./routes/leaderboard');
 const adminRoutes = require('./routes/admin');
 const marketCreatorsRoutes = require('./routes/marketCreators');
 const parlayTournamentRoutes = require('./routes/parlayTournaments');
+
+// Handle OPTIONS pre-flight for PATCH requests
+app.options('/api/mobile/markets/:marketId/approval', cors(corsOptions));
 
 // Mobile API endpoint for admin-controlled markets
 app.get('/api/mobile/markets', async (req, res) => {
@@ -439,6 +443,84 @@ app.get('/api/debug', (req, res) => {
     corsOrigins: corsOptions.origin,
     port: PORT
   });
+});
+
+// Database schema fix endpoint
+app.post('/api/admin/fix-database-schema', adminLimiter, async (req, res) => {
+  try {
+    const walletAddress = req.headers['x-wallet-address'];
+    const authorizedWallets = process.env.ADMIN_WALLETS?.split(',').map(w => w.trim()) || [];
+    
+    if (!walletAddress || !authorizedWallets.includes(walletAddress)) {
+      return res.status(403).json({ error: 'Unauthorized access' });
+    }
+    
+    console.log(`🔧 Admin ${walletAddress} running database schema fixes`);
+    
+    // Fix missing role column in users table
+    await pool.query(`
+      DO $$ 
+      BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                         WHERE table_name = 'users' AND column_name = 'role') THEN
+              ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'user';
+          END IF;
+      END $$;
+    `);
+    
+    // Update admin users
+    const adminUpdate = await pool.query(`
+      UPDATE users SET role = 'admin' 
+      WHERE wallet_address IN ($1, $2)
+      RETURNING wallet_address, role
+    `, ['APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z', '5eC9qH2vZQki2FKLmJR2WCsDw8MxzomyJDyfzoNHM2kE']);
+    
+    // Fix missing status column in markets if needed
+    await pool.query(`
+      DO $$ 
+      BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                         WHERE table_name = 'markets' AND column_name = 'status') THEN
+              ALTER TABLE markets ADD COLUMN status VARCHAR(20) DEFAULT 'Active';
+          END IF;
+      END $$;
+    `);
+    
+    // Create treasury_snapshots table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS treasury_snapshots (
+          id SERIAL PRIMARY KEY,
+          snapshot_date DATE DEFAULT CURRENT_DATE,
+          total_balance DECIMAL(20, 9) DEFAULT 0,
+          total_exposure DECIMAL(20, 9) DEFAULT 0,
+          risk_level VARCHAR(20) DEFAULT 'LOW',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Insert default snapshot
+    await pool.query(`
+      INSERT INTO treasury_snapshots (snapshot_date, total_balance, total_exposure, risk_level)
+      SELECT CURRENT_DATE, 1222092565.71, 0, 'LOW'
+      WHERE NOT EXISTS (SELECT 1 FROM treasury_snapshots WHERE snapshot_date = CURRENT_DATE)
+    `);
+    
+    console.log(`✅ Database schema fixes complete`);
+    
+    res.json({
+      success: true,
+      message: 'Database schema fixes applied successfully',
+      adminUpdates: adminUpdate.rows
+    });
+    
+  } catch (error) {
+    console.error('❌ Database schema fix failed:', error);
+    res.status(500).json({
+      error: 'Schema fix failed',
+      details: error.message
+    });
+  }
 });
 
 // Migration endpoint for mobile approval

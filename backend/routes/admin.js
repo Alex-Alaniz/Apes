@@ -197,7 +197,7 @@ router.get('/markets', authenticateAdmin, async (req, res) => {
         resolved_option,
         category,
         created_at,
-        creator_wallet,
+        creator,
         total_volume,
         option_volumes
       FROM markets 

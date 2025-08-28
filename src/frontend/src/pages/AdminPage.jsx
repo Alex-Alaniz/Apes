@@ -63,7 +63,7 @@ const AdminPage = () => {
     setLoading(true);
     try {
       // Call admin-specific endpoint to get ALL markets (including resolved)
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+      const apiUrl = 'http://localhost:5001'; // Force localhost for debugging
       
       // Add cache busting for admin refresh to force fresh data
       const cacheBuster = Date.now();
@@ -330,6 +330,12 @@ const AdminPage = () => {
             className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-lg hover:opacity-90"
           >
             Manage Assets
+          </button>
+          <button
+            onClick={() => navigate('/admin/mobile-markets')}
+            className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold rounded-lg hover:opacity-90"
+          >
+            📱 Mobile Markets
           </button>
           <button
             onClick={handleForceSync}

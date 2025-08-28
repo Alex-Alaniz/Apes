@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 // Cache for admin status to avoid repeated API calls
 let adminStatusCache = new Map();
 let cacheTimestamp = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 0; // Disable cache for debugging
 
 /**
  * Securely check if a wallet is authorized for admin access
@@ -33,7 +33,9 @@ export const isWalletAuthorized = async (walletAddress) => {
   try {
     console.log('🔐 Checking admin authorization for wallet:', walletStr);
     
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+    const apiUrl = 'http://localhost:5001'; // Force localhost for debugging
+    console.log('🔐 API URL:', apiUrl);
+    
     const response = await fetch(`${apiUrl}/api/admin/check-authorization`, {
       method: 'GET',
       headers: {
@@ -42,12 +44,17 @@ export const isWalletAuthorized = async (walletAddress) => {
       },
     });
 
+    console.log('🔐 Response status:', response.status);
+    
     if (!response.ok) {
-      console.warn('🔐 Admin authorization check failed:', response.status);
+      console.warn('🔐 Admin authorization check failed:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.warn('🔐 Error response:', errorText);
       return false;
     }
 
     const data = await response.json();
+    console.log('🔐 Full response data:', data);
     const isAuthorized = data.authorized === true;
 
     // Cache the result
@@ -124,6 +131,11 @@ export const clearAdminCache = () => {
   cacheTimestamp = 0;
   console.log('🔐 Admin authorization cache cleared');
 };
+
+// Expose clearAdminCache globally for debugging
+if (typeof window !== 'undefined') {
+  window.clearAdminCache = clearAdminCache;
+}
 
 /**
  * Legacy compatibility function

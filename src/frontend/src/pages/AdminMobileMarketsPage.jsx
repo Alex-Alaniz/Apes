@@ -15,6 +15,7 @@ const AdminMobileMarketsPage = () => {
   const [updatingMarkets, setUpdatingMarkets] = useState({});
   const [bulkAction, setBulkAction] = useState('');
   const [selectedMarkets, setSelectedMarkets] = useState(new Set());
+  const [runningMigration, setRunningMigration] = useState(false);
 
   // Check authorization
   useEffect(() => {
@@ -32,7 +33,7 @@ const AdminMobileMarketsPage = () => {
   const loadMarkets = async () => {
     setLoading(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+      const apiUrl = 'http://localhost:5001'; // Force localhost for debugging
       
       // Fetch all active markets with mobile approval status
       const response = await fetch(`${apiUrl}/api/admin/markets/mobile-status`, {
@@ -63,7 +64,7 @@ const AdminMobileMarketsPage = () => {
     setUpdatingMarkets(prev => ({ ...prev, [marketAddress]: true }));
     
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
+      const apiUrl = 'http://localhost:5001'; // Force localhost for debugging
       const newStatus = !currentStatus;
       
       const response = await fetch(`${apiUrl}/api/mobile/markets/${marketAddress}/approval`, {
@@ -102,6 +103,46 @@ const AdminMobileMarketsPage = () => {
       });
     } finally {
       setUpdatingMarkets(prev => ({ ...prev, [marketAddress]: false }));
+    }
+  };
+
+  const handleRunMigration = async () => {
+    setRunningMigration(true);
+    
+    try {
+      const apiUrl = 'http://localhost:5001';
+      
+      const response = await fetch(`${apiUrl}/api/admin/run-mobile-migration`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Wallet-Address': publicKey.toString()
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setToast({
+          message: `Migration successful! Updated ${result.updatedMarkets} markets for mobile.`,
+          type: 'success'
+        });
+        
+        // Reload markets after migration
+        setTimeout(loadMarkets, 1000);
+      }
+    } catch (error) {
+      console.error('Error running migration:', error);
+      setToast({
+        message: 'Failed to run migration. Check console for details.',
+        type: 'error'
+      });
+    } finally {
+      setRunningMigration(false);
     }
   };
 
@@ -241,6 +282,13 @@ const AdminMobileMarketsPage = () => {
               >
                 {loading ? 'Loading...' : 'Refresh'}
               </button>
+              <button
+                onClick={handleRunMigration}
+                disabled={runningMigration}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                {runningMigration ? 'Migrating...' : 'Run Migration'}
+              </button>
             </div>
 
             {/* Bulk Actions */}
@@ -314,12 +362,29 @@ const AdminMobileMarketsPage = () => {
           </div>
         )}
 
+        {/* Migration Button for First Run */}
+        {!loading && markets.length === 0 && (
+          <div className="text-center py-12 bg-gray-800 rounded-lg mb-6">
+            <h3 className="text-xl font-semibold text-white mb-4">Database Setup Required</h3>
+            <p className="text-gray-400 mb-6">
+              The mobile_approved column needs to be added to the database.
+            </p>
+            <button
+              onClick={handleRunMigration}
+              disabled={runningMigration}
+              className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg disabled:opacity-50"
+            >
+              {runningMigration ? 'Running Migration...' : 'Run Mobile Migration'}
+            </button>
+          </div>
+        )}
+
         {/* Markets List */}
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
           </div>
-        ) : filteredMarkets.length === 0 ? (
+        ) : filteredMarkets.length === 0 && markets.length > 0 ? (
           <div className="text-center py-12 bg-gray-800 rounded-lg">
             <p className="text-gray-400">No markets found</p>
           </div>
@@ -352,7 +417,7 @@ const AdminMobileMarketsPage = () => {
                       <p>Category: <span className="text-gray-300">{market.category}</span></p>
                       <p>Created: {new Date(market.created_at).toLocaleDateString()}</p>
                       <p>Participants: <span className="text-gray-300">{market.participant_count || 0}</span></p>
-                      <p>Volume: <span className="text-gray-300">{(market.total_volume || 0).toFixed(2)} APES</span></p>
+                      <p>Volume: <span className="text-gray-300">{parseFloat(market.total_volume || 0).toFixed(2)} APES</span></p>
                     </div>
 
                     {/* Options Display */}
