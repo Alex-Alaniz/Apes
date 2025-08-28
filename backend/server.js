@@ -103,21 +103,13 @@ app.get('/api/mobile/markets', async (req, res) => {
       // Fallback: return all active binary markets if no mobile-approved ones exist
       const fallbackQuery = `
         SELECT 
-          market_address as "publicKey",
-          market_address as "marketAccount", 
+          market_address,
           question,
           options,
-          resolution_date as "resolutionDate",
-          COALESCE(creator_fee, creator_fee_rate, 200) as "creatorFeeRate",
-          COALESCE(min_bet, min_bet_amount, 1000000) as "minBetAmount",
+          resolution_date,
           status,
-          winning_option as "winningOption",
-          COALESCE(total_volume, 0) as "totalPool",
-          market_address as "marketId",
-          COALESCE(category, 'crypto') as category,
-          COALESCE(participant_count, 0) as "participantCount",
-          COALESCE(option_a_volume, 0) as option_a_volume,
-          COALESCE(option_b_volume, 0) as option_b_volume,
+          category,
+          total_volume,
           created_at
         FROM markets 
         WHERE status = 'Active' 
@@ -130,13 +122,21 @@ app.get('/api/mobile/markets', async (req, res) => {
       const fallbackResult = await pool.query(fallbackQuery);
       
       const processedMarkets = fallbackResult.rows.map(market => ({
-        ...market,
-        optionPools: [
-          market.option_a_volume || 0,
-          market.option_b_volume || 0
-        ],
-        totalPool: market.totalPool || 0,
-        participantCount: market.participantCount || 0,
+        publicKey: market.market_address,
+        marketAccount: market.market_address,
+        question: market.question,
+        options: market.options,
+        resolutionDate: market.resolution_date,
+        creatorFeeRate: 200, // Default 2%
+        minBetAmount: 1000000, // Default 1 APES
+        tokenMint: '9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts',
+        status: { active: {} },
+        winningOption: null,
+        optionPools: [0, 0],
+        totalPool: parseFloat(market.total_volume || 0),
+        marketId: market.market_address,
+        category: market.category || 'crypto',
+        participantCount: 0,
         dataSource: 'mobile_fallback'
       }));
       
