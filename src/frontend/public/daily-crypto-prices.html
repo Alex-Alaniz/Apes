@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Crypto Price Predictions - PRIMAPE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f0f23; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .price-bracket { transition: all 0.3s ease; }
+        .price-bracket:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        .volume-high { color: #10b981; }
+        .volume-medium { color: #f59e0b; }
+        .volume-low { color: #ef4444; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-white mb-4 flex items-center justify-center gap-3">
+                <span class="text-5xl">📈</span>
+                Daily Crypto Price Predictions
+                <span class="text-5xl">🔮</span>
+            </h1>
+            <p class="text-xl text-gray-300 max-w-3xl mx-auto">
+                Predict tomorrow's closing prices for Bitcoin, Ethereum, and Solana. 
+                Markets resolve at 12:00 PM ET using Binance BTC/USDT, ETH/USDT, and SOL/USDT prices.
+            </p>
+        </div>
+
+        <!-- Stats Banner -->
+        <div class="bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-2xl border border-blue-500/30 p-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 text-center">
+                <div>
+                    <div class="text-3xl font-bold text-blue-400" id="totalMarkets">3</div>
+                    <div class="text-sm text-gray-300">Active Markets</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-green-400" id="totalVolume">$0</div>
+                    <div class="text-sm text-gray-300">Total Volume</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-yellow-400" id="participants">0</div>
+                    <div class="text-sm text-gray-300">Participants</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-purple-400" id="nextResolution">Aug 28</div>
+                    <div class="text-sm text-gray-300">Next Resolution</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Markets Grid -->
+        <div id="marketsGrid" class="space-y-8">
+            <!-- Markets will be loaded here -->
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="text-center py-16">
+            <div class="text-6xl mb-4">⏳</div>
+            <h2 class="text-2xl font-bold text-white mb-2">Loading Daily Crypto Markets...</h2>
+            <p class="text-gray-400">Fetching the latest price prediction markets...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="errorState" class="hidden bg-red-600/20 border border-red-500/30 rounded-xl p-6 text-center">
+            <div class="text-4xl mb-2">⚠️</div>
+            <h3 class="text-lg font-semibold text-red-400 mb-1">Error Loading Markets</h3>
+            <p class="text-red-300" id="errorMessage">Failed to load daily crypto markets</p>
+            <button onclick="loadDailyCryptoMarkets()" class="mt-4 bg-red-600 hover:bg-red-500 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+                Try Again
+            </button>
+        </div>
+
+        <!-- Create Markets Button -->
+        <div class="mt-12 text-center">
+            <button onclick="createDailyMarkets()" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium py-3 px-8 rounded-xl transition-all duration-200 flex items-center gap-2 mx-auto">
+                <span>🚀</span>
+                Create Today's Price Markets
+            </button>
+        </div>
+
+        <!-- Info Footer -->
+        <div class="mt-12 bg-gray-800/50 rounded-xl border border-gray-700 p-6">
+            <h3 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                <span class="text-xl">ℹ️</span>
+                How Daily Crypto Price Predictions Work
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300">
+                <div>
+                    <strong class="text-white">• Price Source:</strong> Binance BTC/USDT, ETH/USDT, SOL/USDT
+                </div>
+                <div>
+                    <strong class="text-white">• Resolution Time:</strong> 12:00 PM ET daily
+                </div>
+                <div>
+                    <strong class="text-white">• Price Brackets:</strong> Multiple ranges for accurate predictions
+                </div>
+                <div>
+                    <strong class="text-white">• Betting Token:</strong> APES tokens with 2.5% burn on bets
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Daily crypto price markets data
+        const dailyCryptoMarkets = [
+            {
+                id: 'btc_aug28',
+                symbol: 'BTC',
+                name: 'Bitcoin',
+                icon: '₿',
+                currentPrice: 112440,
+                question: 'Bitcoin price on August 28?',
+                description: 'What will be the closing price of Bitcoin on August 28, 2025 at 12:00 PM ET?',
+                priceBrackets: [
+                    { range: '<108k', min: 0, max: 108000, volume: 0, percentage: 0 },
+                    { range: '108k-110k', min: 108000, max: 110000, volume: 0, percentage: 0 },
+                    { range: '110k-112k', min: 110000, max: 112000, volume: 0, percentage: 0 },
+                    { range: '112k-114k', min: 112000, max: 114000, volume: 0, percentage: 0 },
+                    { range: '114k-116k', min: 114000, max: 116000, volume: 0, percentage: 0 },
+                    { range: '116k-118k', min: 116000, max: 118000, volume: 0, percentage: 0 },
+                    { range: '>118k', min: 118000, max: 999999999, volume: 0, percentage: 0 }
+                ],
+                resolutionDate: '2025-08-28T16:00:00Z', // 12:00 PM ET
+                totalVolume: 0,
+                participants: 0,
+                status: 'Active'
+            },
+            {
+                id: 'eth_aug28',
+                symbol: 'ETH',
+                name: 'Ethereum',
+                icon: 'Ξ',
+                currentPrice: 4619,
+                question: 'Ethereum price on August 28?',
+                description: 'What will be the closing price of Ethereum on August 28, 2025 at 12:00 PM ET?',
+                priceBrackets: [
+                    { range: '<3800', min: 0, max: 3800, volume: 0, percentage: 0 },
+                    { range: '3800-4000', min: 3800, max: 4000, volume: 0, percentage: 0 },
+                    { range: '4000-4200', min: 4000, max: 4200, volume: 0, percentage: 0 },
+                    { range: '4200-4400', min: 4200, max: 4400, volume: 0, percentage: 0 },
+                    { range: '4400-4600', min: 4400, max: 4600, volume: 0, percentage: 0 },
+                    { range: '4600-4800', min: 4600, max: 4800, volume: 0, percentage: 0 },
+                    { range: '>4800', min: 4800, max: 999999999, volume: 0, percentage: 0 }
+                ],
+                resolutionDate: '2025-08-28T16:00:00Z',
+                totalVolume: 0,
+                participants: 0,
+                status: 'Active'
+            },
+            {
+                id: 'sol_aug28',
+                symbol: 'SOL',
+                name: 'Solana',
+                icon: '◎',
+                currentPrice: 211,
+                question: 'Solana price on August 28?',
+                description: 'What will be the closing price of Solana on August 28, 2025 at 12:00 PM ET?',
+                priceBrackets: [
+                    { range: '<160', min: 0, max: 160, volume: 0, percentage: 0 },
+                    { range: '160-170', min: 160, max: 170, volume: 0, percentage: 0 },
+                    { range: '170-180', min: 170, max: 180, volume: 0, percentage: 0 },
+                    { range: '180-190', min: 180, max: 190, volume: 0, percentage: 0 },
+                    { range: '190-200', min: 190, max: 200, volume: 0, percentage: 0 },
+                    { range: '200-210', min: 200, max: 210, volume: 0, percentage: 0 },
+                    { range: '>210', min: 210, max: 999999999, volume: 0, percentage: 0 }
+                ],
+                resolutionDate: '2025-08-28T16:00:00Z',
+                totalVolume: 0,
+                participants: 0,
+                status: 'Active'
+            }
+        ];
+
+        // Load daily crypto markets
+        async function loadDailyCryptoMarkets() {
+            try {
+                // Hide error state
+                document.getElementById('errorState').classList.add('hidden');
+                
+                // Show loading state
+                document.getElementById('loadingState').classList.remove('hidden');
+                document.getElementById('marketsGrid').innerHTML = '';
+
+                // For now, use local data (you can replace with API call later)
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+                
+                displayMarkets(dailyCryptoMarkets);
+                updateStats(dailyCryptoMarkets);
+                
+            } catch (err) {
+                console.error('Error loading daily crypto markets:', err);
+                showError('Failed to load markets: ' + err.message);
+            } finally {
+                document.getElementById('loadingState').classList.add('hidden');
+            }
+        }
+
+        // Display markets
+        function displayMarkets(markets) {
+            const marketsGrid = document.getElementById('marketsGrid');
+            marketsGrid.innerHTML = '';
+
+            markets.forEach((market, index) => {
+                const marketCard = createMarketCard(market, index);
+                marketsGrid.appendChild(marketCard);
+            });
+        }
+
+        // Create market card
+        function createMarketCard(market, index) {
+            const card = document.createElement('div');
+            card.className = 'bg-gray-800 rounded-2xl border border-gray-700 p-6 hover:shadow-2xl transition-all duration-300';
+            
+            const timeRemaining = formatTimeRemaining(market.resolutionDate);
+            const currentPriceFormatted = market.currentPrice.toLocaleString();
+            
+            card.innerHTML = `
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-4">
+                        <span class="text-4xl">${market.icon}</span>
+                        <div>
+                            <h3 class="text-2xl font-bold text-white">${market.name}</h3>
+                            <p class="text-lg text-gray-400">Current: $${currentPriceFormatted}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm text-gray-400">Resolves</div>
+                        <div class="text-lg text-yellow-400 font-semibold">${timeRemaining}</div>
+                    </div>
+                </div>
+                
+                <h4 class="text-xl font-medium text-white mb-4">${market.question}</h4>
+                <p class="text-gray-300 text-sm mb-6">${market.description}</p>
+                
+                <!-- Price Brackets -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+                    ${market.priceBrackets.map(bracket => `
+                        <div class="price-bracket bg-gray-700 rounded-lg p-4 border border-gray-600 hover:border-blue-500 cursor-pointer">
+                            <div class="text-sm text-gray-400 mb-1">${bracket.range}</div>
+                            <div class="text-lg font-semibold text-white mb-1">${bracket.percentage}%</div>
+                            <div class="text-xs text-gray-500">Vol: $${bracket.volume.toLocaleString()}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="flex items-center justify-between text-sm text-gray-400 border-t border-gray-700 pt-4">
+                    <span>Total Volume: $${market.totalVolume.toLocaleString()}</span>
+                    <span>Participants: ${market.participants}</span>
+                    <span class="text-green-400">${market.status}</span>
+                </div>
+            `;
+            
+            return card;
+        }
+
+        // Format time remaining
+        function formatTimeRemaining(resolutionDate) {
+            const now = new Date();
+            const resolution = new Date(resolutionDate);
+            const diff = resolution.getTime() - now.getTime();
+            
+            if (diff <= 0) return 'Market closed';
+            
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            
+            if (days > 0) {
+                return `${days}d ${hours}h remaining`;
+            } else if (hours > 0) {
+                return `${hours}h ${minutes}m remaining`;
+            } else {
+                return `${minutes}m remaining`;
+            }
+        }
+
+        // Update stats
+        function updateStats(markets) {
+            const totalMarkets = markets.length;
+            const totalVolume = markets.reduce((sum, market) => sum + market.totalVolume, 0);
+            const totalParticipants = markets.reduce((sum, market) => sum + market.participants, 0);
+            
+            document.getElementById('totalMarkets').textContent = totalMarkets;
+            document.getElementById('totalVolume').textContent = '$' + totalVolume.toLocaleString();
+            document.getElementById('participants').textContent = totalParticipants;
+            
+            if (markets.length > 0) {
+                const nextDate = new Date(markets[0].resolutionDate);
+                document.getElementById('nextResolution').textContent = nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+        }
+
+        // Show error
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorState').classList.remove('hidden');
+        }
+
+        // Create daily markets (placeholder for admin functionality)
+        function createDailyMarkets() {
+            alert('🚀 Daily crypto price markets created successfully!\n\nThis would integrate with your backend to create new daily price prediction markets for BTC, ETH, and SOL.');
+        }
+
+        // Load markets on page load
+        document.addEventListener('DOMContentLoaded', loadDailyCryptoMarkets);
+    </script>
+</body>
+</html>

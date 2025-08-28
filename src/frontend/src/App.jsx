@@ -20,6 +20,7 @@ import AdminMarketAssetsPage from './pages/AdminMarketAssetsPage';
 import AdminMarketDeploymentPage from './pages/AdminMarketDeploymentPage';
 import AdminTournamentPage from './pages/AdminTournamentPage';
 import AdminCryptoMarketsPage from './pages/AdminCryptoMarketsPage';
+import AdminMobileMarketsPage from './pages/AdminMobileMarketsPage';
 import EngageToEarnPage from './pages/EngageToEarnPage';
 import TwitterCallback from './pages/TwitterCallback';
 import ProfilePage from './pages/ProfilePage';
@@ -87,6 +88,7 @@ function App() {
                   <Route path="/admin/deploy-markets" element={<AdminMarketDeploymentPage />} />
                   <Route path="/admin/crypto-markets" element={<AdminCryptoMarketsPage />} />
                   <Route path="/admin/tournament" element={<AdminTournamentPage />} />
+                  <Route path="/admin/mobile-markets" element={<AdminMobileMarketsPage />} />
                   <Route path="/engage-to-earn" element={<EngageToEarnPage />} />
                   <Route path="/auth/twitter/callback" element={<TwitterCallback />} />
                   <Route path="/debug-api" element={<DebugApiPage />} />

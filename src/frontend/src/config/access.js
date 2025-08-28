@@ -33,7 +33,7 @@ export const isWalletAuthorized = async (walletAddress) => {
   try {
     console.log('🔐 Checking admin authorization for wallet:', walletStr);
     
-    const apiUrl = 'http://localhost:5001'; // Force localhost for debugging
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
     console.log('🔐 API URL:', apiUrl);
     
     const response = await fetch(`${apiUrl}/api/admin/check-authorization`, {

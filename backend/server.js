@@ -77,23 +77,15 @@ app.get('/api/mobile/markets', async (req, res) => {
     // This allows admin control via a database column
     const query = `
       SELECT 
-        market_address as "publicKey",
-        market_address as "marketAccount", 
+        market_address,
         question,
         options,
-        resolution_date as "resolutionDate",
-        creator_fee as "creatorFeeRate",
-        min_bet as "minBetAmount",
+        resolution_date,
         status,
-        winning_option as "winningOption",
-        total_volume as "totalPool",
-        market_address as "marketId",
         category,
-        participant_count as "participantCount",
-        option_a_volume,
-        option_b_volume,
+        total_volume,
         created_at,
-        mobile_approved
+        COALESCE(mobile_approved, false) as mobile_approved
       FROM markets 
       WHERE status = 'Active' 
         AND mobile_approved = true
@@ -116,16 +108,16 @@ app.get('/api/mobile/markets', async (req, res) => {
           question,
           options,
           resolution_date as "resolutionDate",
-          creator_fee as "creatorFeeRate",
-          min_bet as "minBetAmount",
+          COALESCE(creator_fee, creator_fee_rate, 200) as "creatorFeeRate",
+          COALESCE(min_bet, min_bet_amount, 1000000) as "minBetAmount",
           status,
           winning_option as "winningOption",
-          total_volume as "totalPool",
+          COALESCE(total_volume, 0) as "totalPool",
           market_address as "marketId",
-          category,
-          participant_count as "participantCount",
-          option_a_volume,
-          option_b_volume,
+          COALESCE(category, 'crypto') as category,
+          COALESCE(participant_count, 0) as "participantCount",
+          COALESCE(option_a_volume, 0) as option_a_volume,
+          COALESCE(option_b_volume, 0) as option_b_volume,
           created_at
         FROM markets 
         WHERE status = 'Active' 
