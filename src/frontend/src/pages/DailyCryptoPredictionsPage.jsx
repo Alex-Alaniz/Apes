@@ -26,8 +26,15 @@ function DailyCryptoPredictionsPage() {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/markets/daily-crypto`);
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      console.log('🔍 API URL:', apiUrl);
+      console.log('🌐 Full URL:', `${apiUrl}/api/markets/daily-crypto`);
+      
+      const response = await fetch(`${apiUrl}/api/markets/daily-crypto`);
+      console.log('📡 Response status:', response.status);
+      
       const data = await response.json();
+      console.log('📊 Response data:', data);
       
       if (data.success) {
         setMarkets(data.markets || []);
@@ -35,8 +42,13 @@ function DailyCryptoPredictionsPage() {
         setError('Failed to load daily crypto markets');
       }
     } catch (err) {
-      console.error('Error loading daily crypto markets:', err);
-      setError('Failed to connect to server');
+      console.error('❌ Error loading daily crypto markets:', err);
+      console.error('❌ Error details:', {
+        message: err.message,
+        stack: err.stack,
+        apiUrl: import.meta.env.VITE_API_URL
+      });
+      setError(`Failed to connect to server: ${err.message}`);
     } finally {
       setLoading(false);
     }

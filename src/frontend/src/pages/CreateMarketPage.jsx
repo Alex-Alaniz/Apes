@@ -36,7 +36,8 @@ const CreateMarketPage = () => {
     creatorStake: '100',
     creatorFeeRate: '200', // 2%
     minBetAmount: '10',
-    description: ''
+    description: '',
+    mobileApproved: false
   });
 
   // Initialize market service when wallet connects
@@ -388,6 +389,24 @@ const CreateMarketPage = () => {
               </select>
             </div>
 
+            {/* Mobile Approval */}
+            <div className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                name="mobileApproved"
+                id="mobileApproved"
+                checked={formData.mobileApproved}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+              />
+              <label htmlFor="mobileApproved" className="text-sm font-medium text-gray-300">
+                📱 Approve for Mobile App
+                <span className="block text-xs text-gray-400 mt-1">
+                  Allow this market to appear in the mobile application
+                </span>
+              </label>
+            </div>
+
             {/* Creator Stake */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -454,11 +473,11 @@ const CreateMarketPage = () => {
           </form>
 
           {/* Info Box */}
-          <div className="mt-6 bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-            <h3 className="text-blue-400 font-semibold mb-2">ℹ️ Test Mode</h3>
+          <div className="mt-6 bg-green-900/20 border border-green-500/30 rounded-lg p-4">
+            <h3 className="text-green-400 font-semibold mb-2">✅ Mainnet Live</h3>
             <p className="text-gray-300 text-sm">
-              The platform is currently in test mode on devnet. Markets created here are for testing purposes only.
-              You have 1 billion mock APES tokens to experiment with.
+              Create prediction markets on Solana mainnet with APES tokens. 
+              Markets require a 100 APES creator stake and have a 2% creator fee.
             </p>
           </div>
         </div>

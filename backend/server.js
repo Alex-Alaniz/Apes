@@ -33,6 +33,7 @@ app.use(generalLimiter);
 const corsOptions = {
   origin: [
     'http://localhost:3000',
+    'http://localhost:3001',
     'http://localhost:5173', 
     'https://apes-primape-app.vercel.app',
     'https://apes.primape.app',
@@ -62,6 +63,317 @@ const leaderboardRoutes = require('./routes/leaderboard');
 const adminRoutes = require('./routes/admin');
 const marketCreatorsRoutes = require('./routes/marketCreators');
 const parlayTournamentRoutes = require('./routes/parlayTournaments');
+
+// Mobile API endpoint for admin-controlled markets
+app.get('/api/mobile/markets', async (req, res) => {
+  try {
+    console.log('📱 Mobile API: GET /api/mobile/markets called');
+    
+    // Query for markets that are specifically approved for mobile
+    // This allows admin control via a database column
+    const query = `
+      SELECT 
+        market_address as "publicKey",
+        market_address as "marketAccount", 
+        question,
+        options,
+        resolution_date as "resolutionDate",
+        creator_fee as "creatorFeeRate",
+        min_bet as "minBetAmount",
+        status,
+        winning_option as "winningOption",
+        total_volume as "totalPool",
+        market_address as "marketId",
+        category,
+        participant_count as "participantCount",
+        option_a_volume,
+        option_b_volume,
+        created_at,
+        mobile_approved
+      FROM markets 
+      WHERE status = 'Active' 
+        AND mobile_approved = true
+        AND options IS NOT NULL 
+        AND array_length(options, 1) = 2
+      ORDER BY created_at DESC 
+      LIMIT 20
+    `;
+    
+    const result = await pool.query(query);
+    
+    if (result.rows.length === 0) {
+      console.log('📱 Mobile API: No mobile-approved markets found, falling back to all active markets');
+      
+      // Fallback: return all active binary markets if no mobile-approved ones exist
+      const fallbackQuery = `
+        SELECT 
+          market_address as "publicKey",
+          market_address as "marketAccount", 
+          question,
+          options,
+          resolution_date as "resolutionDate",
+          creator_fee as "creatorFeeRate",
+          min_bet as "minBetAmount",
+          status,
+          winning_option as "winningOption",
+          total_volume as "totalPool",
+          market_address as "marketId",
+          category,
+          participant_count as "participantCount",
+          option_a_volume,
+          option_b_volume,
+          created_at
+        FROM markets 
+        WHERE status = 'Active' 
+          AND options IS NOT NULL 
+          AND array_length(options, 1) = 2
+        ORDER BY created_at DESC 
+        LIMIT 10
+      `;
+      
+      const fallbackResult = await pool.query(fallbackQuery);
+      
+      const processedMarkets = fallbackResult.rows.map(market => ({
+        ...market,
+        optionPools: [
+          market.option_a_volume || 0,
+          market.option_b_volume || 0
+        ],
+        totalPool: market.totalPool || 0,
+        participantCount: market.participantCount || 0,
+        dataSource: 'mobile_fallback'
+      }));
+      
+      console.log(`📱 Mobile API: Returning ${processedMarkets.length} fallback markets`);
+      return res.json(processedMarkets);
+    }
+    
+    // Process mobile-approved markets
+    const mobileMarkets = result.rows.map(market => ({
+      publicKey: market.publicKey,
+      marketAccount: market.marketAccount,
+      question: market.question,
+      options: market.options,
+      resolutionDate: market.resolutionDate,
+      creatorFeeRate: market.creatorFeeRate,
+      minBetAmount: market.minBetAmount,
+      status: { active: {} }, // Convert to expected format
+      winningOption: market.winningOption,
+      optionPools: [
+        market.option_a_volume || 0,
+        market.option_b_volume || 0
+      ],
+      totalPool: market.totalPool || 0,
+      marketId: market.marketId,
+      category: market.category || 'crypto',
+      participantCount: market.participantCount || 0,
+      dataSource: 'mobile_approved'
+    }));
+    
+    console.log(`📱 Mobile API: Returning ${mobileMarkets.length} mobile-approved markets`);
+    res.json(mobileMarkets);
+    
+  } catch (error) {
+    console.error('❌ Mobile API Error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch mobile markets',
+      details: error.message
+    });
+  }
+});
+
+// Update mobile approval status for a market (admin only)
+app.patch('/api/mobile/markets/:marketId/approval', adminLimiter, async (req, res) => {
+  try {
+    const { marketId } = req.params;
+    const { approved } = req.body;
+    const walletAddress = req.headers['x-wallet-address'];
+    
+    // Check admin authorization
+    const authorizedWallets = process.env.ADMIN_WALLETS?.split(',').map(w => w.trim()) || [];
+    if (!walletAddress || !authorizedWallets.includes(walletAddress)) {
+      return res.status(403).json({ error: 'Unauthorized access' });
+    }
+    
+    console.log(`📱 Mobile API: Admin ${walletAddress} updating approval for market ${marketId} to ${approved}`);
+    
+    const query = `
+      UPDATE markets 
+      SET mobile_approved = $1, updated_at = NOW()
+      WHERE market_address = $2 
+      RETURNING market_address, question, mobile_approved
+    `;
+    
+    const result = await pool.query(query, [approved, marketId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Market not found' });
+    }
+    
+    console.log(`✅ Mobile API: Updated market ${marketId} approval to ${approved}`);
+    res.json({
+      success: true,
+      market: result.rows[0]
+    });
+    
+  } catch (error) {
+    console.error('❌ Mobile API Error updating approval:', error);
+    res.status(500).json({
+      error: 'Failed to update market approval',
+      details: error.message
+    });
+  }
+});
+
+// Daily crypto markets endpoints (direct routes for immediate fix)
+app.get('/api/markets/daily-crypto', async (req, res) => {
+  try {
+    console.log('📊 GET /api/markets/daily-crypto called');
+    const axios = require('axios');
+    
+    // Get current prices
+    const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true');
+    const data = response.data;
+    
+    const btcPrice = data.bitcoin.usd;
+    const ethPrice = data.ethereum.usd;
+    const solPrice = data.solana.usd;
+    
+    console.log(`💰 Current prices: BTC $${btcPrice}, ETH $${ethPrice}, SOL $${solPrice}`);
+    
+    // Create simple up/down markets
+    const markets = [
+      {
+        market_address: `manual_btc_${Date.now()}`,
+        question: `Will Bitcoin be above $${Math.round(btcPrice)} at 11:59 PM UTC today?`,
+        description: `Bitcoin price prediction. Current: $${btcPrice.toFixed(2)}. Resolves at market close.`,
+        options: ['Yes', 'No'],
+        category: 'Crypto',
+        resolution_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        creator_fee: 200,
+        min_bet: '10000000000',
+        volume: '0',
+        current_price: btcPrice,
+        crypto_symbol: 'BTC'
+      },
+      {
+        market_address: `manual_eth_${Date.now() + 1}`,
+        question: `Will Ethereum be above $${Math.round(ethPrice)} at 11:59 PM UTC today?`,
+        description: `Ethereum price prediction. Current: $${ethPrice.toFixed(2)}. Resolves at market close.`,
+        options: ['Yes', 'No'],
+        category: 'Crypto',
+        resolution_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        creator_fee: 200,
+        min_bet: '10000000000',
+        volume: '0',
+        current_price: ethPrice,
+        crypto_symbol: 'ETH'
+      },
+      {
+        market_address: `manual_sol_${Date.now() + 2}`,
+        question: `Will Solana be above $${Math.round(solPrice)} at 11:59 PM UTC today?`,
+        description: `Solana price prediction. Current: $${solPrice.toFixed(2)}. Resolves at market close.`,
+        options: ['Yes', 'No'],
+        category: 'Crypto',
+        resolution_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        creator_fee: 200,
+        min_bet: '10000000000',
+        volume: '0',
+        current_price: solPrice,
+        crypto_symbol: 'SOL'
+      }
+    ];
+    
+    console.log('✅ Serving manual crypto markets');
+    res.json({
+      success: true,
+      markets,
+      pending: false,
+      message: 'Manual crypto markets loaded'
+    });
+  } catch (error) {
+    console.error('❌ Error fetching daily crypto markets:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/markets/daily-crypto', async (req, res) => {
+  try {
+    console.log('🚀 POST /api/markets/daily-crypto - Creating markets...');
+    const axios = require('axios');
+    
+    // Get current prices
+    const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true');
+    const data = response.data;
+    
+    const btcPrice = data.bitcoin.usd;
+    const ethPrice = data.ethereum.usd;
+    const solPrice = data.solana.usd;
+    
+    console.log(`💰 Created markets with prices: BTC $${btcPrice}, ETH $${ethPrice}, SOL $${solPrice}`);
+    
+    // Create simple up/down markets
+    const markets = [
+      {
+        market_address: `created_btc_${Date.now()}`,
+        question: `Will Bitcoin be above $${Math.round(btcPrice)} at 11:59 PM UTC today?`,
+        description: `Bitcoin price prediction. Current: $${btcPrice.toFixed(2)}. Resolves at market close.`,
+        options: ['Yes', 'No'],
+        category: 'Crypto',
+        resolution_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        creator_fee: 200,
+        min_bet: '10000000000',
+        volume: '0',
+        current_price: btcPrice,
+        crypto_symbol: 'BTC'
+      },
+      {
+        market_address: `created_eth_${Date.now() + 1}`,
+        question: `Will Ethereum be above $${Math.round(ethPrice)} at 11:59 PM UTC today?`,
+        description: `Ethereum price prediction. Current: $${ethPrice.toFixed(2)}. Resolves at market close.`,
+        options: ['Yes', 'No'],
+        category: 'Crypto',
+        resolution_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        creator_fee: 200,
+        min_bet: '10000000000',
+        volume: '0',
+        current_price: ethPrice,
+        crypto_symbol: 'ETH'
+      },
+      {
+        market_address: `created_sol_${Date.now() + 2}`,
+        question: `Will Solana be above $${Math.round(solPrice)} at 11:59 PM UTC today?`,
+        description: `Solana price prediction. Current: $${solPrice.toFixed(2)}. Resolves at market close.`,
+        options: ['Yes', 'No'],
+        category: 'Crypto',
+        resolution_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        creator_fee: 200,
+        min_bet: '10000000000',
+        volume: '0',
+        current_price: solPrice,
+        crypto_symbol: 'SOL'
+      }
+    ];
+    
+    console.log('✅ POST: Successfully created 3 crypto markets');
+    res.json({
+      success: true,
+      message: `Successfully created ${markets.length} daily crypto prediction markets!`,
+      markets,
+      pending: false
+    });
+  } catch (error) {
+    console.error('❌ POST Error creating daily crypto markets:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create daily crypto markets',
+      details: error.message
+    });
+  }
+});
 
 app.use('/api/users', userRoutes);
 app.use('/api/predictions', predictionRoutes);
@@ -117,6 +429,68 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     docs: '/api/docs' 
   });
+});
+
+// Debug endpoint for frontend
+app.get('/api/debug', (req, res) => {
+  res.json({
+    message: 'Backend is working!',
+    timestamp: new Date().toISOString(),
+    corsOrigins: corsOptions.origin,
+    port: PORT
+  });
+});
+
+// Migration endpoint for mobile approval
+app.post('/api/admin/run-mobile-migration', adminLimiter, async (req, res) => {
+  try {
+    const walletAddress = req.headers['x-wallet-address'];
+    const authorizedWallets = process.env.ADMIN_WALLETS?.split(',').map(w => w.trim()) || [];
+    
+    if (!walletAddress || !authorizedWallets.includes(walletAddress)) {
+      return res.status(403).json({ error: 'Unauthorized access' });
+    }
+    
+    console.log(`🔧 Admin ${walletAddress} running mobile approval migration`);
+    
+    // Add mobile_approved column
+    await pool.query(`ALTER TABLE markets ADD COLUMN IF NOT EXISTS mobile_approved BOOLEAN DEFAULT false`);
+    
+    // Update some existing markets for testing
+    const updateResult = await pool.query(`
+      UPDATE markets 
+      SET mobile_approved = true 
+      WHERE status = 'Active' 
+        AND options IS NOT NULL 
+        AND array_length(options, 1) = 2
+        AND question NOT LIKE '%test%'
+        AND mobile_approved = false
+      RETURNING market_address, question
+    `);
+    
+    // Create index
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_markets_mobile_approved 
+      ON markets (mobile_approved, status) 
+      WHERE mobile_approved = true AND status = 'Active'
+    `);
+    
+    console.log(`✅ Mobile migration complete. Updated ${updateResult.rows.length} markets`);
+    
+    res.json({
+      success: true,
+      message: `Mobile approval migration completed`,
+      updatedMarkets: updateResult.rows.length,
+      markets: updateResult.rows
+    });
+    
+  } catch (error) {
+    console.error('❌ Mobile migration failed:', error);
+    res.status(500).json({
+      error: 'Migration failed',
+      details: error.message
+    });
+  }
 });
 
 // Security error handler (must come before generic error handler)

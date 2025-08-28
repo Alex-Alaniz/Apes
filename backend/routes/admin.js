@@ -30,6 +30,45 @@ const getAuthorizedWallets = () => {
 };
 
 // Secure admin authorization check endpoint
+// Get markets with mobile approval status
+router.get('/markets/mobile-status', async (req, res) => {
+  try {
+    const walletAddress = req.headers['x-wallet-address'];
+    const authorizedWallets = getAuthorizedWallets();
+    
+    if (!walletAddress || !authorizedWallets.includes(walletAddress)) {
+      return res.status(403).json({ error: 'Unauthorized access' });
+    }
+
+    const query = `
+      SELECT 
+        market_address,
+        question,
+        options,
+        category,
+        status,
+        created_at,
+        total_volume,
+        participant_count,
+        COALESCE(mobile_approved, false) as mobile_approved
+      FROM markets 
+      WHERE status = 'Active'
+        AND options IS NOT NULL
+        AND array_length(options, 1) = 2
+      ORDER BY created_at DESC
+    `;
+    
+    const result = await db.query(query);
+    
+    console.log(`📱 Admin: Fetched ${result.rows.length} markets with mobile status`);
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Error fetching mobile market status:', error);
+    res.status(500).json({ error: 'Failed to fetch market data' });
+  }
+});
+
 router.get('/check-authorization', async (req, res) => {
   try {
     const walletAddress = req.headers['x-wallet-address'];
