@@ -33,7 +33,7 @@ const AdminMobileMarketsPage = () => {
   const loadMarkets = async () => {
     setLoading(true);
     try {
-      const apiUrl = 'http://localhost:5001'; // Force localhost for debugging
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       
       // Fetch all active markets with mobile approval status
       const response = await fetch(`${apiUrl}/api/admin/markets/mobile-status`, {
@@ -64,7 +64,7 @@ const AdminMobileMarketsPage = () => {
     setUpdatingMarkets(prev => ({ ...prev, [marketAddress]: true }));
     
     try {
-      const apiUrl = 'http://localhost:5001'; // Force localhost for debugging
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       const newStatus = !currentStatus;
       
       const response = await fetch(`${apiUrl}/api/mobile/markets/${marketAddress}/approval`, {
@@ -110,7 +110,7 @@ const AdminMobileMarketsPage = () => {
     setRunningMigration(true);
     
     try {
-      const apiUrl = 'http://localhost:5001';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app';
       
       const response = await fetch(`${apiUrl}/api/admin/run-mobile-migration`, {
         method: 'POST',

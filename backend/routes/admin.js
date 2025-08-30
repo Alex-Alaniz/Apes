@@ -1381,7 +1381,8 @@ router.get('/pending-crypto-markets', async (req, res) => {
   try {
     const walletAddress = req.headers['x-wallet-address'];
     
-    if (!isAuthorized(walletAddress)) {
+    const authorizedWallets = getAuthorizedWallets();
+    if (!walletAddress || !authorizedWallets.includes(walletAddress)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -1450,7 +1451,8 @@ router.post('/run-crypto-oracle', async (req, res) => {
   try {
     const walletAddress = req.headers['x-wallet-address'];
     
-    if (!isAuthorized(walletAddress)) {
+    const authorizedWallets = getAuthorizedWallets();
+    if (!walletAddress || !authorizedWallets.includes(walletAddress)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -1477,7 +1479,8 @@ router.post('/deploy-crypto-market/:marketId', async (req, res) => {
     const walletAddress = req.headers['x-wallet-address'];
     const { marketId } = req.params;
     
-    if (!isAuthorized(walletAddress)) {
+    const authorizedWallets = getAuthorizedWallets();
+    if (!walletAddress || !authorizedWallets.includes(walletAddress)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -1553,7 +1556,8 @@ router.post('/reject-crypto-market/:marketId', async (req, res) => {
     const { marketId } = req.params;
     const { reason } = req.body;
     
-    if (!isAuthorized(walletAddress)) {
+    const authorizedWallets = getAuthorizedWallets();
+    if (!walletAddress || !authorizedWallets.includes(walletAddress)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
