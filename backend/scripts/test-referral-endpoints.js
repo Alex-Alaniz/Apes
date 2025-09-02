@@ -1,4 +1,4 @@
-const db = require('../database/db');
+const db = require('../config/database');
 
 async function testReferralSystem() {
   console.log('🧪 Testing referral system setup...\n');

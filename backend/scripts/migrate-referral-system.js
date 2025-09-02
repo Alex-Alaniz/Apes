@@ -1,4 +1,4 @@
-const db = require('../database/db');
+const db = require('../config/database');
 const { checkReferralTables } = require('./check-referral-tables');
 
 async function runMigration() {
