@@ -1,6 +1,6 @@
 const db = require('../database/db');
 const { PublicKey, Transaction, SystemProgram } = require('@solana/web3.js');
-const { Token, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
+const { TOKEN_PROGRAM_ID, createTransferInstruction, getAssociatedTokenAddress } = require('@solana/spl-token');
 
 class ReferralFeeService {
   // Platform fee configuration
