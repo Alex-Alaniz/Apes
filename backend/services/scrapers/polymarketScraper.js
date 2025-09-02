@@ -7,7 +7,7 @@ class PolymarketScraper {
     this.apiUrl = 'https://clob.polymarket.com/markets';
     this.dataUrl = 'https://data-api.polymarket.com/markets';
     this.polygonRpc = process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com';
-    this.provider = new ethers.providers.JsonRpcProvider(this.polygonRpc);
+    this.provider = new ethers.JsonRpcProvider(this.polygonRpc);
     this.sourceName = 'polymarket';
   }
 
