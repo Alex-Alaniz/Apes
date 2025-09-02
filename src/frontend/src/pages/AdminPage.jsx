@@ -338,6 +338,18 @@ const AdminPage = () => {
             📱 Mobile Markets
           </button>
           <button
+            onClick={() => navigate('/admin/market-approval')}
+            className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold rounded-lg hover:opacity-90"
+          >
+            🤖 Market Pipeline
+          </button>
+          <button
+            onClick={() => navigate('/super-admin')}
+            className="px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold rounded-lg hover:opacity-90"
+          >
+            👑 Super Admin
+          </button>
+          <button
             onClick={handleForceSync}
             disabled={syncingVolumes}
             className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-lg hover:opacity-90 disabled:opacity-50"

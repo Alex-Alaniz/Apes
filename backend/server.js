@@ -41,7 +41,7 @@ const corsOptions = {
   ].filter(Boolean),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-wallet-address', 'X-Wallet-Address'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-wallet-address', 'X-Wallet-Address', 'x-wallet-signature', 'x-signature-message'],
   exposedHeaders: ['RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset'],
 };
 
@@ -64,6 +64,9 @@ const leaderboardRoutes = require('./routes/leaderboard');
 const adminRoutes = require('./routes/admin');
 const marketCreatorsRoutes = require('./routes/marketCreators');
 const parlayTournamentRoutes = require('./routes/parlayTournaments');
+const mobileMarketsRoutes = require('./routes/mobileMarkets');
+const superAdminRoutes = require('./routes/superAdmin');
+const referralRoutes = require('./routes/referrals');
 
 // Handle OPTIONS pre-flight for PATCH requests
 app.options('/api/mobile/markets/:marketId/approval', cors(corsOptions));
@@ -74,7 +77,7 @@ app.get('/api/mobile/markets', async (req, res) => {
     console.log('📱 Mobile API: GET /api/mobile/markets called');
     
     // Query for markets that are specifically approved for mobile
-    // This allows admin control via a database column
+    // This allows admin control via a database column  
     const query = `
       SELECT 
         market_address,
@@ -85,7 +88,9 @@ app.get('/api/mobile/markets', async (req, res) => {
         category,
         total_volume,
         created_at,
-        COALESCE(mobile_approved, false) as mobile_approved
+        mobile_approved,
+        assets,
+        options_metadata
       FROM markets 
       WHERE status = 'Active' 
         AND mobile_approved = true
@@ -98,50 +103,8 @@ app.get('/api/mobile/markets', async (req, res) => {
     const result = await pool.query(query);
     
     if (result.rows.length === 0) {
-      console.log('📱 Mobile API: No mobile-approved markets found, falling back to all active markets');
-      
-      // Fallback: return all active binary markets if no mobile-approved ones exist
-      const fallbackQuery = `
-        SELECT 
-          market_address,
-          question,
-          options,
-          resolution_date,
-          status,
-          category,
-          total_volume,
-          created_at
-        FROM markets 
-        WHERE status = 'Active' 
-          AND options IS NOT NULL 
-          AND array_length(options, 1) = 2
-        ORDER BY created_at DESC 
-        LIMIT 10
-      `;
-      
-      const fallbackResult = await pool.query(fallbackQuery);
-      
-      const processedMarkets = fallbackResult.rows.map(market => ({
-        publicKey: market.market_address,
-        marketAccount: market.market_address,
-        question: market.question,
-        options: market.options,
-        resolutionDate: market.resolution_date,
-        creatorFeeRate: 200, // Default 2%
-        minBetAmount: 1000000, // Default 1 APES
-        tokenMint: '9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts',
-        status: { active: {} },
-        winningOption: null,
-        optionPools: [0, 0],
-        totalPool: parseFloat(market.total_volume || 0),
-        marketId: market.market_address,
-        category: market.category || 'crypto',
-        participantCount: 0,
-        dataSource: 'mobile_fallback'
-      }));
-      
-      console.log(`📱 Mobile API: Returning ${processedMarkets.length} fallback markets`);
-      return res.json(processedMarkets);
+      console.log('📱 Mobile API: No mobile-approved markets found - returning empty array (admin control)');
+      return res.json([]);
     }
     
     // Process mobile-approved markets
@@ -161,7 +124,10 @@ app.get('/api/mobile/markets', async (req, res) => {
       marketId: market.market_address,
       category: market.category || 'crypto',
       participantCount: 0,
-      dataSource: 'mobile_approved'
+      dataSource: 'mobile_approved',
+      // Include image assets from database
+      assets: market.assets || null,
+      optionsMetadata: market.options_metadata || null
     }));
     
     console.log(`📱 Mobile API: Returning ${mobileMarkets.length} mobile-approved markets`);
@@ -379,6 +345,10 @@ app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/market-creators', marketCreatorsRoutes);
 app.use('/api/parlay-tournaments', parlayTournamentRoutes);
+app.use('/api/mobile', mobileMarketsRoutes);
+app.use('/api/super-admin', superAdminRoutes);
+// Apply additional rate limiting to referral routes
+app.use('/api/referrals', authLimiter, referralRoutes);
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
@@ -655,6 +625,21 @@ async function startServer() {
     } catch (cronError) {
       console.log('⚠️ Daily cron service not available:', cronError.message);
       console.log('💡 Manual market creation still available via /daily-crypto page');
+    }
+
+    // Start scraper orchestrator (optional - graceful fallback)
+    try {
+      const scraperOrchestrator = require('./services/scrapers/scraperOrchestrator');
+      if (!global.scraperOrchestratorStarted) {
+        scraperOrchestrator.start();
+        global.scraperOrchestratorStarted = true;
+        console.log('✅ Market scraper orchestrator started');
+      } else {
+        console.log('⚠️ Scraper orchestrator already running');
+      }
+    } catch (scraperError) {
+      console.log('⚠️ Scraper orchestrator not available:', scraperError.message);
+      console.log('💡 Manual scraping available via admin interface');
     }
 
     // Start the server

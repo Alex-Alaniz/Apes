@@ -9,6 +9,7 @@ import TwitterLink from '../components/TwitterLink';
 import { Edit2 } from 'lucide-react';
 import { FaXTwitter } from 'react-icons/fa6';
 import { FaCheckCircle } from 'react-icons/fa';
+import ReferralSection from '../components/ReferralSection';
 
 const ProfilePage = () => {
   const { publicKey, connected } = useWallet();
@@ -769,6 +770,9 @@ const ProfilePage = () => {
                       <TwitterLink onLinked={handleTwitterLinked} />
                     )}
                   </div>
+                  
+                  {/* Referral Section */}
+                  <ReferralSection />
                 </div>
               </div>
             )}
