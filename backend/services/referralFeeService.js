@@ -1,4 +1,4 @@
-const { db } = require('../database/db');
+const db = require('../database/db');
 const { PublicKey, Transaction, SystemProgram } = require('@solana/web3.js');
 const { Token, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
 
