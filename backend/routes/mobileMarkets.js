@@ -1,216 +1,63 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const scraperOrchestrator = require('../services/scrapers/scraperOrchestrator');
+// const scraperOrchestrator = require('../services/scrapers/scraperOrchestrator'); // DISABLED - causing puppeteer-core errors
 const { authenticateAdmin } = require('../middleware/auth');
 
-// Get all scraped markets pending approval
+// Get all scraped markets pending approval (DISABLED - scrapers disabled)
 router.get('/scraped/pending', authenticateAdmin, async (req, res) => {
-  try {
-    const filters = {
-      source: req.query.source,
-      category: req.query.category,
-      sport_type: req.query.sport_type,
-      time_category: req.query.time_category,
-      min_quality_score: req.query.min_quality_score ? parseFloat(req.query.min_quality_score) : null,
-      sort_by: req.query.sort_by || 'quality_score',
-      sort_order: req.query.sort_order || 'DESC',
-      limit: req.query.limit ? parseInt(req.query.limit) : 100
-    };
-
-    const markets = await scraperOrchestrator.getPendingMarkets(filters);
-    
-    // Add statistics
-    const stats = await db.query(`
-      SELECT 
-        source,
-        COUNT(*) as count,
-        AVG(quality_score) as avg_quality
-      FROM scraped_markets
-      WHERE approval_status = 'pending'
-        AND end_time > NOW()
-      GROUP BY source
-    `);
-
-    res.json({
-      markets,
-      stats: stats.rows,
-      total: markets.length
-    });
-  } catch (error) {
-    console.error('Error fetching pending markets:', error);
-    res.status(500).json({ error: 'Failed to fetch pending markets' });
-  }
+  res.status(503).json({ 
+    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
+    message: 'Scrapers are temporarily disabled to prevent backend crashes'
+  });
 });
 
-// Get high quality markets for quick approval
+// Get high quality markets for quick approval (DISABLED - scrapers disabled)
 router.get('/scraped/high-quality', authenticateAdmin, async (req, res) => {
-  try {
-    const minScore = req.query.min_score ? parseFloat(req.query.min_score) : 0.7;
-    const limit = req.query.limit ? parseInt(req.query.limit) : 50;
-    
-    const markets = await scraperOrchestrator.getHighQualityMarkets(minScore, limit);
-    
-    res.json({
-      markets,
-      total: markets.length,
-      min_score: minScore
-    });
-  } catch (error) {
-    console.error('Error fetching high quality markets:', error);
-    res.status(500).json({ error: 'Failed to fetch high quality markets' });
-  }
+  res.status(503).json({ 
+    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
+    message: 'Scrapers are temporarily disabled to prevent backend crashes'
+  });
 });
 
-// Approve markets in bulk
+// Approve markets in bulk (DISABLED - scrapers disabled)
 router.post('/scraped/approve-bulk', authenticateAdmin, async (req, res) => {
-  try {
-    const { market_ids, auto_deploy } = req.body;
-    const walletAddress = req.headers['x-wallet-address'];
-    
-    if (!market_ids || !Array.isArray(market_ids)) {
-      return res.status(400).json({ error: 'market_ids array is required' });
-    }
-
-    // Approve markets
-    const approvedCount = await scraperOrchestrator.approveMarkets(market_ids, walletAddress);
-    
-    // If auto_deploy is true, mark them for deployment
-    if (auto_deploy) {
-      await db.query(`
-        UPDATE scraped_markets 
-        SET deployment_status = 'approved'
-        WHERE id = ANY($1::int[])
-      `, [market_ids]);
-    }
-    
-    res.json({
-      success: true,
-      approved_count: approvedCount,
-      auto_deploy: auto_deploy || false
-    });
-  } catch (error) {
-    console.error('Error approving markets:', error);
-    res.status(500).json({ error: 'Failed to approve markets' });
-  }
+  res.status(503).json({ 
+    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
+    message: 'Scrapers are temporarily disabled to prevent backend crashes'
+  });
 });
 
-// Reject markets in bulk
+// Reject markets in bulk (DISABLED - scrapers disabled)
 router.post('/scraped/reject-bulk', authenticateAdmin, async (req, res) => {
-  try {
-    const { market_ids, reason } = req.body;
-    const walletAddress = req.headers['x-wallet-address'];
-    
-    if (!market_ids || !Array.isArray(market_ids)) {
-      return res.status(400).json({ error: 'market_ids array is required' });
-    }
-
-    const rejectedCount = await scraperOrchestrator.rejectMarkets(
-      market_ids, 
-      walletAddress, 
-      reason || 'Not suitable for platform'
-    );
-    
-    res.json({
-      success: true,
-      rejected_count: rejectedCount
-    });
-  } catch (error) {
-    console.error('Error rejecting markets:', error);
-    res.status(500).json({ error: 'Failed to reject markets' });
-  }
+  res.status(503).json({ 
+    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
+    message: 'Scrapers are temporarily disabled to prevent backend crashes'
+  });
 });
 
-// Auto-approve high quality markets
+// Auto-approve high quality markets (DISABLED - scrapers disabled)
 router.post('/scraped/auto-approve', authenticateAdmin, async (req, res) => {
-  try {
-    const { min_score = 0.8, max_markets = 20, sources = [] } = req.body;
-    const walletAddress = req.headers['x-wallet-address'];
-    
-    // Get high quality markets
-    let query = `
-      SELECT id FROM scraped_markets 
-      WHERE approval_status = 'pending'
-        AND quality_score >= $1
-        AND end_time > NOW()
-    `;
-    
-    const params = [min_score];
-    
-    if (sources.length > 0) {
-      params.push(sources);
-      query += ` AND source = ANY($${params.length})`;
-    }
-    
-    query += ` ORDER BY quality_score DESC LIMIT $${params.length + 1}`;
-    params.push(max_markets);
-    
-    const result = await db.query(query, params);
-    const marketIds = result.rows.map(r => r.id);
-    
-    if (marketIds.length === 0) {
-      return res.json({
-        success: true,
-        approved_count: 0,
-        message: 'No markets met the auto-approval criteria'
-      });
-    }
-    
-    // Approve the markets
-    const approvedCount = await scraperOrchestrator.approveMarkets(marketIds, walletAddress);
-    
-    res.json({
-      success: true,
-      approved_count: approvedCount,
-      min_score,
-      sources
-    });
-  } catch (error) {
-    console.error('Error auto-approving markets:', error);
-    res.status(500).json({ error: 'Failed to auto-approve markets' });
-  }
+  res.status(503).json({ 
+    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
+    message: 'Scrapers are temporarily disabled to prevent backend crashes'
+  });
 });
 
-// Get scraper statistics
+// Get scraper statistics (DISABLED - scrapers disabled)
 router.get('/scrapers/stats', authenticateAdmin, async (req, res) => {
-  try {
-    const hours = req.query.hours ? parseInt(req.query.hours) : 24;
-    const stats = await scraperOrchestrator.getStats(hours);
-    
-    res.json({
-      stats,
-      hours,
-      timestamp: new Date()
-    });
-  } catch (error) {
-    console.error('Error fetching scraper stats:', error);
-    res.status(500).json({ error: 'Failed to fetch scraper stats' });
-  }
+  res.status(503).json({ 
+    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
+    message: 'Scrapers are temporarily disabled to prevent backend crashes'
+  });
 });
 
-// Manually trigger a scraper
+// Manually trigger a scraper (DISABLED - scrapers disabled)
 router.post('/scrapers/run/:source', authenticateAdmin, async (req, res) => {
-  try {
-    const { source } = req.params;
-    
-    // Run scraper asynchronously
-    scraperOrchestrator.runScraper(source)
-      .then(result => {
-        console.log(`Manual scrape completed for ${source}:`, result);
-      })
-      .catch(error => {
-        console.error(`Manual scrape failed for ${source}:`, error);
-      });
-    
-    res.json({
-      success: true,
-      message: `${source} scraper started`,
-      source
-    });
-  } catch (error) {
-    console.error('Error running scraper:', error);
-    res.status(500).json({ error: 'Failed to run scraper' });
-  }
+  res.status(503).json({ 
+    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
+    message: 'Scrapers are temporarily disabled to prevent backend crashes'
+  });
 });
 
 // Get market sources configuration

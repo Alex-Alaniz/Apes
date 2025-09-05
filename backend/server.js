@@ -627,20 +627,9 @@ async function startServer() {
       console.log('💡 Manual market creation still available via /daily-crypto page');
     }
 
-    // Start scraper orchestrator (optional - graceful fallback)
-    try {
-      const scraperOrchestrator = require('./services/scrapers/scraperOrchestrator');
-      if (!global.scraperOrchestratorStarted) {
-        scraperOrchestrator.start();
-        global.scraperOrchestratorStarted = true;
-        console.log('✅ Market scraper orchestrator started');
-      } else {
-        console.log('⚠️ Scraper orchestrator already running');
-      }
-    } catch (scraperError) {
-      console.log('⚠️ Scraper orchestrator not available:', scraperError.message);
-      console.log('💡 Manual scraping available via admin interface');
-    }
+    // Start scraper orchestrator (DISABLED - causing puppeteer-core errors)
+    console.log('⚠️ Scraper orchestrator disabled to prevent puppeteer-core errors');
+    console.log('💡 Scrapers can be re-enabled once puppeteer-core dependency is fixed');
 
     // Start the server
     const server = app.listen(PORT, '0.0.0.0', () => {
