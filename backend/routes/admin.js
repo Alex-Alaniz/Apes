@@ -930,6 +930,7 @@ router.get('/deployed-markets', authenticateAdmin, async (req, res) => {
   try {
     console.log('📋 Admin fetching deployed markets');
     
+    // First, get all deployed markets from our database
     const result = await db.query(`
       SELECT 
         market_address,
@@ -938,16 +939,114 @@ router.get('/deployed-markets', authenticateAdmin, async (req, res) => {
         status,
         category,
         created_at,
-        creator_wallet,
-        total_volume
+        creator,
+        total_volume,
+        poly_id,
+        apechain_market_id,
+        assets,
+        options_metadata
       FROM markets 
       WHERE market_address IS NOT NULL
+        AND poly_id IS NOT NULL
       ORDER BY created_at DESC
     `);
 
+    // For each market, fetch the original options from Polymarket DB if it has a poly_id
+    const { Pool } = require('pg');
+    const POLYMARKET_DB_URL = process.env.POLYMARKET_DB_URL || 'postgresql://neondb_owner:npg_qht1Er7SFAIn@ep-proud-snow-a4l83fqg.us-east-1.aws.neon.tech/neondb?sslmode=require';
+    
+    const pool = new Pool({
+      connectionString: POLYMARKET_DB_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+
+    // Process each market to add additional metadata
+    const enrichedMarkets = await Promise.all(result.rows.map(async (market) => {
+      try {
+        let originalOptions = [];
+        let originalQuestion = market.question;
+        
+        if (market.poly_id) {
+          // Fetch original options from Polymarket DB
+          const polyQuery = `
+            SELECT 
+              m.question as original_question,
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'label', mo.label,
+                    'icon', mo.icon
+                  ) ORDER BY mo.id
+                ) FILTER (WHERE mo.id IS NOT NULL),
+                '[]'::json
+              ) as original_options
+            FROM markets m
+            LEFT JOIN market_options mo ON m.poly_id = mo.market_poly_id
+            WHERE m.poly_id = $1
+            GROUP BY m.poly_id
+          `;
+          
+          const polyResult = await pool.query(polyQuery, [market.poly_id]);
+          
+          if (polyResult.rows.length > 0) {
+            originalOptions = polyResult.rows[0].original_options || [];
+            originalQuestion = polyResult.rows[0].original_question || market.question;
+          }
+        }
+        
+        // Parse assets if it's a string
+        let assets = {};
+        try {
+          assets = typeof market.assets === 'string' ? JSON.parse(market.assets) : (market.assets || {});
+        } catch (e) {
+          console.warn('Failed to parse assets for market:', market.market_address);
+        }
+        
+        // Determine deployed options (current options in the market)
+        const deployedOptions = market.options || [];
+        
+        return {
+          market_address: market.market_address,
+          question: market.question,
+          original_question: originalQuestion,
+          options: market.options,
+          deployed_options: deployedOptions,
+          original_options: originalOptions,
+          deployed_option_count: deployedOptions.length,
+          total_option_count: originalOptions.length || deployedOptions.length,
+          has_more_options: originalOptions.length > deployedOptions.length,
+          status: market.status,
+          category: market.category,
+          created_at: market.created_at,
+          creator: market.creator,
+          total_volume: market.total_volume,
+          poly_id: market.poly_id,
+          apechain_market_id: market.apechain_market_id,
+          assets: assets,
+          assets_available: !!(assets.banner || assets.icon),
+          options_metadata: market.options_metadata
+        };
+      } catch (error) {
+        console.error(`Error enriching market ${market.market_address}:`, error);
+        // Return market with minimal enrichment on error
+        return {
+          ...market,
+          deployed_options: market.options || [],
+          original_options: [],
+          deployed_option_count: (market.options || []).length,
+          total_option_count: (market.options || []).length,
+          has_more_options: false,
+          assets_available: false,
+          original_question: market.question
+        };
+      }
+    }));
+    
+    await pool.end();
+
     res.json({
-      markets: result.rows,
-      total: result.rows.length
+      markets: enrichedMarkets,
+      total: enrichedMarkets.length
     });
   } catch (error) {
     console.error('❌ Error fetching deployed markets:', error);
