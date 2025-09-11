@@ -627,9 +627,8 @@ async function startServer() {
       console.log('💡 Manual market creation still available via /daily-crypto page');
     }
 
-    // Start scraper orchestrator (DISABLED - causing puppeteer-core errors)
-    console.log('⚠️ Scraper orchestrator disabled to prevent puppeteer-core errors');
-    console.log('💡 Scrapers can be re-enabled once puppeteer-core dependency is fixed');
+    // Scrapers removed - handled in separate project
+    console.log('ℹ️ Scrapers handled in separate project to avoid deployment conflicts');
 
     // Start the server
     const server = app.listen(PORT, '0.0.0.0', () => {

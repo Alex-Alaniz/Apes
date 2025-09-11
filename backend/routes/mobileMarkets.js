@@ -1,64 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-// const scraperOrchestrator = require('../services/scrapers/scraperOrchestrator'); // DISABLED - causing puppeteer-core errors
 const { authenticateAdmin } = require('../middleware/auth');
 
-// Get all scraped markets pending approval (DISABLED - scrapers disabled)
-router.get('/scraped/pending', authenticateAdmin, async (req, res) => {
-  res.status(503).json({ 
-    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
-    message: 'Scrapers are temporarily disabled to prevent backend crashes'
-  });
-});
-
-// Get high quality markets for quick approval (DISABLED - scrapers disabled)
-router.get('/scraped/high-quality', authenticateAdmin, async (req, res) => {
-  res.status(503).json({ 
-    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
-    message: 'Scrapers are temporarily disabled to prevent backend crashes'
-  });
-});
-
-// Approve markets in bulk (DISABLED - scrapers disabled)
-router.post('/scraped/approve-bulk', authenticateAdmin, async (req, res) => {
-  res.status(503).json({ 
-    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
-    message: 'Scrapers are temporarily disabled to prevent backend crashes'
-  });
-});
-
-// Reject markets in bulk (DISABLED - scrapers disabled)
-router.post('/scraped/reject-bulk', authenticateAdmin, async (req, res) => {
-  res.status(503).json({ 
-    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
-    message: 'Scrapers are temporarily disabled to prevent backend crashes'
-  });
-});
-
-// Auto-approve high quality markets (DISABLED - scrapers disabled)
-router.post('/scraped/auto-approve', authenticateAdmin, async (req, res) => {
-  res.status(503).json({ 
-    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
-    message: 'Scrapers are temporarily disabled to prevent backend crashes'
-  });
-});
-
-// Get scraper statistics (DISABLED - scrapers disabled)
-router.get('/scrapers/stats', authenticateAdmin, async (req, res) => {
-  res.status(503).json({ 
-    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
-    message: 'Scrapers are temporarily disabled to prevent backend crashes'
-  });
-});
-
-// Manually trigger a scraper (DISABLED - scrapers disabled)
-router.post('/scrapers/run/:source', authenticateAdmin, async (req, res) => {
-  res.status(503).json({ 
-    error: 'Scraper functionality disabled due to puppeteer-core dependency issues',
-    message: 'Scrapers are temporarily disabled to prevent backend crashes'
-  });
-});
+// Scraper endpoints removed - handled in separate project
 
 // Get market sources configuration
 router.get('/sources', authenticateAdmin, async (req, res) => {
