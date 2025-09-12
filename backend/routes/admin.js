@@ -215,12 +215,17 @@ router.get('/markets', authenticateAdmin, async (req, res) => {
 // Get all markets from Polymarket DB (debug endpoint)
 router.get('/all-polymarket-markets', authenticateAdmin, async (req, res) => {
   try {
+    console.log('📋 Admin fetching all Polymarket markets');
+    
     const { Pool } = require('pg');
     const POLYMARKET_DB_URL = process.env.POLYMARKET_DB_URL || 'postgresql://neondb_owner:npg_qht1Er7SFAIn@ep-proud-snow-a4l83fqg.us-east-1.aws.neon.tech/neondb?sslmode=require';
     
+    console.log('🔗 Connecting to Polymarket DB...');
     const pool = new Pool({
       connectionString: POLYMARKET_DB_URL,
-      ssl: { rejectUnauthorized: false }
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 10000,
+      query_timeout: 30000
     });
     
     // Fetch ALL markets from the database for debugging
@@ -246,12 +251,7 @@ router.get('/all-polymarket-markets', authenticateAdmin, async (req, res) => {
             ) ORDER BY mo.id
           ) FILTER (WHERE mo.id IS NOT NULL),
           '[]'::json
-        ) as options,
-        -- Check if already deployed to Solana
-        EXISTS(
-          SELECT 1 FROM markets_cache mc 
-          WHERE mc.poly_id = m.poly_id
-        ) as is_deployed_to_solana
+        ) as options
       FROM markets m
       LEFT JOIN market_options mo ON m.poly_id = mo.market_poly_id
       WHERE 
@@ -262,11 +262,23 @@ router.get('/all-polymarket-markets', authenticateAdmin, async (req, res) => {
       LIMIT 50
     `;
     
-    console.log('Fetching all markets from Polymarket DB...');
-    const result = await pool.query(query);
-    await pool.end();
+    let result;
+    try {
+      console.log('Fetching all markets from Polymarket DB...');
+      result = await pool.query(query);
+      console.log(`Found ${result.rows.length} markets in Polymarket DB`);
+    } catch (queryError) {
+      console.error('❌ Failed to query Polymarket DB:', queryError.message);
+      await pool.end();
+      throw new Error(`Polymarket DB query failed: ${queryError.message}`);
+    } finally {
+      await pool.end();
+    }
     
-    console.log(`Found ${result.rows.length} markets in Polymarket DB`);
+    // Get all deployed poly_ids from our local database
+    const deployedQuery = await db.query('SELECT DISTINCT poly_id FROM markets WHERE poly_id IS NOT NULL');
+    const deployedPolyIds = new Set(deployedQuery.rows.map(r => r.poly_id));
+    console.log(`Found ${deployedPolyIds.size} deployed markets in local DB`);
     
     // Transform data for frontend
     const markets = result.rows.map(row => ({
@@ -283,7 +295,7 @@ router.get('/all-polymarket-markets', authenticateAdmin, async (req, res) => {
       market_type: row.market_type || 'binary',
       status: row.status,
       deployed_at: row.deployed_at,
-      is_deployed_to_solana: row.is_deployed_to_solana,
+      is_deployed_to_solana: deployedPolyIds.has(row.poly_id),
       // Additional metadata
       option_count: row.options.length,
       time_remaining: new Date(row.end_time) - new Date(),
@@ -312,10 +324,74 @@ router.get('/all-polymarket-markets', authenticateAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching all Polymarket markets:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch markets',
-      details: error.message 
-    });
+    console.error('Error stack:', error.stack);
+    
+    // Try to return data from our local database as fallback
+    try {
+      console.log('📋 Falling back to local deployed markets...');
+      
+      const localResult = await db.query(`
+        SELECT 
+          market_address,
+          question,
+          options,
+          status,
+          category,
+          created_at,
+          poly_id,
+          apechain_market_id,
+          assets,
+          total_volume
+        FROM markets 
+        WHERE poly_id IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT 50
+      `);
+      
+      const localMarkets = localResult.rows.map(row => {
+        let assets = {};
+        try {
+          assets = typeof row.assets === 'string' ? JSON.parse(row.assets) : (row.assets || {});
+        } catch (e) {
+          console.warn('Failed to parse assets');
+        }
+        
+        return {
+          poly_id: row.poly_id,
+          apechain_market_id: row.apechain_market_id,
+          question: row.question,
+          category: row.category || 'general',
+          options: row.options || [],
+          assets: assets,
+          market_address: row.market_address,
+          status: row.status,
+          is_deployed_to_solana: true,
+          option_count: (row.options || []).length,
+          total_volume: row.total_volume || 0
+        };
+      });
+      
+      res.json({
+        total: localMarkets.length,
+        deployable: 0,
+        already_deployed: localMarkets.length,
+        expired: 0,
+        markets: [],
+        all_markets: localMarkets,
+        debug_info: {
+          error: 'Polymarket DB unavailable, showing local markets only',
+          local_markets: localMarkets.length
+        }
+      });
+      
+    } catch (localError) {
+      console.error('Failed to fetch local markets as fallback:', localError);
+      res.status(500).json({ 
+        error: 'Failed to fetch markets from both Polymarket and local DB',
+        details: error.message,
+        localError: localError.message
+      });
+    }
   }
 });
 
