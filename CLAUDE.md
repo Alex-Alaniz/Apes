@@ -74,6 +74,12 @@ node scripts/test-market.js
 
 # Check platform status
 node scripts/check-platform-status.js
+
+# Test Polymarket CLOB connection
+node scripts/test-polymarket-clob.js
+
+# Test Polymarket integration
+node scripts/test-polymarket-integration.js
 ```
 
 ## Environment Configuration
@@ -83,8 +89,15 @@ node scripts/check-platform-status.js
 DATABASE_URL=your-database-url
 SUPABASE_URL=your-supabase-url  
 SUPABASE_ANON_KEY=your-supabase-anon-key
-SOLANA_RPC_URL=https://api.devnet.solana.com
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 PORT=5001
+
+# Polymarket Integration (Optional)
+USE_POLYMARKET_CLOB=false
+POLYMARKET_API_KEY=your-api-key
+POLYMARKET_API_SECRET=your-api-secret
+POLYGON_RPC_URL=https://polygon-rpc.com
+ENCRYPTION_PASSWORD=min-32-char-password
 ```
 
 ### Frontend Environment (`src/frontend/.env`)
@@ -107,8 +120,8 @@ VITE_API_URL=http://localhost:5001  # Must be 5001, NOT 3000!
 
 2. **Backend API** (`backend/`)
    - Express.js server with PostgreSQL/Supabase
-   - Routes: `/api/markets`, `/api/users`, `/api/predictions`, `/api/leaderboard`
-   - Services for blockchain sync, Twitter integration, Believe API burns
+   - Routes: `/api/markets`, `/api/users`, `/api/predictions`, `/api/leaderboard`, `/api/polymarket`
+   - Services for blockchain sync, Twitter integration, Believe API burns, Polymarket proxy
    - Security middleware with rate limiting and CORS
 
 3. **Frontend** (`src/frontend/`)
@@ -123,6 +136,8 @@ VITE_API_URL=http://localhost:5001  # Must be 5001, NOT 3000!
 - **Believe Integration**: `backend/services/believeAppService.js` - Handles token burns
 - **Twitter Service**: `backend/services/twitterServiceV2.js` - Social features
 - **Market Service**: `src/frontend/src/services/marketService.js` - Frontend market operations
+- **Polymarket Proxy**: `backend/services/polymarketProxyService.js` - Polymarket order routing
+- **Polymarket CLOB**: `backend/services/polymarketClobService.js` - Real-time order book connection
 
 ### Database Schema
 
@@ -132,6 +147,9 @@ Main tables:
 - `users` - User profiles and stats
 - `primape_tweets` - Twitter integration
 - `tournaments` - Tournament markets
+- `polymarket_orders` - Polymarket proxy orders
+- `proxy_wallets` - Encrypted proxy wallets
+- `platform_fees` - Fee collection tracking
 
 ## Deployment
 

@@ -31,6 +31,7 @@ import DebugApiPage from './pages/DebugApiPage';
 import CS2ParlayTournamentPage from './pages/CS2ParlayTournamentPage';
 import DailyCryptoPredictionsPage from './pages/DailyCryptoPredictionsPage';
 import ReferralPage from './pages/ReferralPage';
+import PrivyTestPage from './pages/PrivyTestPage';
 import { Toaster } from 'react-hot-toast';
 import AppWithReferralTracking from './components/AppWithReferralTracking';
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -100,6 +101,7 @@ function App() {
                   <Route path="/auth/twitter/callback" element={<TwitterCallback />} />
                   <Route path="/debug-api" element={<DebugApiPage />} />
                   <Route path="/ref/:referralCode" element={<ReferralPage />} />
+                  <Route path="/privy-test" element={<PrivyTestPage />} />
                 </Routes>
                 </main>
                 <Toaster position="bottom-right" />

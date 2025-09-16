@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APES Market Access</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <img src="icons/icon-48.png" alt="APES" class="logo">
+      <h1>APES Market Access</h1>
+    </div>
+
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="status-card">
+      <div class="status-indicator disconnected"></div>
+      <span class="status-text">Not Connected</span>
+    </div>
+
+    <!-- Wallet Section -->
+    <div id="walletSection" class="section hidden">
+      <h2>Wallet</h2>
+      <div class="wallet-info">
+        <div class="wallet-address" id="walletAddress">--</div>
+        <button id="copyAddress" class="icon-btn" title="Copy address">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="balance-grid">
+        <div class="balance-item">
+          <label>APES Balance</label>
+          <div class="balance" id="apesBalance">--</div>
+        </div>
+        <div class="balance-item">
+          <label>Your Tier</label>
+          <div class="tier" id="userTier">--</div>
+        </div>
+      </div>
+
+      <div class="fee-info">
+        <div class="fee-rate">
+          <span>Your Fee Rate:</span>
+          <span id="feeRate" class="highlight">--</span>
+        </div>
+        <div class="fee-savings">
+          <span>Lifetime Savings:</span>
+          <span id="totalSavings" class="highlight">$--</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connect Section -->
+    <div id="connectSection" class="section">
+      <p class="description">
+        Connect your Solana wallet to unlock reduced fees on Polymarket based on your APES holdings.
+      </p>
+      <button id="connectWallet" class="primary-btn">
+        Connect Wallet
+      </button>
+    </div>
+
+    <!-- Stats Section -->
+    <div id="statsSection" class="section hidden">
+      <h2>Your Stats</h2>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <label>Total Volume</label>
+          <div id="totalVolume">$--</div>
+        </div>
+        <div class="stat-item">
+          <label>Open Positions</label>
+          <div id="openPositions">--</div>
+        </div>
+        <div class="stat-item">
+          <label>Win Rate</label>
+          <div id="winRate">--%</div>
+        </div>
+        <div class="stat-item">
+          <label>Total P&L</label>
+          <div id="totalPnl" class="pnl">$--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Section -->
+    <div class="section settings">
+      <label class="toggle">
+        <input type="checkbox" id="autoConnect" checked>
+        <span>Auto-connect on Polymarket</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="showSavings" checked>
+        <span>Show fee savings overlay</span>
+      </label>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <a href="https://apes.primape.app" target="_blank">Dashboard</a>
+      <span>•</span>
+      <a href="https://discord.gg/apes" target="_blank">Support</a>
+      <span>•</span>
+      <a href="#" id="disconnect" class="hidden">Disconnect</a>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

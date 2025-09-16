@@ -5,6 +5,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
+import { PrivyProvider } from '@privy-io/react-auth';
+import { privyConfig } from './config/privy';
 import App from './App';
 import './index.css';
 
@@ -40,13 +42,34 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// Conditionally wrap with Privy
+const AppWithProviders = () => {
+  const appContent = (
+    <Router>
+      <App />
+    </Router>
+  );
+  
+  // Only use Privy if configured
+  if (privyConfig.appId && import.meta.env.VITE_ENABLE_PRIVY === 'true') {
+    return (
+      <PrivyProvider
+        appId={privyConfig.appId}
+        config={privyConfig.config}
+      >
+        {appContent}
+      </PrivyProvider>
+    );
+  }
+  
+  return appContent;
+};
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
       <HelmetProvider>
-        <Router>
-          <App />
-        </Router>
+        <AppWithProviders />
       </HelmetProvider>
     </ErrorBoundary>
   </React.StrictMode>

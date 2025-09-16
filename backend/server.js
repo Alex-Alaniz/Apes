@@ -67,6 +67,9 @@ const parlayTournamentRoutes = require('./routes/parlayTournaments');
 const mobileMarketsRoutes = require('./routes/mobileMarkets');
 const superAdminRoutes = require('./routes/superAdmin');
 const referralRoutes = require('./routes/referrals');
+const polymarketRoutes = require('./routes/polymarket');
+const monitoringRoutes = require('./routes/monitoring');
+const { errorHandler } = require('./utils/errorHandler');
 
 // Handle OPTIONS pre-flight for PATCH requests
 app.options('/api/mobile/markets/:marketId/approval', cors(corsOptions));
@@ -349,42 +352,15 @@ app.use('/api/mobile', mobileMarketsRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 // Apply additional rate limiting to referral routes
 app.use('/api/referrals', authLimiter, referralRoutes);
+// Polymarket proxy routes  
+app.use('/api/polymarket', polymarketRoutes);
+// Order book routes for external market integration
+app.use('/api/orderbook', require('./routes/orderBook'));
+// Privy test routes
+app.use('/api/privy', require('./routes/privyTest'));
 
-// Health check endpoint
-app.get('/health', async (req, res) => {
-  try {
-    // Test database connection
-    const dbStart = Date.now();
-    await pool.query('SELECT 1');
-    const dbTime = Date.now() - dbStart;
-    
-    const healthStatus = {
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development',
-      uptime: process.uptime(),
-      database: {
-        connected: true,
-        responseTime: `${dbTime}ms`
-      },
-      services: {
-        tweetCache: !!global.tweetCacheServiceStarted,
-        syncService: !!global.syncServiceStarted
-      },
-      version: '1.0.0'
-    };
-    
-    res.status(200).json(healthStatus);
-  } catch (error) {
-    console.error('❌ Health check failed:', error);
-    res.status(503).json({
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      error: error.message,
-      environment: process.env.NODE_ENV || 'development'
-    });
-  }
-});
+// Monitoring and health check routes (no auth required)
+app.use('/', monitoringRoutes);
 
 // Basic route
 app.get('/', (req, res) => {
@@ -538,14 +514,8 @@ app.post('/api/admin/run-mobile-migration', adminLimiter, async (req, res) => {
 // Security error handler (must come before generic error handler)
 app.use(securityErrorHandler);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ 
-    error: 'Something went wrong!',
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined
-  });
-});
+// Comprehensive error handling middleware (must be last)
+app.use(errorHandler);
 
 // Initialize services and start server
 async function startServer() {
@@ -625,6 +595,17 @@ async function startServer() {
     } catch (cronError) {
       console.log('⚠️ Daily cron service not available:', cronError.message);
       console.log('💡 Manual market creation still available via /daily-crypto page');
+    }
+
+    // Initialize order book service (optional - graceful fallback)
+    try {
+      console.log('🔄 Initializing order book service...');
+      const orderBookService = require('./services/orderBookService');
+      await orderBookService.initialize();
+      console.log('✅ Order book service initialized');
+    } catch (orderBookError) {
+      console.log('⚠️ Order book service not available:', orderBookError.message);
+      console.log('💡 External market integration will be limited');
     }
 
     // Scrapers removed - handled in separate project
