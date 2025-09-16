@@ -1,68 +1,41 @@
 const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const pool = require('./config/database');
+const path = require('path');
 
-dotenv.config();
-
+// Minimal server for Railway deployment
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Basic middleware only
-app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173', 
-    'https://apes-primape-app.vercel.app',
-    'https://apes.primape.app',
-    'https://apes-lake.vercel.app'
-  ],
-  credentials: true
-}));
+console.log('🚀 Starting APES minimal server...');
+console.log('📊 Environment:', process.env.NODE_ENV);
+console.log('🔌 Port:', PORT);
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Health check - super basic
+// Health check endpoint - MUST be first and simple
 app.get('/health', (req, res) => {
+  console.log('📊 Health check requested');
   res.status(200).json({
     status: 'healthy',
-    timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    timestamp: new Date().toISOString()
   });
 });
 
-// Health check with DB test
-app.get('/health/db', async (req, res) => {
-  try {
-    await pool.query('SELECT 1');
-    res.status(200).json({
-      status: 'healthy',
-      database: 'connected'
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      database: 'failed',
-      error: error.message
-    });
-  }
+// Basic root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'APES API - Minimal Mode',
+    status: 'running'
+  });
 });
 
-// Load routes
-const marketsRoutes = require('./routes/markets');
-const usersRoutes = require('./routes/users');
-const predictionsRoutes = require('./routes/predictions');
-const adminRoutes = require('./routes/admin');
-
-app.use('/api/markets', marketsRoutes);
-app.use('/api/users', usersRoutes);
-app.use('/api/predictions', predictionsRoutes);
-app.use('/api/admin', adminRoutes);
-
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Minimal server running on port ${PORT}`);
-  console.log(`📊 Health: http://localhost:${PORT}/health`);
-  console.log('✅ Railway deployment should pass health checks');
+// Start server immediately
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server listening on port ${PORT}`);
+  console.log(`📊 Health endpoint: http://0.0.0.0:${PORT}/health`);
 });
+
+// Handle errors
+server.on('error', (error) => {
+  console.error('❌ Server error:', error);
+  process.exit(1);
+});
+
+console.log('✅ Minimal server script loaded');
