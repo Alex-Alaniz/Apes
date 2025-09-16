@@ -2,13 +2,15 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "nixpacks",
-    "buildCommand": "cd backend && npm install"
+    "watchPatterns": [
+      "backend/**"
+    ]
   },
   "deploy": {
-    "startCommand": "cd backend && node server-minimal.js",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 300,
     "restartPolicyType": "on_failure",
     "restartPolicyMaxRetries": 3
-  }
+  },
+  "root": "backend"
 } 
