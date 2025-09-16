@@ -529,6 +529,31 @@ app.use(errorHandler);
 // Initialize services and start server
 async function startServer() {
   try {
+    // Start the server FIRST for Railway health checks
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📊 Health check available at http://0.0.0.0:${PORT}/health`);
+      console.log('🔄 Starting background service initialization...');
+      
+      // Initialize services in the background AFTER server is listening
+      initializeServices().catch(error => {
+        console.error('❌ Service initialization failed:', error);
+        // Server continues running even if services fail
+      });
+    });
+
+    // Set server timeout to prevent hanging
+    server.timeout = 30000; // 30 seconds
+
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Separate function to initialize services after server starts
+async function initializeServices() {
+  try {
     // Test database connection
     console.log('🔄 Testing database connection...');
     await testConnection();
@@ -620,29 +645,15 @@ async function startServer() {
     // Scrapers removed - handled in separate project
     console.log('ℹ️ Scrapers handled in separate project to avoid deployment conflicts');
 
-    // Start the server
-    const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      
-      // Fix health check URL for Railway production
-      const healthUrl = process.env.NODE_ENV === 'production' 
-        ? `https://apes-production.up.railway.app/health`
-        : `http://localhost:${PORT}/health`;
-      
-      console.log(`📊 Health check: ${healthUrl}`);
-      console.log(`🐦 Tweet cache: Scheduled every 2 hours`);
-      console.log(`💾 Cache status: https://apes-production.up.railway.app/api/twitter/cache-status`);
-      console.log('📊 Environment:', process.env.NODE_ENV);
-      console.log('💾 Supabase URL set:', !!process.env.POSTGRES_URL);
-      console.log('🌐 CORS Origins:', corsOptions.origin);
-    });
-
-    // Set server timeout to prevent hanging
-    server.timeout = 30000; // 30 seconds
+    // Log final status
+    console.log('✅ All services initialized successfully');
+    console.log('📊 Environment:', process.env.NODE_ENV);
+    console.log('💾 Database:', !!process.env.POSTGRES_URL ? 'Connected' : 'Not configured');
+    console.log('🌐 CORS Origins:', corsOptions.origin);
 
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
+    console.error('❌ Service initialization error:', error);
+    // Don't exit - let server continue running
   }
 }
 

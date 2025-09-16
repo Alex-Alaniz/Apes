@@ -37,7 +37,7 @@ const databaseConfig = connectionString
       }),
       max: 20,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 15000,
+      connectionTimeoutMillis: 30000, // Increased to 30s for Railway
       query_timeout: 60000,
       statement_timeout: 60000
     }
@@ -49,7 +49,7 @@ const databaseConfig = connectionString
       password: process.env.POSTGRES_PASSWORD || process.env.DB_PASSWORD,
       max: 20,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 15000,
+      connectionTimeoutMillis: 30000, // Increased to 30s for Railway
       ssl: process.env.NODE_ENV === 'production' ? {
         rejectUnauthorized: false
       } : false
