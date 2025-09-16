@@ -51,7 +51,10 @@ app.use(express.json({ limit: '10mb' })); // Set JSON payload limit for security
 
 // Early health check endpoint for Railway
 app.get('/health', (req, res) => {
-  res.status(200).send('OK');
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Security logging middleware
