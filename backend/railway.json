@@ -4,10 +4,11 @@
     "builder": "nixpacks"
   },
   "deploy": {
-    "startCommand": "node server-railway.js",
+    "startCommand": "node server.js",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 300,
     "restartPolicyType": "on_failure",
-    "restartPolicyMaxRetries": 3
+    "restartPolicyMaxRetries": 3,
+    "numReplicas": 1
   }
 }

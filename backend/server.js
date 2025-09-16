@@ -1,3 +1,10 @@
+// Railway deployment debugging
+console.log('🚀 APES Backend starting...');
+console.log('📊 Environment:', process.env.NODE_ENV);
+console.log('🔌 PORT from env:', process.env.PORT);
+console.log('📁 Working directory:', process.cwd());
+console.log('📦 Node version:', process.version);
+
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -530,16 +537,27 @@ app.use(errorHandler);
 async function startServer() {
   try {
     // Start the server FIRST for Railway health checks
-    const server = app.listen(PORT, '0.0.0.0', () => {
+    // Try to bind to all interfaces (IPv4 and IPv6)
+    const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📊 Health check available at http://0.0.0.0:${PORT}/health`);
+      console.log(`📊 Health check available at http://localhost:${PORT}/health`);
       console.log('🔄 Starting background service initialization...');
+      console.log('🌐 Server is listening on all available interfaces');
       
       // Initialize services in the background AFTER server is listening
       initializeServices().catch(error => {
         console.error('❌ Service initialization failed:', error);
         // Server continues running even if services fail
       });
+    });
+    
+    // Add error handler for server
+    server.on('error', (error) => {
+      console.error('❌ Server error:', error);
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use`);
+      }
+      process.exit(1);
     });
 
     // Set server timeout to prevent hanging
