@@ -48,6 +48,12 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' })); // Set JSON payload limit for security
 
+
+// Early health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // Security logging middleware
 app.use(requestLogger);
 app.use(validateWalletAddress);
