@@ -538,11 +538,11 @@ async function startServer() {
   try {
     // Start the server FIRST for Railway health checks
     // Try to bind to all interfaces (IPv4 and IPv6)
-    const server = app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📊 Health check available at http://localhost:${PORT}/health`);
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on 0.0.0.0:${PORT}`);
+      console.log(`📊 Health check available at http://0.0.0.0:${PORT}/health`);
       console.log('🔄 Starting background service initialization...');
-      console.log('🌐 Server is listening on all available interfaces');
+      console.log('🌐 Server is listening on all available interfaces (IPv4)');
       
       // Initialize services in the background AFTER server is listening
       initializeServices().catch(error => {

@@ -4,8 +4,21 @@ const path = require('path');
 // Minimal server for Railway deployment
 const app = express();
 const PORT = process.env.PORT || 5001;
+
+// Enhanced Railway environment logging
+console.log('=== RAILWAY ENVIRONMENT DEBUG ===');
 console.log('🔍 PORT from environment:', process.env.PORT);
 console.log('🔍 Final PORT value:', PORT);
+console.log('🚂 RAILWAY_ENVIRONMENT:', process.env.RAILWAY_ENVIRONMENT);
+console.log('🆔 RAILWAY_SERVICE_ID:', process.env.RAILWAY_SERVICE_ID);
+console.log('📦 RAILWAY_DEPLOYMENT_ID:', process.env.RAILWAY_DEPLOYMENT_ID);
+console.log('🏠 HOME directory:', process.env.HOME);
+console.log('📁 Current working directory:', process.cwd());
+console.log('🖥️ Hostname:', require('os').hostname());
+console.log('💻 Platform:', process.platform);
+console.log('🔢 Node version:', process.version);
+console.log('🕐 Server start time:', new Date().toISOString());
+console.log('================================');
 
 console.log('🚀 Starting APES minimal server...');
 console.log('📊 Environment:', process.env.NODE_ENV);

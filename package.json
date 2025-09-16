@@ -1,33 +1,17 @@
 {
-  "name": "apes-platform",
+  "name": "apes-monorepo",
   "version": "1.0.0",
-  "description": "APES Prediction Market Platform - Full Stack Application",
-  "main": "start.js",
+  "description": "APES Prediction Market Platform",
+  "private": true,
   "scripts": {
-    "start": "node start.js",
-    "dev": "cd backend && npm run dev",
-    "backend:install": "cd backend && npm install",
-    "frontend:install": "cd src/frontend && npm install",
-    "install:all": "npm run backend:install && npm run frontend:install"
+    "start": "cd backend && npm start",
+    "start:backend": "cd backend && node server-minimal.js",
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd src/frontend && npm install",
+    "install:all": "npm run install:backend && npm run install:frontend"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Alex-Alaniz/Apes.git"
-  },
-  "keywords": [
-    "solana",
-    "prediction-market",
-    "crypto",
-    "apes"
-  ],
-  "author": "Alex Alaniz",
-  "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
-  },
-  "dependencies": {
-    "@coral-xyz/anchor": "^0.31.1",
-    "@solana/web3.js": "^1.98.2",
-    "node-fetch": "^2.7.0"
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   }
 }
