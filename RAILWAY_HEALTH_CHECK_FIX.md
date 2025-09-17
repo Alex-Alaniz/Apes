@@ -37,11 +37,19 @@ Railway deployments were failing health checks despite the server starting corre
 
 2. **Early Health Endpoint**: Define health endpoint BEFORE any middleware or service initialization
    ```javascript
-   // MUST be first - before any middleware
+   // CRITICAL: Health check MUST be first - before ANY middleware
+   // This includes security headers, rate limiting, CORS, etc.
    app.get('/health', (req, res) => {
      res.status(200).json({ status: 'healthy' });
    });
+   
+   // Only apply middleware AFTER health check
+   app.use(securityHeaders);
+   app.use(cors());
+   // etc...
    ```
+   
+   **IMPORTANT**: Security middleware (rate limiting, headers, etc.) can block Railway's health checks!
 
 3. **Immediate Server Start**: Start HTTP server immediately, initialize services after
    ```javascript
