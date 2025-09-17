@@ -26,32 +26,49 @@ export const privyConfig = {
     supportedChains: [polygonWithCustomRpc],
     
     // Solana configuration (for APES)
-    solanaClusters: [{
+    // IMPORTANT: This enables Solana support
+    solanaCluster: {
       name: 'mainnet-beta',
       rpcUrl: import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com'
-    }],
+    },
     
-    // Embedded wallets - automatically create for new users
+    // Embedded wallets - automatically create for BOTH chains
     embeddedWallets: {
       createOnLogin: 'users-without-wallets',
       noPromptOnSignature: false,
       requireUserPasswordOnCreate: false,
+      // Create wallets for both EVM and Solana
+      chains: ['ethereum', 'solana']
     },
     
-    // External wallet connectors
+    // External wallet connectors - Configure both EVM and Solana
     externalWallets: {
+      // EVM Wallets
       coinbaseWallet: {
-        // Coinbase Wallet configuration
-        connectionOptions: 'all', // 'all' | 'smartWalletOnly' | 'eoaOnly'
+        connectionOptions: 'all',
+        chains: ['ethereum', 'polygon'] // Support EVM chains
       },
       metamask: {
-        // MetaMask configuration
         connectionOptions: 'all',
+        chains: ['ethereum', 'polygon']
       },
       walletConnect: {
-        // WalletConnect configuration - you'll need a project ID from WalletConnect
         projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
+        chains: ['ethereum', 'polygon']
       },
+      // Solana Wallets - According to Privy docs
+      solana: {
+        // This enables Solana wallet connections
+        wallets: ['phantom', 'solflare', 'backpack', 'coinbaseWallet']
+      }
+    },
+    
+    // Multi-chain configuration
+    multiChainWallets: {
+      // Enable multi-chain support
+      enabled: true,
+      // Prioritize Solana for APES markets
+      priorityChain: 'solana'
     },
     
     // MFA options

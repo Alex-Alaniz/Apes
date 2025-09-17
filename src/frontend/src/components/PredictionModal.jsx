@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection } from '@solana/web3.js';
 import marketService from '../services/marketService';
 import believeApiService from '../services/believeApiService';
 import { getCachedTokenDecimals, uiToUnits } from '../utils/tokenUtils';
 import { config } from '../config/solana';
 import { BELIEVE_CONFIG, isBelieveConfigured } from '../config/believe';
+import { useSolanaWallet } from '../utils/solanaWalletIntegration';
+import toast from 'react-hot-toast';
 
 const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
-  const { publicKey, connected, wallet, signTransaction, signAllTransactions } = useWallet();
+  const { solanaWallet, connectSolana } = useSolanaWallet();
   const [selectedOption, setSelectedOption] = useState(0);
   const [betAmount, setBetAmount] = useState('');
   const [isPlacingBet, setIsPlacingBet] = useState(false);
@@ -57,31 +58,38 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
   const handlePlaceBet = async (e) => {
     e.preventDefault();
     
-    if (!publicKey || !connected || selectedOption === null || !betAmount) return;
+    if (!solanaWallet || selectedOption === null || !betAmount) {
+      if (!solanaWallet) {
+        toast.error('Please connect a Solana wallet (Phantom, Solflare, etc.) to place bets');
+      }
+      return;
+    }
     
     // Validate that the selected option is valid
     const selectedOptionData = actualOptions.find(opt => opt.index === selectedOption);
     if (!selectedOptionData) {
-      alert('Invalid option selected');
+      toast.error('Invalid option selected');
       return;
     }
     
     // Ensure we're not betting on a placeholder option
     if (selectedOptionData.label.startsWith('Option ') && selectedOptionData.label.match(/Option \d+$/)) {
-      alert('This option is not available for betting');
+      toast.error('This option is not available for betting');
       return;
     }
     
-    // Ensure marketService is initialized before placing bet
-    if (wallet && publicKey) {
-      // Use actual Phantom wallet with signAndSendTransaction method
-      const phantomWallet = window.phantom?.solana;
-      if (phantomWallet && typeof phantomWallet.signAndSendTransaction === 'function') {
-        await marketService.initialize(phantomWallet);
-      } else {
-        alert('Please use Phantom wallet to place predictions');
-        return;
-      }
+    // Initialize marketService with Solana wallet
+    try {
+      const { wallet, publicKey, provider } = await connectSolana();
+      
+      // Initialize market service with the Solana provider's wallet
+      await marketService.initialize(provider.wallet);
+      
+      console.log('✅ Market service initialized with Solana wallet:', publicKey.toString());
+    } catch (error) {
+      console.error('Failed to connect Solana wallet:', error);
+      toast.error(error.message || 'Failed to connect Solana wallet');
+      return;
     }
     
     setIsPlacingBet(true);
@@ -103,7 +111,7 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
         // Run burn in background (non-blocking)
         believeApiService.burnForPrediction(
           market.publicKey,
-          publicKey.toString(),
+          solanaWallet.address,
           selectedOption,
           parseFloat(betAmount),
           result.transaction
@@ -285,10 +293,11 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
           <div className="flex gap-3">
             <button
               type="submit"
-              disabled={!connected || !betAmount || isPlacingBet}
+              disabled={!solanaWallet || !betAmount || isPlacingBet}
               className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isPlacingBet ? 'Placing...' : 'Place Prediction'}
+              {isPlacingBet ? 'Placing...' : 
+                !solanaWallet ? 'Connect Solana Wallet' : 'Place Prediction'}
             </button>
             <button
               type="button"
