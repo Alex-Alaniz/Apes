@@ -1,29 +1,23 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { FaMoon, FaSun } from 'react-icons/fa';
 import { isWalletAuthorized } from '../config/access';
 import { useTheme } from '../contexts/ThemeContext';
 import PointsWidget from './PointsWidget';
 import PrivyWalletButton from './PrivyWalletButton';
-import { usePrivy } from '@privy-io/react-auth';
-import { useMultiChainWallet } from '../hooks/useMultiChainWallet';
+import { useSafeWallet } from '../hooks/useSafeWallet';
 
 const Navbar = () => {
   const location = useLocation();
-  const { publicKey } = useWallet();
+  const { publicKey, addresses } = useSafeWallet();
   const { isDarkMode, toggleTheme } = useTheme();
-  const { authenticated } = usePrivy();
-  const { addresses } = useMultiChainWallet();
   
   // Determine if Privy is enabled
   const isPrivyEnabled = import.meta.env.VITE_ENABLE_PRIVY === 'true';
   
-  // Get the current wallet address (Privy or regular)
-  const currentWalletAddress = isPrivyEnabled 
-    ? addresses?.solana 
-    : publicKey?.toString();
+  // Get the current wallet address
+  const currentWalletAddress = addresses?.solana || publicKey?.toString();
   
   // Check if current wallet is authorized
   const isAuthorized = currentWalletAddress && isWalletAuthorized(currentWalletAddress);

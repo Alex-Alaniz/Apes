@@ -43,6 +43,9 @@ if (typeof window !== 'undefined') {
 }
 
 function App() {
+  // Check if Privy is enabled
+  const isPrivyEnabled = import.meta.env.VITE_ENABLE_PRIVY === 'true';
+  
   // Configure network - using mainnet for production
   const network = import.meta.env.VITE_SOLANA_NETWORK === 'mainnet' 
     ? WalletAdapterNetwork.Mainnet 
@@ -52,13 +55,13 @@ function App() {
     return customRpc || clusterApiUrl(network);
   }, [network]);
 
-  // Configure wallets
+  // Configure wallets - only if Privy is NOT enabled
   const wallets = React.useMemo(
-    () => [
+    () => isPrivyEnabled ? [] : [
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
     ],
-    []
+    [isPrivyEnabled]
   );
 
   // Handle wallet connection errors gracefully
@@ -68,46 +71,61 @@ function App() {
     // Don't show error to user for autoConnect failures
   }, []);
 
+  // App content
+  const appContent = (
+    <ThemeProvider>
+      <AppWithReferralTracking>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+          <Navbar />
+          <main className="pt-16">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/markets" element={<MarketsPage />} />
+            <Route path="/markets/:marketId" element={<MarketDetailPage />} />
+            <Route path="/create-market" element={<CreateMarketPage />} />
+            <Route path="/tournaments" element={<TournamentsPage />} />
+            <Route path="/tournaments/:tournamentId" element={<TournamentDetailPage />} />
+            <Route path="/parlay/:tournamentId" element={<CS2ParlayTournamentPage />} />
+            <Route path="/daily-crypto" element={<DailyCryptoPredictionsPage />} />
+            <Route path="/leaderboard" element={<LeaderboardPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/profile/:walletAddress" element={<PublicProfilePage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/assets" element={<AdminMarketAssetsPage />} />
+            <Route path="/admin/deploy-markets" element={<AdminMarketDeploymentPage />} />
+            <Route path="/admin/crypto-markets" element={<AdminCryptoMarketsPage />} />
+            <Route path="/admin/tournament" element={<AdminTournamentPage />} />
+            <Route path="/admin/mobile-markets" element={<AdminMobileMarketsPage />} />
+            <Route path="/admin/market-approval" element={<AdminMarketApprovalPage />} />
+            <Route path="/super-admin" element={<SuperAdminPage />} />
+            <Route path="/engage-to-earn" element={<EngageToEarnPage />} />
+            <Route path="/auth/twitter/callback" element={<TwitterCallback />} />
+            <Route path="/debug-api" element={<DebugApiPage />} />
+            <Route path="/ref/:referralCode" element={<ReferralPage />} />
+            <Route path="/privy-test" element={<PrivyTestPage />} />
+          </Routes>
+          </main>
+          <Toaster position="bottom-right" />
+        </div>
+      </AppWithReferralTracking>
+    </ThemeProvider>
+  );
+
+  // If Privy is enabled, don't wrap with Solana wallet providers
+  if (isPrivyEnabled) {
+    return (
+      <ConnectionProvider endpoint={endpoint}>
+        {appContent}
+      </ConnectionProvider>
+    );
+  }
+
+  // Original Solana wallet provider setup
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect={true} onError={onError}>
         <WalletModalProvider>
-          <ThemeProvider>
-            <AppWithReferralTracking>
-              <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-                <Navbar />
-                <main className="pt-16">
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/markets" element={<MarketsPage />} />
-                  <Route path="/markets/:marketId" element={<MarketDetailPage />} />
-                  <Route path="/create-market" element={<CreateMarketPage />} />
-                  <Route path="/tournaments" element={<TournamentsPage />} />
-                  <Route path="/tournaments/:tournamentId" element={<TournamentDetailPage />} />
-                  <Route path="/parlay/:tournamentId" element={<CS2ParlayTournamentPage />} />
-                  <Route path="/daily-crypto" element={<DailyCryptoPredictionsPage />} />
-                  <Route path="/leaderboard" element={<LeaderboardPage />} />
-                  <Route path="/profile" element={<ProfilePage />} />
-                  <Route path="/profile/:walletAddress" element={<PublicProfilePage />} />
-                  <Route path="/admin" element={<AdminPage />} />
-                  <Route path="/admin/assets" element={<AdminMarketAssetsPage />} />
-                  <Route path="/admin/deploy-markets" element={<AdminMarketDeploymentPage />} />
-                  <Route path="/admin/crypto-markets" element={<AdminCryptoMarketsPage />} />
-                  <Route path="/admin/tournament" element={<AdminTournamentPage />} />
-                  <Route path="/admin/mobile-markets" element={<AdminMobileMarketsPage />} />
-                  <Route path="/admin/market-approval" element={<AdminMarketApprovalPage />} />
-                  <Route path="/super-admin" element={<SuperAdminPage />} />
-                  <Route path="/engage-to-earn" element={<EngageToEarnPage />} />
-                  <Route path="/auth/twitter/callback" element={<TwitterCallback />} />
-                  <Route path="/debug-api" element={<DebugApiPage />} />
-                  <Route path="/ref/:referralCode" element={<ReferralPage />} />
-                  <Route path="/privy-test" element={<PrivyTestPage />} />
-                </Routes>
-                </main>
-                <Toaster position="bottom-right" />
-              </div>
-            </AppWithReferralTracking>
-          </ThemeProvider>
+          {appContent}
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>

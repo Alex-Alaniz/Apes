@@ -13,8 +13,7 @@ const TwitterEngagement = ({
   onRefreshAuth, 
   onLoadMorePosts, 
   refreshCache,
-  isAdmin = false,
-  publicKey
+  isAdmin = false
 }) => {
   const { publicKey: walletPublicKey } = useWallet();
   const [engagements, setEngagements] = useState({});
@@ -1145,7 +1144,6 @@ const EngageToEarnPage = () => {
               onLoadMorePosts={loadMorePosts}
               refreshCache={refreshCache}
               isAdmin={isAdmin}
-              publicKey={publicKey}
             />
           )}
         </div>

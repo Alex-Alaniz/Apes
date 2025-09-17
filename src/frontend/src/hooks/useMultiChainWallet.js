@@ -80,10 +80,27 @@ export function useMultiChainWallet() {
   }, [polygonWallet, privySolanaWallet, solanaWalletAdapter, getPolygonSigner]);
   
   // Get wallet addresses
-  const addresses = useMemo(() => ({
-    solana: solanaWallet?.publicKey?.toBase58() || privySolanaWallet?.address,
-    polygon: polygonWallet?.address
-  }), [solanaWallet, privySolanaWallet, polygonWallet]);
+  const addresses = useMemo(() => {
+    let solanaAddress = null;
+    
+    // Try to get Solana address from Privy first
+    if (privySolanaWallet?.address) {
+      solanaAddress = privySolanaWallet.address;
+    } 
+    // Only try wallet adapter if Privy is not enabled
+    else if (solanaWallet && solanaWallet.publicKey && typeof solanaWallet.publicKey.toBase58 === 'function') {
+      try {
+        solanaAddress = solanaWallet.publicKey.toBase58();
+      } catch (e) {
+        console.log('Error getting Solana address from adapter:', e);
+      }
+    }
+    
+    return {
+      solana: solanaAddress,
+      polygon: polygonWallet?.address
+    };
+  }, [solanaWallet, privySolanaWallet, polygonWallet]);
   
   // Check balances
   const getBalances = useCallback(async () => {
