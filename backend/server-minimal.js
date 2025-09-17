@@ -43,11 +43,15 @@ app.get('/', (req, res) => {
 
 // Start server immediately
 console.log('🔄 Attempting to start server...');
+console.log(`🔧 Railway Config: PORT=${PORT}, NODE_ENV=${process.env.NODE_ENV}`);
+console.log(`🌍 Binding to 0.0.0.0:${PORT} for IPv4 compatibility`);
+
 try {
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Server listening on port ${PORT}`);
+    console.log(`✅ Server listening on 0.0.0.0:${PORT}`);
     console.log(`📊 Health endpoint: http://0.0.0.0:${PORT}/health`);
-    console.log('🟢 Server is ready to accept connections');
+    console.log('🟢 Server is ready for Railway health checks');
+    console.log(`🚂 Railway domain: ${process.env.RAILWAY_PUBLIC_DOMAIN || 'not set'}`);
   });
 
   // Handle errors
