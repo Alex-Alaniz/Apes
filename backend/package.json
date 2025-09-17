@@ -9,7 +9,8 @@
     "start-full": "node server.js",
     "dev": "nodemon server.js",
     "db:create": "node scripts/createDb.js",
-    "db:migrate": "node scripts/migrate.js"
+    "db:migrate": "node scripts/migrate.js",
+    "test": "echo 'No tests yet'"
   },
   "engines": {
     "node": ">=20.0.0",
