@@ -52,10 +52,6 @@ export const privyConfig = {
         // WalletConnect configuration - you'll need a project ID from WalletConnect
         projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
       },
-      solana: {
-        // Solana wallet connectors
-        connectors: ['phantom', 'solflare', 'backpack', 'coinbaseWallet']
-      },
     },
     
     // MFA options
