@@ -1,6 +1,22 @@
 import { toSolanaWalletConnectors as getSolanaConnectors } from '@privy-io/react-auth/solana';
+import { defineChain } from 'viem';
 
-// No EVM chains in frontend
+// Dummy chain to satisfy Privy's requirement
+// This chain will never be used since we're in Solana-only mode
+const dummyChain = defineChain({
+  id: 1,
+  name: 'Dummy',
+  network: 'dummy',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Dummy',
+    symbol: 'DUM',
+  },
+  rpcUrls: {
+    default: { http: ['https://dummy.com'] },
+    public: { http: ['https://dummy.com'] },
+  },
+});
 
 export const privyConfig = {
   appId: 'cmfmo7so5004ojz0bl03kuy1l', // Your Privy App ID
@@ -21,13 +37,11 @@ export const privyConfig = {
     
     // Prevent auto-connection and wallet conflicts
     autoConnect: false,
-    preventWalletAutoConnect: true,
     
-    // Remove EVM configuration from frontend
-    // EVM wallets will only be accessible server-side
-    // Explicitly disable EVM chains
-    defaultChain: undefined,
-    supportedChains: [],
+    // Dummy chain config to satisfy Privy requirement
+    // Won't be used since walletChainType is 'solana-only'
+    defaultChain: dummyChain,
+    supportedChains: [dummyChain],
     
     // Solana configuration (for APES)
     // IMPORTANT: This must be set for Solana support
