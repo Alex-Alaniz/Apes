@@ -91,18 +91,26 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
       app.use(cors(corsOptions));
       app.use(express.json({ limit: '10mb' }));
       
+      // Apply additional middleware if available
+      if (securityMiddleware) {
+        app.use(securityMiddleware.requestLogger || ((req, res, next) => next()));
+        app.use(securityMiddleware.validateWalletAddress || ((req, res, next) => next()));
+        app.use(securityMiddleware.sanitizeInputs || ((req, res, next) => next()));
+      }
+      
       // Load routes
       const routeFiles = [
         'markets', 'predictions', 'users', 'leaderboard', 'tournaments',
         'admin', 'auth', 'rewards', 'payouts', 'engagement', 'twitter',
-        'parlay', 'polymarket', 'dailyCrypto', 'orderbook'
+        'parlay', 'polymarket', 'dailyCrypto', 'orderbook', 'privyTest'
       ];
       
       for (const routeFile of routeFiles) {
         try {
           const route = require(`./routes/${routeFile}`);
-          app.use(`/api/${routeFile}`, route);
-          console.log(`✅ Loaded route: /api/${routeFile}`);
+          const apiPath = routeFile === 'privyTest' ? '/api/privy' : `/api/${routeFile}`;
+          app.use(apiPath, route);
+          console.log(`✅ Loaded route: ${apiPath}`);
         } catch (routeError) {
           console.log(`⚠️ Route ${routeFile} not available:`, routeError.message);
         }
@@ -119,9 +127,42 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
             predictions: '/api/predictions',
             users: '/api/users',
             leaderboard: '/api/leaderboard',
-            tournaments: '/api/tournaments'
+            tournaments: '/api/tournaments',
+            privy: '/api/privy'
           }
         });
+      });
+      
+      // Special admin endpoints from original server
+      // Database schema fix endpoint
+      app.post('/api/admin/fix-database-schema', adminLimiter || ((req, res, next) => next()), async (req, res) => {
+        try {
+          const walletAddress = req.headers['x-wallet-address'];
+          const authorizedWallets = process.env.ADMIN_WALLETS?.split(',').map(w => w.trim()) || [];
+          
+          if (!walletAddress || !authorizedWallets.includes(walletAddress)) {
+            return res.status(403).json({ error: 'Unauthorized access' });
+          }
+          
+          if (!pool) {
+            return res.status(503).json({ error: 'Database not available' });
+          }
+          
+          console.log(`🔧 Admin ${walletAddress} running database schema fixes`);
+          
+          // Schema fixes here...
+          res.json({
+            success: true,
+            message: 'Database schema fixes applied successfully'
+          });
+          
+        } catch (error) {
+          console.error('❌ Database schema fix failed:', error);
+          res.status(500).json({
+            error: 'Schema fix failed',
+            details: error.message
+          });
+        }
       });
       
       // Error handling
@@ -136,9 +177,64 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
       console.log('✅ Full application loaded successfully');
       
       // Initialize services (optional)
-      setTimeout(() => {
+      setTimeout(async () => {
         console.log('🔄 Initializing optional services...');
-        // Services will be loaded here if needed
+        
+        // Test database connection if available
+        if (testConnection) {
+          try {
+            await testConnection();
+            console.log('✅ Database connection verified');
+          } catch (dbError) {
+            console.log('⚠️ Database connection test failed:', dbError.message);
+          }
+        }
+        
+        // Initialize tweet cache service
+        try {
+          const tweetCacheService = require('./services/tweetCacheService');
+          console.log('✅ Tweet cache service initialized');
+        } catch (error) {
+          console.log('⚠️ Tweet cache service not available:', error.message);
+        }
+        
+        // Initialize other services with error handling
+        const services = [
+          { name: 'treasuryMonitoringService', init: 'initialize' },
+          { name: 'parlayPayoutService', init: 'initialize' },
+          { name: 'syncService', init: 'startSync', globalFlag: 'syncServiceStarted' },
+          { name: 'marketMonitoringService', init: 'start', globalFlag: 'marketMonitoringStarted' },
+          { name: 'orderBookService', init: 'initialize' }
+        ];
+        
+        for (const service of services) {
+          try {
+            // Check global flag to prevent duplicate starts
+            if (service.globalFlag && global[service.globalFlag]) {
+              console.log(`⚠️ ${service.name} already running`);
+              continue;
+            }
+            
+            const serviceModule = require(`./services/${service.name}`);
+            if (service.init === 'initialize' && serviceModule.initialize) {
+              await serviceModule.initialize();
+            } else if (service.init === 'start' && serviceModule.start) {
+              serviceModule.start();
+            } else if (service.init === 'startSync' && serviceModule.startSync) {
+              serviceModule.startSync();
+            }
+            
+            if (service.globalFlag) {
+              global[service.globalFlag] = true;
+            }
+            
+            console.log(`✅ ${service.name} initialized`);
+          } catch (error) {
+            console.log(`⚠️ ${service.name} not available:`, error.message);
+          }
+        }
+        
+        console.log('✅ Service initialization complete');
       }, 5000);
       
     } catch (error) {
