@@ -1,6 +1,6 @@
 import { useWallet } from '@solana/wallet-adapter-react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useEffect } from 'react';
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import { AnchorProvider } from '@coral-xyz/anchor';
 
@@ -24,6 +24,15 @@ export function useAppWallet() {
   } catch {
     // Wallet adapter not available in Privy mode
   }
+  
+  // Prevent any auto-connection on mount
+  useEffect(() => {
+    // Block any auto-connection attempts
+    if (isPrivyEnabled && !authenticated) {
+      // Not authenticated, ensure no wallets try to connect
+      return;
+    }
+  }, []);
   
   // Find Solana wallet from Privy wallets
   const privySolanaWallet = useMemo(() => {

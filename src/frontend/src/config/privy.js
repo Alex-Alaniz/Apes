@@ -1,18 +1,10 @@
-import { polygon } from 'viem/chains';
-import { addRpcUrlOverrideToChain, toSolanaWalletConnectors } from '@privy-io/react-auth';
 import { toSolanaWalletConnectors as getSolanaConnectors } from '@privy-io/react-auth/solana';
 
-// Custom RPC configuration for Polygon
-export const polygonWithCustomRpc = addRpcUrlOverrideToChain(
-  polygon,
-  import.meta.env.VITE_POLYGON_RPC_URL || 'https://polygon-rpc.com'
-);
+// No EVM chains in frontend
 
 export const privyConfig = {
   appId: 'cmfmo7so5004ojz0bl03kuy1l', // Your Privy App ID
   config: {
-    // Debug configuration
-    _debug: true,
     
     // Login methods
     loginMethods: ['email', 'google', 'twitter', 'wallet'],
@@ -27,8 +19,15 @@ export const privyConfig = {
       walletList: ['phantom', 'solflare', 'backpack'] // Only Solana wallets
     },
     
+    // Prevent auto-connection and wallet conflicts
+    autoConnect: false,
+    preventWalletAutoConnect: true,
+    
     // Remove EVM configuration from frontend
     // EVM wallets will only be accessible server-side
+    // Explicitly disable EVM chains
+    defaultChain: undefined,
+    supportedChains: [],
     
     // Solana configuration (for APES)
     // IMPORTANT: This must be set for Solana support
@@ -44,13 +43,16 @@ export const privyConfig = {
     // External wallet connectors - ONLY Solana
     externalWallets: {
       solana: {
-        connectors: getSolanaConnectors()
+        connectors: getSolanaConnectors({
+          // Disable auto-connect for each wallet
+          autoConnect: false
+        })
       }
     },
     
     
-    // Explicitly set wallet connector behavior
-    walletConnectCloudProjectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
+    // No WalletConnect for Solana-only mode
+    // walletConnectCloudProjectId: undefined,
     
     // MFA options
     mfa: {

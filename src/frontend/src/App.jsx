@@ -123,7 +123,7 @@ function App() {
   // Original Solana wallet provider setup
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect={true} onError={onError}>
+      <WalletProvider wallets={wallets} autoConnect={false} onError={onError}>
         <WalletModalProvider>
           {appContent}
         </WalletModalProvider>
