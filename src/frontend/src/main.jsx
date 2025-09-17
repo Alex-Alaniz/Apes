@@ -1,5 +1,7 @@
 // Import minimal Buffer polyfill first
 import './polyfills.js';
+// Import debugging utilities
+import './utils/debugObjectRendering.js';
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -8,6 +10,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { PrivyProvider } from '@privy-io/react-auth';
 import { privyConfig } from './config/privy';
 import App from './App';
+import ObjectRenderingDebugger from './components/ObjectRenderingDebugger';
 import './index.css';
 
 // Buffer polyfill loaded from ./polyfills.js
@@ -46,7 +49,9 @@ class ErrorBoundary extends React.Component {
 const AppWithProviders = () => {
   const appContent = (
     <Router>
-      <App />
+      <ObjectRenderingDebugger>
+        <App />
+      </ObjectRenderingDebugger>
     </Router>
   );
   

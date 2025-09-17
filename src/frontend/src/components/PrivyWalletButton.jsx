@@ -11,6 +11,16 @@ function PrivyWalletButton() {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
   
+  // Debug: Check addresses structure
+  React.useEffect(() => {
+    if (addresses) {
+      console.log('PrivyWalletButton addresses:', addresses);
+      console.log('Type of addresses:', typeof addresses);
+      console.log('addresses.solana type:', typeof addresses.solana);
+      console.log('addresses.polygon type:', typeof addresses.polygon);
+    }
+  }, [addresses]);
+  
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -45,10 +55,13 @@ function PrivyWalletButton() {
   const getButtonText = () => {
     if (!ready) return 'Loading...';
     
-    if (authenticated && addresses.solana) {
+    if (authenticated && addresses && addresses.solana) {
       // Show truncated address
       const addr = addresses.solana;
-      return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
+      // Ensure addr is a string
+      if (typeof addr === 'string') {
+        return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
+      }
     }
     
     return 'Select Wallet';
@@ -86,7 +99,7 @@ function PrivyWalletButton() {
           
           {/* Wallet Addresses */}
           <div className="p-2">
-            {addresses.solana && (
+            {addresses && addresses.solana && typeof addresses.solana === 'string' && (
               <div className="p-2 hover:bg-gray-700 rounded">
                 <div className="flex items-center justify-between">
                   <div className="text-sm">
@@ -105,7 +118,7 @@ function PrivyWalletButton() {
               </div>
             )}
             
-            {addresses.polygon && (
+            {addresses && addresses.polygon && typeof addresses.polygon === 'string' && (
               <div className="p-2 hover:bg-gray-700 rounded">
                 <div className="flex items-center justify-between">
                   <div className="text-sm">

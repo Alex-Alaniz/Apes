@@ -11,6 +11,11 @@ import { useSafeWallet } from '../hooks/useSafeWallet';
 const Navbar = () => {
   const location = useLocation();
   const { publicKey, addresses } = useSafeWallet();
+  
+  // Debug: Check what addresses contains
+  if (addresses && typeof addresses === 'object' && !addresses.solana && !addresses.polygon) {
+    console.warn('Navbar: addresses object might be malformed:', addresses);
+  }
   const { isDarkMode, toggleTheme } = useTheme();
   
   // Determine if Privy is enabled

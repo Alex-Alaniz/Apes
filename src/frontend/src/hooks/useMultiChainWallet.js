@@ -82,10 +82,18 @@ export function useMultiChainWallet() {
   // Get wallet addresses
   const addresses = useMemo(() => {
     let solanaAddress = null;
+    let polygonAddress = null;
     
     // Try to get Solana address from Privy first
     if (privySolanaWallet?.address) {
-      solanaAddress = privySolanaWallet.address;
+      // Ensure it's a string, not an object
+      const addr = privySolanaWallet.address;
+      solanaAddress = typeof addr === 'string' ? addr : (addr?.address || null);
+      
+      // Debug logging
+      if (typeof addr !== 'string') {
+        console.warn('Privy Solana wallet address is not a string:', addr);
+      }
     } 
     // Only try wallet adapter if Privy is not enabled
     else if (solanaWallet && solanaWallet.publicKey && typeof solanaWallet.publicKey.toBase58 === 'function') {
@@ -96,9 +104,20 @@ export function useMultiChainWallet() {
       }
     }
     
+    // Get Polygon address
+    if (polygonWallet?.address) {
+      const addr = polygonWallet.address;
+      polygonAddress = typeof addr === 'string' ? addr : (addr?.address || null);
+      
+      // Debug logging
+      if (typeof addr !== 'string') {
+        console.warn('Privy Polygon wallet address is not a string:', addr);
+      }
+    }
+    
     return {
       solana: solanaAddress,
-      polygon: polygonWallet?.address
+      polygon: polygonAddress
     };
   }, [solanaWallet, privySolanaWallet, polygonWallet]);
   
