@@ -10,6 +10,8 @@ export const polygonWithCustomRpc = addRpcUrlOverrideToChain(
 export const privyConfig = {
   appId: 'cmfmo7so5004ojz0bl03kuy1l', // Your Privy App ID
   config: {
+    // Debug configuration
+    _debug: true,
     // Branding
     appearance: {
       theme: 'dark',
@@ -41,27 +43,23 @@ export const privyConfig = {
       chains: ['ethereum', 'solana']
     },
     
-    // External wallet connectors - Configure both EVM and Solana
+    // External wallet connectors - KEEP EMPTY FOR SOLANA
+    // Privy handles Solana wallets differently
     externalWallets: {
-      // EVM Wallets
+      // EVM Wallets for Polygon/Polymarket
       coinbaseWallet: {
-        connectionOptions: 'all',
-        chains: ['ethereum', 'polygon'] // Support EVM chains
+        connectionOptions: 'all'
       },
       metamask: {
-        connectionOptions: 'all',
-        chains: ['ethereum', 'polygon']
+        connectionOptions: 'all'
       },
       walletConnect: {
-        projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
-        chains: ['ethereum', 'polygon']
-      },
-      // Solana Wallets - According to Privy docs
-      solana: {
-        // This enables Solana wallet connections
-        wallets: ['phantom', 'solflare', 'backpack', 'coinbaseWallet']
+        projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
       }
     },
+    
+    // Solana wallets configuration - MUST be separate from externalWallets
+    solanaWallets: ['phantom', 'solflare', 'backpack'],
     
     // Multi-chain configuration
     multiChainWallets: {
@@ -70,6 +68,9 @@ export const privyConfig = {
       // Prioritize Solana for APES markets
       priorityChain: 'solana'
     },
+    
+    // Explicitly set wallet connector behavior
+    walletConnectCloudProjectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
     
     // MFA options
     mfa: {

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { usePrivy, useWallets, useCreateWallet } from '@privy-io/react-auth';
 import { ethers } from 'ethers';
+import DebugWalletInfo from '../components/DebugWalletInfo';
+import { isPrivySolanaWallet } from '../utils/privySolanaAdapter';
 
 function PrivyTestPage() {
   const { 
@@ -19,8 +21,8 @@ function PrivyTestPage() {
   const [message, setMessage] = useState('');
   const [signatures, setSignatures] = useState({});
   
-  // Find wallets by chain
-  const solanaWallet = wallets.find(w => w.chainId === 'solana:mainnet');
+  // Find wallets by chain - use improved detection
+  const solanaWallet = wallets.find(w => isPrivySolanaWallet(w));
   const polygonWallet = wallets.find(w => w.chainId === 'eip155:137');
   const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
   const externalWallets = wallets.filter(w => w.walletClientType !== 'privy');
@@ -255,6 +257,12 @@ function PrivyTestPage() {
           hasEmbedded: !!embeddedWallet,
           externalCount: externalWallets.length
         }, null, 2)}</pre>
+      </div>
+      
+      {/* Detailed Debug Component */}
+      <div className="mt-4">
+        <h2 className="text-xl font-semibold mb-2">Detailed Wallet Debug</h2>
+        <DebugWalletInfo />
       </div>
     </div>
   );

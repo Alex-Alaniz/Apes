@@ -6,13 +6,27 @@ import { getCachedTokenDecimals, uiToUnits } from '../utils/tokenUtils';
 import { config } from '../config/solana';
 import { BELIEVE_CONFIG, isBelieveConfigured } from '../config/believe';
 import { useSolanaWallet } from '../utils/solanaWalletIntegration';
+import { usePrivySolanaWallet } from '../hooks/usePrivySolanaWallet';
 import toast from 'react-hot-toast';
 
 const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
   const { solanaWallet, connectSolana } = useSolanaWallet();
+  // Also try the new Privy-specific hook
+  const privyHook = usePrivySolanaWallet();
+  
   const [selectedOption, setSelectedOption] = useState(0);
   const [betAmount, setBetAmount] = useState('');
   const [isPlacingBet, setIsPlacingBet] = useState(false);
+  
+  // Debug logging
+  React.useEffect(() => {
+    if (isOpen) {
+      console.log('PredictionModal wallet state:', {
+        standardHook: { hasSolana: !!solanaWallet },
+        privyHook: privyHook.debug
+      });
+    }
+  }, [isOpen, solanaWallet, privyHook.debug]);
 
   if (!isOpen || !market) return null;
 
@@ -58,8 +72,10 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
   const handlePlaceBet = async (e) => {
     e.preventDefault();
     
-    if (!solanaWallet || selectedOption === null || !betAmount) {
-      if (!solanaWallet) {
+    const hasSolana = solanaWallet || privyHook.hasSolanaWallet;
+    
+    if (!hasSolana || selectedOption === null || !betAmount) {
+      if (!hasSolana) {
         toast.error('Please connect a Solana wallet (Phantom, Solflare, etc.) to place bets');
       }
       return;
@@ -80,10 +96,30 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
     
     // Initialize marketService with Solana wallet
     try {
-      const { wallet, publicKey, provider } = await connectSolana();
+      let wallet, publicKey, provider;
       
-      // Initialize market service with the Solana provider's wallet
-      await marketService.initialize(provider.wallet);
+      // Try Privy hook first if standard hook doesn't have a wallet
+      if (!solanaWallet && privyHook.hasSolanaWallet) {
+        console.log('Using Privy-specific Solana connection');
+        const result = await privyHook.connectSolana();
+        wallet = result.wallet;
+        publicKey = result.publicKey;
+        provider = result.provider;
+      } else {
+        const result = await connectSolana();
+        wallet = result.wallet;
+        publicKey = result.publicKey;
+        provider = result.provider;
+      }
+      
+      // Initialize market service
+      if (provider) {
+        await marketService.initialize(provider.wallet);
+      } else if (wallet) {
+        await marketService.initialize(wallet);
+      } else {
+        throw new Error('No wallet available for initialization');
+      }
       
       console.log('✅ Market service initialized with Solana wallet:', publicKey.toString());
     } catch (error) {
@@ -293,11 +329,11 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
           <div className="flex gap-3">
             <button
               type="submit"
-              disabled={!solanaWallet || !betAmount || isPlacingBet}
+              disabled={(!solanaWallet && !privyHook.hasSolanaWallet) || !betAmount || isPlacingBet}
               className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isPlacingBet ? 'Placing...' : 
-                !solanaWallet ? 'Connect Solana Wallet' : 'Place Prediction'}
+                (!solanaWallet && !privyHook.hasSolanaWallet) ? 'Connect Solana Wallet' : 'Place Prediction'}
             </button>
             <button
               type="button"

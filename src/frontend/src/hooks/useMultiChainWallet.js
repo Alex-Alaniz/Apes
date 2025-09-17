@@ -2,6 +2,7 @@ import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react';
 import { ethers } from 'ethers';
 import { useCallback, useMemo } from 'react';
+import { isPrivySolanaWallet } from '../utils/privySolanaAdapter';
 
 export function useMultiChainWallet() {
   const { user, authenticated, login, logout, ready } = usePrivy();
@@ -15,10 +16,20 @@ export function useMultiChainWallet() {
   );
   
   // Get Solana wallet (prefer Privy embedded, fallback to adapter)
-  const privySolanaWallet = useMemo(() => 
-    wallets.find(w => w.chainId === 'solana:mainnet'),
-    [wallets]
-  );
+  const privySolanaWallet = useMemo(() => {
+    // Debug: Log all wallets to see what Privy returns
+    console.log('All Privy wallets:', wallets.map(w => ({
+      address: w.address,
+      walletClientType: w.walletClientType,
+      chainType: w.chainType,
+      chainId: w.chainId,
+      connectorType: w.connectorType,
+      isSolana: isPrivySolanaWallet(w)
+    })));
+    
+    // Use the new detection method
+    return wallets.find(w => isPrivySolanaWallet(w));
+  }, [wallets]);
   
   // Use Privy Solana wallet if available, otherwise use adapter
   const solanaWallet = privySolanaWallet || (solanaWalletAdapter.connected ? solanaWalletAdapter : null);
