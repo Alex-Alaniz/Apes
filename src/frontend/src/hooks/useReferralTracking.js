@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useSafeWallet } from './useSafeWallet';
 import { toast } from 'react-hot-toast';
 import ReferralService from '../services/referralService';
 
 export const useReferralTracking = () => {
-  const { publicKey, connected } = useWallet();
-  const wallet = useWallet();
+  const { publicKey, connected } = useSafeWallet();
+  const wallet = useSafeWallet();
   const hasProcessedRef = useRef(false);
   
   useEffect(() => {

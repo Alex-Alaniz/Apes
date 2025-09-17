@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useSafeWallet } from '../hooks/useSafeWallet';
 import { Coins, TrendingUp, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const PointsWidget = () => {
-  const { publicKey } = useWallet();
+  const { publicKey } = useSafeWallet();
   const navigate = useNavigate();
   const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -21,8 +21,14 @@ const PointsWidget = () => {
 
   const fetchBalance = async () => {
     try {
+      const walletAddress = publicKey?.toString ? publicKey.toString() : publicKey;
+      if (!walletAddress) {
+        console.log('No wallet address available');
+        return;
+      }
+      
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/engagement/balance/${publicKey.toString()}`
+        `${import.meta.env.VITE_API_URL || 'https://apes-production.up.railway.app'}/api/engagement/balance/${walletAddress}`
       );
       
       if (response.ok) {
