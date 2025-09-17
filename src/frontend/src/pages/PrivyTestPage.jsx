@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { usePrivy, useWallets, useCreateWallet } from '@privy-io/react-auth';
+import { usePrivy, useWallets, useCreateWallet, useConnectWallet } from '@privy-io/react-auth';
 import { ethers } from 'ethers';
 import DebugWalletInfo from '../components/DebugWalletInfo';
+import ConnectSolanaButton from '../components/ConnectSolanaButton';
 import { isPrivySolanaWallet } from '../utils/privySolanaAdapter';
+import { usePrivySolanaWallets } from '../hooks/usePrivySolanaWallets';
 
 function PrivyTestPage() {
   const { 
@@ -17,6 +19,8 @@ function PrivyTestPage() {
   
   const { wallets } = useWallets();
   const { createWallet } = useCreateWallet();
+  const { connectWallet } = useConnectWallet();
+  const solanaInfo = usePrivySolanaWallets();
   
   const [message, setMessage] = useState('');
   const [signatures, setSignatures] = useState({});
@@ -49,6 +53,28 @@ function PrivyTestPage() {
       await linkWallet();
     } catch (error) {
       console.error('Failed to link wallet:', error);
+    }
+  };
+  
+  const handleConnectSolana = async () => {
+    try {
+      // Connect specifically requesting Solana
+      await connectWallet({
+        walletChainType: 'solana'
+      });
+    } catch (error) {
+      console.error('Failed to connect Solana wallet:', error);
+    }
+  };
+  
+  const handleConnectPolygon = async () => {
+    try {
+      // Connect specifically requesting Ethereum/Polygon
+      await connectWallet({
+        walletChainType: 'ethereum'
+      });
+    } catch (error) {
+      console.error('Failed to connect Polygon wallet:', error);
     }
   };
   
@@ -138,7 +164,11 @@ function PrivyTestPage() {
                 Create New Wallet
               </button>
               <button onClick={handleLinkWallet} className="btn btn-primary">
-                Link External Wallet
+                Link External Wallet (Auto)
+              </button>
+              <ConnectSolanaButton className="btn btn-primary" />
+              <button onClick={handleConnectPolygon} className="btn btn-secondary">
+                Connect Polygon Wallet
               </button>
             </>
           )}
@@ -237,10 +267,18 @@ function PrivyTestPage() {
           
           {/* Messages */}
           {message && (
-            <div className="bg-blue-900 p-4 rounded-lg">
+            <div className="bg-blue-900 p-4 rounded-lg mb-4">
               <p className="text-sm">{message}</p>
             </div>
           )}
+          
+          {/* Solana Wallet Detection Debug */}
+          <div className="bg-gray-800 p-6 rounded-lg mb-8">
+            <h2 className="text-xl font-semibold mb-4">Solana Wallet Detection</h2>
+            <pre className="text-xs bg-gray-900 p-2 rounded overflow-auto">
+              {JSON.stringify(solanaInfo.debug, null, 2)}
+            </pre>
+          </div>
         </>
       )}
       

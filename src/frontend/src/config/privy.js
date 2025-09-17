@@ -1,5 +1,6 @@
 import { polygon } from 'viem/chains';
-import { addRpcUrlOverrideToChain } from '@privy-io/react-auth';
+import { addRpcUrlOverrideToChain, toSolanaWalletConnectors } from '@privy-io/react-auth';
+import { toSolanaWalletConnectors as getSolanaConnectors } from '@privy-io/react-auth/solana';
 
 // Custom RPC configuration for Polygon
 export const polygonWithCustomRpc = addRpcUrlOverrideToChain(
@@ -12,40 +13,41 @@ export const privyConfig = {
   config: {
     // Debug configuration
     _debug: true,
-    // Branding
+    
+    // Login methods
+    loginMethods: ['email', 'google', 'twitter', 'wallet'],
+    
+    // CRITICAL: Enable both Ethereum and Solana wallets
     appearance: {
       theme: 'dark',
       accentColor: '#FF6B6B',
       logo: '/primape/Asset 1@3x.png',
       showWalletLoginFirst: false,
+      walletChainType: 'ethereum-and-solana', // Enable BOTH chains
+      walletList: ['phantom', 'solflare', 'metamask', 'coinbase_wallet', 'detected_wallets']
     },
-    
-    // Login methods
-    loginMethods: ['email', 'google', 'twitter', 'wallet'],
     
     // EVM configuration (Polygon for Polymarket)
     defaultChain: polygonWithCustomRpc,
     supportedChains: [polygonWithCustomRpc],
     
     // Solana configuration (for APES)
-    // IMPORTANT: This enables Solana support
-    solanaCluster: {
-      name: 'mainnet-beta',
-      rpcUrl: import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com'
-    },
+    // IMPORTANT: This must be set for Solana support
+    solanaRpc: import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
     
-    // Embedded wallets - automatically create for BOTH chains
+    // Embedded wallets configuration
     embeddedWallets: {
       createOnLogin: 'users-without-wallets',
       noPromptOnSignature: false,
-      requireUserPasswordOnCreate: false,
-      // Create wallets for both EVM and Solana
-      chains: ['ethereum', 'solana']
+      requireUserPasswordOnCreate: false
     },
     
-    // External wallet connectors - KEEP EMPTY FOR SOLANA
-    // Privy handles Solana wallets differently
+    // External wallet connectors
     externalWallets: {
+      // Solana wallet support (REQUIRED for Phantom to work as Solana)
+      solana: {
+        connectors: getSolanaConnectors()
+      },
       // EVM Wallets for Polygon/Polymarket
       coinbaseWallet: {
         connectionOptions: 'all'
@@ -58,16 +60,6 @@ export const privyConfig = {
       }
     },
     
-    // Solana wallets configuration - MUST be separate from externalWallets
-    solanaWallets: ['phantom', 'solflare', 'backpack'],
-    
-    // Multi-chain configuration
-    multiChainWallets: {
-      // Enable multi-chain support
-      enabled: true,
-      // Prioritize Solana for APES markets
-      priorityChain: 'solana'
-    },
     
     // Explicitly set wallet connector behavior
     walletConnectCloudProjectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
