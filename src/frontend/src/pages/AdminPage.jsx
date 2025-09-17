@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { useNavigate } from 'react-router-dom';
+import { useAppWallet } from '../hooks/useAppWallet';
 import marketService from '../services/marketService';
 import { isWalletAuthorized } from '../config/access';
 import Toast from '../components/Toast';
 import { PublicKey } from '@solana/web3.js';
 
 const AdminPage = () => {
-  const { publicKey, connected, wallet } = useWallet();
-  const walletAdapter = wallet?.adapter;
+  const { publicKey, walletAddress, connected, getProvider } = useAppWallet();
   const navigate = useNavigate();
   const [markets, setMarkets] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -23,24 +22,19 @@ const AdminPage = () => {
   // Initialize market service and check authorization
   useEffect(() => {
     const initService = async () => {
-      if (walletAdapter && publicKey) {
+      if (walletAddress && connected) {
         try {
-          // Use actual Phantom wallet with signAndSendTransaction method
-          const phantomWallet = window.phantom?.solana;
-          if (phantomWallet && typeof phantomWallet.signAndSendTransaction === 'function') {
-            await marketService.initialize(phantomWallet);
-            setServiceInitialized(true);
-            
-            // Check if wallet is authorized
-            const walletAddress = publicKey.toString();
-            const authorized = isWalletAuthorized(walletAddress);
-            setIsAuthorized(authorized);
-            
-            if (authorized) {
-              loadMarkets();
-            }
-          } else {
-            throw new Error('Please use Phantom wallet for admin features');
+          // Get provider and initialize market service
+          const provider = await getProvider();
+          await marketService.initialize(provider.wallet);
+          setServiceInitialized(true);
+          
+          // Check if wallet is authorized
+          const authorized = isWalletAuthorized(walletAddress);
+          setIsAuthorized(authorized);
+          
+          if (authorized) {
+            loadMarkets();
           }
         } catch (error) {
           console.error('Failed to initialize market service:', error);
@@ -57,7 +51,7 @@ const AdminPage = () => {
     };
 
     initService();
-  }, [walletAdapter, publicKey]);
+  }, [walletAddress, connected]);
 
   const loadMarkets = async () => {
     setLoading(true);
@@ -70,7 +64,7 @@ const AdminPage = () => {
       
       const response = await fetch(`${apiUrl}/api/admin/markets?t=${cacheBuster}`, {
         headers: {
-          'X-Wallet-Address': publicKey.toString()
+          'X-Wallet-Address': walletAddress
         }
       });
       

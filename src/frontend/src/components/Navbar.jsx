@@ -6,26 +6,18 @@ import { isWalletAuthorized } from '../config/access';
 import { useTheme } from '../contexts/ThemeContext';
 import PointsWidget from './PointsWidget';
 import PrivyWalletButton from './PrivyWalletButton';
-import { useSafeWallet } from '../hooks/useSafeWallet';
+import { useAppWallet } from '../hooks/useAppWallet';
 
 const Navbar = () => {
   const location = useLocation();
-  const { publicKey, addresses } = useSafeWallet();
-  
-  // Debug: Check what addresses contains
-  if (addresses && typeof addresses === 'object' && !addresses.solana && !addresses.polygon) {
-    console.warn('Navbar: addresses object might be malformed:', addresses);
-  }
+  const { walletAddress } = useAppWallet();
   const { isDarkMode, toggleTheme } = useTheme();
   
   // Determine if Privy is enabled
   const isPrivyEnabled = import.meta.env.VITE_ENABLE_PRIVY === 'true';
   
-  // Get the current wallet address
-  const currentWalletAddress = addresses?.solana || publicKey?.toString();
-  
   // Check if current wallet is authorized
-  const isAuthorized = currentWalletAddress && isWalletAuthorized(currentWalletAddress);
+  const isAuthorized = walletAddress && isWalletAuthorized(walletAddress);
   
   const isActive = (path) => {
     return location.pathname === path ? 'text-purple-400' : 'text-gray-300 hover:text-white';

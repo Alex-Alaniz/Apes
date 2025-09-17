@@ -9,11 +9,8 @@ export function useMultiChainWallet() {
   const { wallets } = useWallets();
   const solanaWalletAdapter = useSolanaWallet();
   
-  // Get Polygon wallet for Polymarket
-  const polygonWallet = useMemo(() => 
-    wallets.find(w => w.chainId === 'eip155:137'), 
-    [wallets]
-  );
+  // No Polygon wallet in frontend - only server-side
+  const polygonWallet = null;
   
   // Get Solana wallet (prefer Privy embedded, fallback to adapter)
   const privySolanaWallet = useMemo(() => {

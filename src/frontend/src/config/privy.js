@@ -17,19 +17,18 @@ export const privyConfig = {
     // Login methods
     loginMethods: ['email', 'google', 'twitter', 'wallet'],
     
-    // CRITICAL: Enable both Ethereum and Solana wallets
+    // CRITICAL: Enable ONLY Solana wallets for frontend
     appearance: {
       theme: 'dark',
       accentColor: '#FF6B6B',
       logo: '/primape/Asset 1@3x.png',
       showWalletLoginFirst: false,
-      walletChainType: 'ethereum-and-solana', // Enable BOTH chains
-      walletList: ['phantom', 'solflare', 'metamask', 'coinbase_wallet', 'detected_wallets']
+      walletChainType: 'solana-only', // ONLY Solana for auth
+      walletList: ['phantom', 'solflare', 'backpack'] // Only Solana wallets
     },
     
-    // EVM configuration (Polygon for Polymarket)
-    defaultChain: polygonWithCustomRpc,
-    supportedChains: [polygonWithCustomRpc],
+    // Remove EVM configuration from frontend
+    // EVM wallets will only be accessible server-side
     
     // Solana configuration (for APES)
     // IMPORTANT: This must be set for Solana support
@@ -42,21 +41,10 @@ export const privyConfig = {
       requireUserPasswordOnCreate: false
     },
     
-    // External wallet connectors
+    // External wallet connectors - ONLY Solana
     externalWallets: {
-      // Solana wallet support (REQUIRED for Phantom to work as Solana)
       solana: {
         connectors: getSolanaConnectors()
-      },
-      // EVM Wallets for Polygon/Polymarket
-      coinbaseWallet: {
-        connectionOptions: 'all'
-      },
-      metamask: {
-        connectionOptions: 'all'
-      },
-      walletConnect: {
-        projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
       }
     },
     

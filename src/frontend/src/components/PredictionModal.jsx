@@ -5,28 +5,15 @@ import believeApiService from '../services/believeApiService';
 import { getCachedTokenDecimals, uiToUnits } from '../utils/tokenUtils';
 import { config } from '../config/solana';
 import { BELIEVE_CONFIG, isBelieveConfigured } from '../config/believe';
-import { useSolanaWallet } from '../utils/solanaWalletIntegration';
-import { usePrivySolanaWallet } from '../hooks/usePrivySolanaWallet';
+import { useAppWallet } from '../hooks/useAppWallet';
 import toast from 'react-hot-toast';
 
 const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
-  const { solanaWallet, connectSolana } = useSolanaWallet();
-  // Also try the new Privy-specific hook
-  const privyHook = usePrivySolanaWallet();
+  const { connected, walletAddress, getProvider, connect } = useAppWallet();
   
   const [selectedOption, setSelectedOption] = useState(0);
   const [betAmount, setBetAmount] = useState('');
   const [isPlacingBet, setIsPlacingBet] = useState(false);
-  
-  // Debug logging
-  React.useEffect(() => {
-    if (isOpen) {
-      console.log('PredictionModal wallet state:', {
-        standardHook: { hasSolana: !!solanaWallet },
-        privyHook: privyHook.debug
-      });
-    }
-  }, [isOpen, solanaWallet, privyHook.debug]);
 
   if (!isOpen || !market) return null;
 
@@ -121,7 +108,7 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
         throw new Error('No wallet available for initialization');
       }
       
-      console.log('✅ Market service initialized with Solana wallet:', publicKey.toString());
+      console.log('✅ Market service initialized with Solana wallet:', walletAddress);
     } catch (error) {
       console.error('Failed to connect Solana wallet:', error);
       toast.error(error.message || 'Failed to connect Solana wallet');
@@ -147,7 +134,7 @@ const PredictionModal = ({ market, isOpen, onClose, onSuccess }) => {
         // Run burn in background (non-blocking)
         believeApiService.burnForPrediction(
           market.publicKey,
-          solanaWallet.address,
+          walletAddress,
           selectedOption,
           parseFloat(betAmount),
           result.transaction
