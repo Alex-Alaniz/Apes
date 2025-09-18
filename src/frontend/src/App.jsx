@@ -43,6 +43,22 @@ if (typeof window !== 'undefined') {
 }
 
 function App() {
+  // Clear any stale wallet adapter localStorage on mount to prevent stuck loading states
+  React.useEffect(() => {
+    try {
+      // Remove Solana wallet adapter localStorage keys that might cause issues
+      const keysToCheck = ['walletName', 'solana-wallet', 'walletAdapter'];
+      keysToCheck.forEach(key => {
+        if (localStorage.getItem(key)) {
+          console.log(`Clearing stale wallet data: ${key}`);
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (e) {
+      console.log('Could not clear wallet localStorage:', e);
+    }
+  }, []);
+
   // Configure network - using mainnet for production
   const network = import.meta.env.VITE_SOLANA_NETWORK === 'mainnet' 
     ? WalletAdapterNetwork.Mainnet 

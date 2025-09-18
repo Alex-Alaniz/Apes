@@ -51,7 +51,7 @@ const MarketsPage = () => {
   const [sortBy, setSortBy] = useState('date'); // 'date', 'volume', 'participants'
   const [sortOrder, setSortOrder] = useState('asc'); // 'asc' or 'desc'
   
-  const { publicKey, connected, getProvider } = useAppWallet();
+  const { publicKey, connected, getProvider, getWallet } = useAppWallet();
   const scrollPositionRef = useRef(0);
   const navigate = useNavigate();
 
@@ -59,22 +59,21 @@ const MarketsPage = () => {
   const LOAD_MORE_COUNT = 12;
 
   useEffect(() => {
-    if (wallet && connected && publicKey) {
-      // Use actual Phantom wallet with signAndSendTransaction method
-      const phantomWallet = window.phantom?.solana;
-      if (phantomWallet && typeof phantomWallet.signAndSendTransaction === 'function') {
-        marketService.initialize(phantomWallet);
-      }
-      
-      // Load user positions for claim functionality
-      loadUserPositions();
-    }
-    
-    // DISABLED: Initialize blockchain service (was causing rate limit issues)
-    // blockchainMarketsService.initialize();
-    
+    // Always load markets regardless of wallet connection
     loadMarkets();
-  }, [wallet, connected, publicKey]);
+    
+    // Only initialize wallet-specific features if connected
+    if (connected && publicKey) {
+      // Initialize market service if wallet is available
+      getWallet().then(wallet => {
+        marketService.initialize(wallet);
+        // Load user positions for claim functionality
+        loadUserPositions();
+      }).catch(err => {
+        console.log('Wallet not available yet:', err);
+      });
+    }
+  }, [connected, publicKey, getWallet]);
 
   // Restore scroll position after markets update
   useEffect(() => {
