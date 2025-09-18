@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { useSafeWallet } from './useSafeWallet';
+import { useAppWallet } from './useAppWallet';
 import { toast } from 'react-hot-toast';
 import ReferralService from '../services/referralService';
 
 export const useReferralTracking = () => {
-  const { publicKey, connected } = useSafeWallet();
-  const wallet = useSafeWallet();
+  const { publicKey, connected, signMessage } = useAppWallet();
   const hasProcessedRef = useRef(false);
   
   useEffect(() => {
@@ -25,7 +24,7 @@ export const useReferralTracking = () => {
           // Get backend URL from environment or use default
           const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://apes-production.up.railway.app';
           
-          const success = await ReferralService.processReferral(walletAddress, backendUrl, wallet);
+          const success = await ReferralService.processReferral(walletAddress, backendUrl, { signMessage });
           
           if (success) {
             toast.success('Referral activated! You\'re now connected to your referrer.', {
