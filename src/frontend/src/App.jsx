@@ -43,9 +43,6 @@ if (typeof window !== 'undefined') {
 }
 
 function App() {
-  // Check if Privy is enabled
-  const isPrivyEnabled = import.meta.env.VITE_ENABLE_PRIVY === 'true';
-  
   // Configure network - using mainnet for production
   const network = import.meta.env.VITE_SOLANA_NETWORK === 'mainnet' 
     ? WalletAdapterNetwork.Mainnet 
@@ -55,13 +52,13 @@ function App() {
     return customRpc || clusterApiUrl(network);
   }, [network]);
 
-  // Configure wallets - only if Privy is NOT enabled
+  // Configure wallets
   const wallets = React.useMemo(
-    () => isPrivyEnabled ? [] : [
+    () => [
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
     ],
-    [isPrivyEnabled]
+    []
   );
 
   // Handle wallet connection errors gracefully
@@ -111,16 +108,7 @@ function App() {
     </ThemeProvider>
   );
 
-  // If Privy is enabled, don't wrap with Solana wallet providers
-  if (isPrivyEnabled) {
-    return (
-      <ConnectionProvider endpoint={endpoint}>
-        {appContent}
-      </ConnectionProvider>
-    );
-  }
-
-  // Original Solana wallet provider setup
+  // Always use Solana wallet providers
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect={false} onError={onError}>

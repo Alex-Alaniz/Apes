@@ -3,22 +3,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
-import { PrivyProvider } from '@privy-io/react-auth';
 import App from './App';
 import './index.css';
-
-// Simple Privy config - NO EVM chains
-const privyConfig = {
-  appId: 'cmfmo7so5004ojz0bl03kuy1l',
-  config: {
-    appearance: {
-      theme: 'dark',
-      accentColor: '#FF6B6B',
-      logo: '/primape/Asset 1@3x.png'
-    },
-    loginMethods: ['email', 'sms', 'google', 'twitter', 'discord', 'wallet']
-  }
-};
 
 // Simple error boundary
 class ErrorBoundary extends React.Component {
@@ -48,21 +34,9 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Main app
+// Main app - Privy temporarily disabled
 function MainApp() {
-  const isPrivyEnabled = import.meta.env.VITE_ENABLE_PRIVY === 'true';
-  
-  if (isPrivyEnabled) {
-    return (
-      <PrivyProvider appId={privyConfig.appId} config={privyConfig.config}>
-        <Router>
-          <App />
-        </Router>
-      </PrivyProvider>
-    );
-  }
-  
-  // Non-Privy mode
+  // Always use non-Privy mode until properly configured
   return (
     <Router>
       <App />
