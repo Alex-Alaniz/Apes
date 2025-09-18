@@ -5,7 +5,7 @@ import { FaMoon, FaSun } from 'react-icons/fa';
 import { isWalletAuthorized } from '../config/access';
 import { useTheme } from '../contexts/ThemeContext';
 import PointsWidget from './PointsWidget';
-import SolanaOnlyWalletButton from './SolanaOnlyWalletButton';
+import PrivySolanaButton from './PrivySolanaButton';
 import { useAppWallet } from '../hooks/useAppWallet';
 
 const Navbar = () => {
@@ -72,7 +72,7 @@ const Navbar = () => {
             </button>
             <PointsWidget />
             {isPrivyEnabled ? (
-              <SolanaOnlyWalletButton />
+              <PrivySolanaButton />
             ) : (
               <WalletMultiButton className="!bg-purple-600 hover:!bg-purple-700" />
             )}

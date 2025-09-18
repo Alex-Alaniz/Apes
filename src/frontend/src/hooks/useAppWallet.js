@@ -36,27 +36,38 @@ export function useAppWallet() {
   
   // Find Solana wallet from Privy wallets
   const privySolanaWallet = useMemo(() => {
-    if (!isPrivyEnabled || !privyWallets.length) return null;
+    if (!isPrivyEnabled || !privyWallets.length) {
+      console.log('No Privy wallets available:', { isPrivyEnabled, walletCount: privyWallets.length });
+      return null;
+    }
+    
+    // Debug: Log all wallets
+    console.log('Available Privy wallets:', privyWallets.map(w => ({
+      address: w.address,
+      chainType: w.chainType,
+      chainId: w.chainId,
+      connectorType: w.connectorType,
+      walletClientType: w.walletClientType
+    })));
     
     // Find wallet that's Solana (check multiple conditions)
-    return privyWallets.find(wallet => {
-      // Check if it's explicitly Solana
-      if (wallet.chainType === 'solana' || wallet.chainId === 'solana:mainnet') {
-        return true;
+    const solanaWallet = privyWallets.find(wallet => {
+      // Check multiple ways to identify Solana wallet
+      const isSolana = (
+        wallet.chainType === 'solana' || 
+        wallet.chainId === 'solana:mainnet' ||
+        wallet.connectorType === 'solana' ||
+        (wallet.address && !wallet.address.startsWith('0x') && wallet.address.length > 30)
+      );
+      
+      if (isSolana) {
+        console.log('Found Solana wallet:', wallet.address);
       }
       
-      // Check if address is Solana format (not starting with 0x)
-      if (wallet.address && !wallet.address.startsWith('0x')) {
-        try {
-          new PublicKey(wallet.address);
-          return true;
-        } catch {
-          // Not a valid Solana public key
-        }
-      }
-      
-      return false;
+      return isSolana;
     });
+    
+    return solanaWallet;
   }, [isPrivyEnabled, privyWallets]);
   
   // Get wallet public key
@@ -69,7 +80,7 @@ export function useAppWallet() {
       }
     }
     return standardWallet?.publicKey || null;
-  }, [isPrivyEnabled, privySolanaWallet, standardWallet]);
+  }, [isPrivyEnabled, privyAuth.solanaWallet, standardWallet]);
   
   // Get wallet address as string
   const walletAddress = publicKey?.toString() || null;
@@ -159,7 +170,7 @@ export function useAppWallet() {
       return standardWallet;
     }
     throw new Error('No wallet available');
-  }, [isPrivyEnabled, privySolanaWallet, standardWallet]);
+  }, [isPrivyEnabled, privyAuth.solanaWallet, standardWallet]);
   
   // Sign message
   const signMessage = useCallback(async (message) => {
@@ -175,7 +186,7 @@ export function useAppWallet() {
     }
     
     throw new Error('Wallet does not support message signing');
-  }, [isPrivyEnabled, privySolanaWallet, standardWallet]);
+  }, [isPrivyEnabled, privyAuth.solanaWallet, standardWallet]);
   
   return {
     // Core properties

@@ -31,12 +31,8 @@ export const privyConfig = {
       accentColor: '#FF6B6B',
       logo: '/primape/Asset 1@3x.png',
       showWalletLoginFirst: false,
-      // Change to support both but prioritize Solana
-      walletChainType: 'ethereum-and-solana',
-      // Show only Solana wallets in the list
-      walletList: ['phantom', 'solflare', 'backpack'],
-      // Ensure Solana is the primary chain
-      defaultChain: 'solana'
+      walletChainType: 'solana-only', // ONLY Solana for auth
+      walletList: ['phantom', 'solflare', 'backpack'] // Only Solana wallets
     },
     
     // Prevent auto-connection and wallet conflicts
