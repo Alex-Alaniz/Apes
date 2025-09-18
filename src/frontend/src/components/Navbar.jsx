@@ -5,7 +5,7 @@ import { FaMoon, FaSun } from 'react-icons/fa';
 import { isWalletAuthorized } from '../config/access';
 import { useTheme } from '../contexts/ThemeContext';
 import PointsWidget from './PointsWidget';
-import PrivySolanaButton from './PrivySolanaButton';
+// import PrivySolanaButton from './PrivySolanaButton'; // Removed to fix production
 import { useAppWallet } from '../hooks/useAppWallet';
 
 const Navbar = () => {
@@ -13,8 +13,8 @@ const Navbar = () => {
   const { walletAddress } = useAppWallet();
   const { isDarkMode, toggleTheme } = useTheme();
   
-  // Determine if Privy is enabled
-  const isPrivyEnabled = import.meta.env.VITE_ENABLE_PRIVY === 'true';
+  // Determine if Privy is enabled - HARDCODED TO FALSE TO FIX PRODUCTION
+  const isPrivyEnabled = false; // import.meta.env.VITE_ENABLE_PRIVY === 'true';
   
   // Check if current wallet is authorized
   const isAuthorized = walletAddress && isWalletAuthorized(walletAddress);
@@ -71,11 +71,7 @@ const Navbar = () => {
               {isDarkMode ? <FaSun className="w-5 h-5" /> : <FaMoon className="w-5 h-5" />}
             </button>
             <PointsWidget />
-            {isPrivyEnabled ? (
-              <PrivySolanaButton />
-            ) : (
-              <WalletMultiButton className="!bg-purple-600 hover:!bg-purple-700" />
-            )}
+            <WalletMultiButton className="!bg-purple-600 hover:!bg-purple-700" />
           </div>
         </div>
 
