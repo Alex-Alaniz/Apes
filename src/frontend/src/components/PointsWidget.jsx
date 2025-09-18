@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useSafeWallet } from '../hooks/useSafeWallet';
+import { useAppWallet } from '../hooks/useAppWallet';
 import { Coins, TrendingUp, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const PointsWidget = () => {
-  const { publicKey } = useSafeWallet();
+  const { publicKey } = useAppWallet();
   const navigate = useNavigate();
   const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(true);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useAppWallet } from '../hooks/useAppWallet';
 import { useNavigate } from 'react-router-dom';
 import MarketList from '../components/MarketList';
 import SportFilter from '../components/SportFilter';
@@ -51,7 +51,7 @@ const MarketsPage = () => {
   const [sortBy, setSortBy] = useState('date'); // 'date', 'volume', 'participants'
   const [sortOrder, setSortOrder] = useState('asc'); // 'asc' or 'desc'
   
-  const { wallet, publicKey, connected, signTransaction, signAllTransactions } = useWallet();
+  const { publicKey, connected, getProvider } = useAppWallet();
   const scrollPositionRef = useRef(0);
   const navigate = useNavigate();
 

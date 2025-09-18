@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { usePrivy, useConnectWallet } from '@privy-io/react-auth';
+import { usePrivy, useConnectWallet, useLogin } from '@privy-io/react-auth';
 import { useAppWallet } from '../hooks/useAppWallet';
 import { FaWallet, FaSignOutAlt, FaCopy, FaChevronDown } from 'react-icons/fa';
 import toast from 'react-hot-toast';
@@ -11,7 +11,8 @@ import toast from 'react-hot-toast';
 function SolanaOnlyWalletButton() {
   const { authenticated, ready, logout } = usePrivy();
   const { connectWallet } = useConnectWallet();
-  const { walletAddress } = useAppWallet();
+  const { login } = useLogin();
+  const { walletAddress, connected } = useAppWallet();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
   
@@ -27,49 +28,25 @@ function SolanaOnlyWalletButton() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   
-  // Prevent any auto-connection attempts
-  useEffect(() => {
-    // Override window.ethereum to prevent MetaMask detection
-    if (typeof window !== 'undefined' && window.ethereum) {
-      // Store original ethereum object if needed for server-side
-      window._originalEthereum = window.ethereum;
-      
-      // Remove ethereum object to prevent auto-detection
-      try {
-        delete window.ethereum;
-      } catch (e) {
-        // If delete fails, override with null
-        window.ethereum = null;
-      }
-    }
-    
-    // Cleanup on unmount
-    return () => {
-      if (window._originalEthereum) {
-        window.ethereum = window._originalEthereum;
-      }
-    };
-  }, []);
+  // Don't block ethereum entirely as it might interfere with Privy
+  // Just prevent auto-connection
   
   const handleConnect = async () => {
-    if (authenticated && walletAddress) {
+    if (connected && walletAddress) {
       // Already connected, show dropdown
       setShowDropdown(!showDropdown);
       return;
     }
     
     try {
-      // Connect ONLY Solana wallets
-      await connectWallet({
-        // Force Solana-only connection
-        walletChainType: 'solana',
-        // Only show these specific wallets
-        walletList: ['phantom', 'solflare', 'backpack'],
-        // Prevent any auto-connection
-        autoConnect: false,
-        // Don't suggest any addresses
-        suggestedAddress: undefined
-      });
+      // If not authenticated, login first
+      if (!authenticated) {
+        await login();
+        return;
+      }
+      
+      // Connect wallet - Privy will handle the chain selection
+      await connectWallet();
       
       toast.success('Solana wallet connected!');
     } catch (error) {
@@ -102,7 +79,7 @@ function SolanaOnlyWalletButton() {
   const getButtonText = () => {
     if (!ready) return 'Loading...';
     
-    if (authenticated && walletAddress) {
+    if (connected && walletAddress) {
       // Show truncated Solana address
       return `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`;
     }
@@ -127,11 +104,11 @@ function SolanaOnlyWalletButton() {
       >
         <FaWallet className="w-4 h-4" />
         <span>{getButtonText()}</span>
-        {authenticated && walletAddress && <FaChevronDown className="w-3 h-3 ml-1" />}
+        {connected && walletAddress && <FaChevronDown className="w-3 h-3 ml-1" />}
       </button>
       
       {/* Dropdown Menu */}
-      {authenticated && walletAddress && showDropdown && (
+      {connected && walletAddress && showDropdown && (
         <div className="absolute right-0 mt-2 w-64 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-50">
           <div className="p-4 border-b border-gray-700">
             <div className="text-sm text-gray-400 mb-1">Solana Wallet</div>

@@ -11,7 +11,6 @@ import { PrivyProvider } from '@privy-io/react-auth';
 import { privyConfig } from './config/privy';
 import App from './App';
 import ObjectRenderingDebugger from './components/ObjectRenderingDebugger';
-import EVMWalletBlocker from './components/EVMWalletBlocker';
 import './index.css';
 
 // Buffer polyfill loaded from ./polyfills.js
@@ -49,13 +48,11 @@ class ErrorBoundary extends React.Component {
 // Conditionally wrap with Privy
 const AppWithProviders = () => {
   const appContent = (
-    <EVMWalletBlocker>
-      <Router>
-        <ObjectRenderingDebugger>
-          <App />
-        </ObjectRenderingDebugger>
-      </Router>
-    </EVMWalletBlocker>
+    <Router>
+      <ObjectRenderingDebugger>
+        <App />
+      </ObjectRenderingDebugger>
+    </Router>
   );
   
   // Only use Privy if configured

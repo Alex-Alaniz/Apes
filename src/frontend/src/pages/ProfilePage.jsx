@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useAppWallet } from '../hooks/useAppWallet';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import marketService from '../services/marketService';
@@ -12,7 +12,7 @@ import { FaCheckCircle } from 'react-icons/fa';
 import ReferralSection from '../components/ReferralSection';
 
 const ProfilePage = () => {
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, walletAddress } = useAppWallet();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [userStats, setUserStats] = useState({

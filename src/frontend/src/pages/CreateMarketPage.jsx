@@ -20,7 +20,7 @@ const IDL = {
 };
 
 const CreateMarketPage = () => {
-  const { publicKey, wallet } = useWallet();
+  const { publicKey, getProvider } = useAppWallet();
   const walletAdapter = wallet?.adapter;
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);

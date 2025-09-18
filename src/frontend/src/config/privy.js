@@ -22,8 +22,8 @@ export const privyConfig = {
   appId: 'cmfmo7so5004ojz0bl03kuy1l', // Your Privy App ID
   config: {
     
-    // Login methods
-    loginMethods: ['email', 'google', 'twitter', 'wallet'],
+    // Login methods - restore all methods
+    loginMethods: ['email', 'sms', 'google', 'twitter', 'discord', 'wallet'],
     
     // CRITICAL: Enable ONLY Solana wallets for frontend
     appearance: {
@@ -31,8 +31,12 @@ export const privyConfig = {
       accentColor: '#FF6B6B',
       logo: '/primape/Asset 1@3x.png',
       showWalletLoginFirst: false,
-      walletChainType: 'solana-only', // ONLY Solana for auth
-      walletList: ['phantom', 'solflare', 'backpack'] // Only Solana wallets
+      // Change to support both but prioritize Solana
+      walletChainType: 'ethereum-and-solana',
+      // Show only Solana wallets in the list
+      walletList: ['phantom', 'solflare', 'backpack'],
+      // Ensure Solana is the primary chain
+      defaultChain: 'solana'
     },
     
     // Prevent auto-connection and wallet conflicts

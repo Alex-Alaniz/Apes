@@ -1,11 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useSafeWallet } from '../hooks/useSafeWallet';
+import { useAppWallet } from '../hooks/useAppWallet';
 import CS2ParlayBanner from '../components/CS2ParlayBanner';
 // import MarketCard from '../components/MarketCard';
 
 const HomePage = () => {
-  const { publicKey } = useSafeWallet();
+  const { publicKey } = useAppWallet();
 
   // Mock data for featured markets
   const featuredMarkets = [
