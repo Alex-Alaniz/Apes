@@ -43,19 +43,24 @@ if (typeof window !== 'undefined') {
 }
 
 function App() {
-  // Clear any stale wallet adapter localStorage on mount to prevent stuck loading states
+  // Only clear problematic wallet adapter localStorage if there are issues
   React.useEffect(() => {
     try {
-      // Remove Solana wallet adapter localStorage keys that might cause issues
-      const keysToCheck = ['walletName', 'solana-wallet', 'walletAdapter'];
-      keysToCheck.forEach(key => {
-        if (localStorage.getItem(key)) {
-          console.log(`Clearing stale wallet data: ${key}`);
-          localStorage.removeItem(key);
-        }
+      // Only clear if we detect a problem state
+      const walletName = localStorage.getItem('walletName');
+      if (walletName && walletName !== 'Phantom' && walletName !== 'Solflare') {
+        console.log(`Clearing unknown wallet adapter: ${walletName}`);
+        localStorage.removeItem('walletName');
+      }
+      
+      // Log current wallet adapter state for debugging
+      console.log('Wallet adapter localStorage:', {
+        walletName: localStorage.getItem('walletName'),
+        hasPhantom: !!window.phantom?.solana,
+        hasSolflare: !!window.solflare
       });
     } catch (e) {
-      console.log('Could not clear wallet localStorage:', e);
+      console.log('Could not check wallet localStorage:', e);
     }
   }, []);
 
@@ -79,9 +84,21 @@ function App() {
 
   // Handle wallet connection errors gracefully
   const onError = React.useCallback((error) => {
-    console.log('Wallet connection error (handled):', error.message);
-    // Silently handle wallet connection errors
-    // Don't show error to user for autoConnect failures
+    console.error('Wallet adapter error:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+      error
+    });
+    
+    // Check for specific error types
+    if (error.message?.includes('User rejected')) {
+      console.log('User cancelled wallet connection');
+    } else if (error.message?.includes('Wallet not found')) {
+      console.log('Wallet extension not installed');
+    } else {
+      console.error('Unknown wallet error:', error);
+    }
   }, []);
 
   // App content
