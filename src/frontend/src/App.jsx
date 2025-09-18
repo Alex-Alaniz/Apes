@@ -43,24 +43,41 @@ if (typeof window !== 'undefined') {
 }
 
 function App() {
-  // Only clear problematic wallet adapter localStorage if there are issues
+  // Clear wallet adapter localStorage on load to prevent stuck states
   React.useEffect(() => {
     try {
-      // Only clear if we detect a problem state
-      const walletName = localStorage.getItem('walletName');
-      if (walletName && walletName !== 'Phantom' && walletName !== 'Solflare') {
-        console.log(`Clearing unknown wallet adapter: ${walletName}`);
-        localStorage.removeItem('walletName');
+      // Force clear all wallet adapter localStorage to fix production issues
+      const walletKeys = [
+        'walletName',
+        'walletAdapter',
+        'solana-wallet',
+        'wallet',
+        'WalletAdapter'
+      ];
+      
+      let cleared = false;
+      walletKeys.forEach(key => {
+        if (localStorage.getItem(key)) {
+          console.log(`Clearing wallet localStorage: ${key} = ${localStorage.getItem(key)}`);
+          localStorage.removeItem(key);
+          cleared = true;
+        }
+      });
+      
+      if (cleared) {
+        console.log('Wallet localStorage cleared to fix stuck loading state');
       }
       
-      // Log current wallet adapter state for debugging
-      console.log('Wallet adapter localStorage:', {
-        walletName: localStorage.getItem('walletName'),
+      // Log current state for debugging
+      console.log('APES v1.0.1 - Wallet environment:', {
+        version: '1.0.1-wallet-fix',
+        timestamp: new Date().toISOString(),
         hasPhantom: !!window.phantom?.solana,
-        hasSolflare: !!window.solflare
+        hasSolflare: !!window.solflare,
+        localStorage: Object.keys(localStorage).filter(k => k.toLowerCase().includes('wallet'))
       });
     } catch (e) {
-      console.log('Could not check wallet localStorage:', e);
+      console.error('Could not clear wallet localStorage:', e);
     }
   }, []);
 
