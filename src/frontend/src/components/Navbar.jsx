@@ -1,20 +1,24 @@
-import React from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { FaMoon, FaSun } from 'react-icons/fa';
 import { isWalletAuthorized } from '../config/access';
 import { useTheme } from '../contexts/ThemeContext';
 import PointsWidget from './PointsWidget';
-// import PrivySolanaButton from './PrivySolanaButton'; // Removed to fix production
+import WalletButton from './WalletButton';
 import { useAppWallet } from '../hooks/useAppWallet';
+import DepositModal from './DepositModal';
+
+// Lazy load Privy button to avoid errors when disabled
+const PrivySolanaWalletButton = lazy(() => import('./PrivySolanaWalletButton'));
 
 const Navbar = () => {
   const location = useLocation();
   const { walletAddress } = useAppWallet();
   const { isDarkMode, toggleTheme } = useTheme();
+  const [showDepositModal, setShowDepositModal] = useState(false);
   
-  // Determine if Privy is enabled - HARDCODED TO FALSE TO FIX PRODUCTION
-  const isPrivyEnabled = false; // import.meta.env.VITE_ENABLE_PRIVY === 'true';
+  // Determine if Privy is enabled
+  const isPrivyEnabled = import.meta.env.VITE_ENABLE_PRIVY === 'true';
   
   // Check if current wallet is authorized
   const isAuthorized = walletAddress && isWalletAuthorized(walletAddress);
@@ -48,6 +52,9 @@ const Navbar = () => {
             <Link to="/daily-crypto" className={`${isActive('/daily-crypto')} transition-colors flex items-center gap-1`}>
               <span>🔮</span> Daily Crypto
             </Link>
+            <Link to="/livestreams" className={`${isActive('/livestreams')} transition-colors flex items-center gap-1`}>
+              <span>🎥</span> Livestreams
+            </Link>
             <Link to="/leaderboard" className={`${isActive('/leaderboard')} transition-colors`}>
               Leaderboard
             </Link>
@@ -71,7 +78,24 @@ const Navbar = () => {
               {isDarkMode ? <FaSun className="w-5 h-5" /> : <FaMoon className="w-5 h-5" />}
             </button>
             <PointsWidget />
-            <WalletMultiButton className="!bg-purple-600 hover:!bg-purple-700" />
+            
+            {/* Deposit Button - Show only when wallet connected */}
+            {walletAddress && (
+              <button
+                onClick={() => setShowDepositModal(true)}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+              >
+                Deposit
+              </button>
+            )}
+            
+            {isPrivyEnabled ? (
+              <Suspense fallback={<div className="px-4 py-2">Loading...</div>}>
+                <PrivySolanaWalletButton />
+              </Suspense>
+            ) : (
+              <WalletButton />
+            )}
           </div>
         </div>
 
@@ -83,6 +107,9 @@ const Navbar = () => {
             </Link>
             <Link to="/tournaments" className={`${isActive('/tournaments')} transition-colors`}>
               Tournaments
+            </Link>
+            <Link to="/livestreams" className={`${isActive('/livestreams')} transition-colors`}>
+              Livestreams
             </Link>
             <Link to="/leaderboard" className={`${isActive('/leaderboard')} transition-colors`}>
               Leaderboard
@@ -98,6 +125,12 @@ const Navbar = () => {
           </div>
         </div>
       </div>
+      
+      {/* Deposit Modal */}
+      <DepositModal 
+        isOpen={showDepositModal} 
+        onClose={() => setShowDepositModal(false)} 
+      />
     </nav>
   );
 };

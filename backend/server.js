@@ -86,6 +86,8 @@ const superAdminRoutes = require('./routes/superAdmin');
 const referralRoutes = require('./routes/referrals');
 const polymarketRoutes = require('./routes/polymarket');
 const monitoringRoutes = require('./routes/monitoring');
+const depositRoutes = require('./routes/deposits');
+const livestreamRoutes = require('./routes/livestreams');
 const { errorHandler } = require('./utils/errorHandler');
 
 // Handle OPTIONS pre-flight for PATCH requests
@@ -371,6 +373,10 @@ app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/referrals', authLimiter, referralRoutes);
 // Polymarket proxy routes  
 app.use('/api/polymarket', polymarketRoutes);
+// Deposit and cross-chain routes
+app.use('/api/deposits', depositRoutes);
+// Livestream markets routes
+app.use('/api/livestreams', livestreamRoutes);
 // Order book routes for external market integration
 app.use('/api/orderbook', require('./routes/orderBook'));
 // Privy test routes
@@ -545,6 +551,13 @@ async function startServer() {
       console.log('🔄 Starting background service initialization...');
       console.log('🌐 Server is listening on all available interfaces (IPv4)');
       
+      // Store server instance for WebSocket
+      serverInstance = server;
+      
+      // Initialize WebSocket service
+      const streamWebSocketService = require('./services/streamWebSocketService');
+      streamWebSocketService.initialize(server);
+      
       // Initialize services in the background AFTER server is listening
       initializeServices().catch(error => {
         console.error('❌ Service initialization failed:', error);
@@ -661,6 +674,30 @@ async function initializeServices() {
       console.log('💡 External market integration will be limited');
     }
 
+    // Initialize livestream services (optional - graceful fallback)
+    try {
+      console.log('🔄 Initializing livestream services...');
+      const pumpfunStreamService = require('./services/pumpfunStreamService');
+      const streamMarketService = require('./services/streamMarketService');
+      
+      await pumpfunStreamService.initialize();
+      await streamMarketService.initialize();
+      
+      // Skip onChainMarketService if IDL is missing
+      try {
+        const onChainMarketService = require('./services/onChainMarketService');
+        await onChainMarketService.initialize();
+      } catch (idlError) {
+        console.log('⚠️ On-chain market creation disabled (IDL not found)');
+      }
+      
+      console.log('✅ Livestream services initialized');
+      console.log('🎥 Monitoring PumpFun streams for prediction markets');
+    } catch (streamError) {
+      console.log('⚠️ Livestream services not available:', streamError.message);
+      console.log('💡 Livestream features will be limited');
+    }
+
     // Scrapers removed - handled in separate project
     console.log('ℹ️ Scrapers handled in separate project to avoid deployment conflicts');
 
@@ -675,6 +712,9 @@ async function initializeServices() {
     // Don't exit - let server continue running
   }
 }
+
+// Store server instance globally for WebSocket
+let serverInstance = null;
 
 // Start the server
 startServer();

@@ -32,6 +32,9 @@ import CS2ParlayTournamentPage from './pages/CS2ParlayTournamentPage';
 import DailyCryptoPredictionsPage from './pages/DailyCryptoPredictionsPage';
 import ReferralPage from './pages/ReferralPage';
 import PrivyTestPage from './pages/PrivyTestPage';
+import LivestreamsPage from './pages/LivestreamsPage';
+import StreamDetailPage from './pages/StreamDetailPage';
+import TestConnectionPage from './pages/TestConnectionPage';
 import { Toaster } from 'react-hot-toast';
 import AppWithReferralTracking from './components/AppWithReferralTracking';
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -101,20 +104,25 @@ function App() {
 
   // Handle wallet connection errors gracefully
   const onError = React.useCallback((error) => {
-    console.error('Wallet adapter error:', {
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-      error
-    });
+    // Ignore certain non-critical errors
+    const ignorableErrors = [
+      'User rejected the request',
+      'The user rejected the request',
+      'Transaction cancelled'
+    ];
     
-    // Check for specific error types
-    if (error.message?.includes('User rejected')) {
-      console.log('User cancelled wallet connection');
-    } else if (error.message?.includes('Wallet not found')) {
-      console.log('Wallet extension not installed');
+    const shouldIgnore = ignorableErrors.some(msg => 
+      error.message?.toLowerCase().includes(msg.toLowerCase())
+    );
+    
+    if (!shouldIgnore) {
+      console.error('Wallet adapter error:', {
+        message: error.message,
+        name: error.name,
+        error
+      });
     } else {
-      console.error('Unknown wallet error:', error);
+      console.log('User action:', error.message);
     }
   }, []);
 
@@ -150,6 +158,9 @@ function App() {
             <Route path="/debug-api" element={<DebugApiPage />} />
             <Route path="/ref/:referralCode" element={<ReferralPage />} />
             <Route path="/privy-test" element={<PrivyTestPage />} />
+            <Route path="/livestreams" element={<LivestreamsPage />} />
+            <Route path="/livestream/:tokenAddress" element={<StreamDetailPage />} />
+            <Route path="/test-connection" element={<TestConnectionPage />} />
           </Routes>
           </main>
           <Toaster position="bottom-right" />

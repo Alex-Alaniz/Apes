@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const PolymarketProxyService = require('../services/polymarketProxyService');
+const polymarketProxy = require('../services/polymarketProxyService');
 const polymarketMock = require('../services/polymarketMockService');
-const { authenticateUser } = require('../middleware/auth');
+// const { authenticateUser } = require('../middleware/auth');
 const { 
   asyncHandler, 
   ValidationError, 
@@ -12,11 +12,18 @@ const {
   validateWalletAddress
 } = require('../utils/errorHandler');
 
-// Initialize service
-const polymarketProxy = new PolymarketProxyService();
-
 // Use mock service for now
 const USE_MOCK = true; // Toggle this for real implementation
+
+// Simple auth middleware for polymarket routes
+const authenticateUser = (req, res, next) => {
+  const walletAddress = req.headers['x-wallet-address'];
+  if (!walletAddress) {
+    return res.status(401).json({ error: 'No wallet address provided' });
+  }
+  req.user = { wallet_address: walletAddress };
+  next();
+};
 
 // Middleware to verify user has connected wallet
 const requireWallet = async (req, res, next) => {

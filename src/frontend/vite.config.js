@@ -29,8 +29,7 @@ export default defineConfig({
   },
   define: {
     global: 'globalThis',
-    'process.env': {},
-    'import.meta.env.VITE_API_URL': '"https://apes-production.up.railway.app"'
+    'process.env': {}
   },
   resolve: {
     alias: {

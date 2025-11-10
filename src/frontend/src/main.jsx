@@ -3,6 +3,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
+import { PrivyProvider } from '@privy-io/react-auth';
+import { privyConfig } from './config/privyConfig';
 import App from './App';
 import './index.css';
 
@@ -34,9 +36,23 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Main app - Privy temporarily disabled
+// Main app with conditional Privy support
 function MainApp() {
-  // Always use non-Privy mode until properly configured
+  const isPrivyEnabled = import.meta.env.VITE_ENABLE_PRIVY === 'true';
+  const privyAppId = import.meta.env.VITE_PRIVY_APP_ID;
+  
+  // If Privy is enabled and configured
+  if (isPrivyEnabled && privyAppId) {
+    return (
+      <PrivyProvider appId={privyAppId} config={privyConfig}>
+        <Router>
+          <App />
+        </Router>
+      </PrivyProvider>
+    );
+  }
+  
+  // Fallback to standard mode
   return (
     <Router>
       <App />

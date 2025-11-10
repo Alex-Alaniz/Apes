@@ -12,7 +12,7 @@ class PolymarketProxyService {
     
     // Polygon RPC for transaction monitoring
     this.polygonRpc = process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com';
-    this.provider = new ethers.JsonRpcProvider(this.polygonRpc);
+    this.provider = new ethers.providers.JsonRpcProvider(this.polygonRpc);
     
     // Solana connection for APES balance checking
     this.solanaConnection = new Connection(
