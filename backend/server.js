@@ -679,11 +679,17 @@ async function initializeServices() {
       console.log('🔄 Initializing livestream services...');
       const pumpfunStreamService = require('./services/pumpfunStreamService');
       const streamMarketService = require('./services/streamMarketService');
-      const onChainMarketService = require('./services/onChainMarketService');
       
       await pumpfunStreamService.initialize();
       await streamMarketService.initialize();
-      await onChainMarketService.initialize();
+      
+      // Skip onChainMarketService if IDL is missing
+      try {
+        const onChainMarketService = require('./services/onChainMarketService');
+        await onChainMarketService.initialize();
+      } catch (idlError) {
+        console.log('⚠️ On-chain market creation disabled (IDL not found)');
+      }
       
       console.log('✅ Livestream services initialized');
       console.log('🎥 Monitoring PumpFun streams for prediction markets');

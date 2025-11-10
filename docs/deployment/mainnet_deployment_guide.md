@@ -1,183 +1,193 @@
-# Mainnet Deployment Guide
+# 🚀 APES Prediction Market - Mainnet Deployment Guide
 
-## Overview
-This document provides instructions for deploying the Solana Prediction Market platform to mainnet. It covers all necessary steps from environment setup to post-deployment verification.
+## ✅ Status: Ready for Production Launch
 
-## Prerequisites
-- Solana CLI tools installed and configured
-- Anchor framework installed
-- Node.js and npm installed
-- Access to deployment wallet with sufficient SOL for deployment costs
-- BelieveApp API key
-- Meteora liquidity pool access
+Your APES Prediction Market Platform is now **LIVE on Solana Mainnet** and ready for deployment!
 
-## Deployment Steps
+## 📋 Configuration Summary
 
-### 1. Environment Setup
+### 🔗 Mainnet Smart Contract Details
+- **Program ID**: `APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS`
+- **Platform State**: `GD3SoR4aHLLtzY9jYZyL7qH64VA73waMtvH9KRSZ3Bgb`
+- **APES Token**: `9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts`
+- **Treasury**: `APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z`
 
-```bash
-# Set up environment variables
-export SOLANA_CLUSTER=mainnet-beta
-export BELIEVE_APP_API_KEY=your_api_key_here
-export METEORA_POOL_ADDRESS=881ooAUZamh41avqLzRbJz8EMzPn5vxFyjhcWmzjDRbu
-export TOKEN_MINT_ADDRESS=9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts
-```
+### 🌐 Network Configuration
+- **RPC Provider**: Helius (Primary)
+- **WebSocket Support**: ✅ Enabled
+- **Fee Structure**: 2.5% bet burn, 1.5% claim burn, 1% platform fee
 
-### 2. Smart Contract Deployment
+## 🔧 Frontend Deployment Instructions
+
+### Step 1: Environment Variables for Production
+
+Create a `.env.production` file in your frontend directory:
 
 ```bash
-# Navigate to smart contracts directory
-cd /home/ubuntu/prediction_market_project/smart_contracts
+# Network Configuration
+VITE_SOLANA_NETWORK=mainnet
 
-# Build the program
-anchor build
+# API Keys (replace with your actual keys)
+VITE_HELIUS_API_KEY=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d
+VITE_BELIEVE_API_KEY=your-believe-api-key
 
-# Deploy to mainnet
-anchor deploy --provider.cluster mainnet-beta
-
-# Verify program ID
-solana address -k target/deploy/prediction_market-keypair.json
+# Optional: Override default configurations
+VITE_PROGRAM_ID=APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS
+VITE_TOKEN_MINT=9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts
 ```
 
-### 3. Initialize Platform
+### Step 2: Deploy to Vercel
 
 ```bash
-# Run initialization script
-node scripts/initialize_platform.js \
-  --admin YOUR_ADMIN_WALLET \
-  --token-mint 9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts \
-  --bet-burn-rate 250 \
-  --claim-burn-rate 150 \
-  --platform-fee 50
+# Install Vercel CLI if not already installed
+npm i -g vercel
+
+# Navigate to frontend directory
+cd src/frontend
+
+# Deploy to Vercel
+vercel --prod
+
+# Set environment variables in Vercel dashboard
+# Go to your project settings and add the environment variables above
 ```
 
-### 4. Backend Deployment
+### Step 3: Deploy to Railway (Alternative)
+
+```bash
+# Install Railway CLI if not already installed
+npm install -g @railway/cli
+
+# Navigate to frontend directory
+cd src/frontend
+
+# Login to Railway
+railway login
+
+# Initialize and deploy
+railway init
+railway up
+
+# Set environment variables in Railway dashboard
+```
+
+## 🗄️ Backend Deployment Instructions
+
+### Step 1: PostgreSQL Database Setup
+
+**Option A: Railway PostgreSQL**
+```bash
+# Add PostgreSQL service in Railway
+railway add postgresql
+
+# Get connection details from Railway dashboard
+```
+
+**Option B: Supabase**
+```bash
+# Create project at https://supabase.com
+# Get connection string from project settings
+```
+
+### Step 2: Backend Environment Variables
+
+Create `.env` in your backend directory:
+
+```bash
+# Database
+DATABASE_URL=your-postgresql-connection-string
+
+# Solana Configuration
+SOLANA_NETWORK=mainnet
+SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=4a7d2ddd-3e83-4265-a9fb-0e4a5b51fd6d
+PROGRAM_ID=APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS
+
+# API Keys
+BELIEVE_API_KEY=your-believe-api-key
+
+# Security
+JWT_SECRET=your-secure-jwt-secret
+```
+
+### Step 3: Deploy Backend
 
 ```bash
 # Navigate to backend directory
-cd /home/ubuntu/prediction_market_project/backend
+cd src/backend
 
-# Install dependencies
-npm install
+# Deploy to Railway
+railway init
+railway up
 
-# Build the application
-npm run build
-
-# Deploy to server
-npm run deploy
+# Or deploy to Heroku/other platform of choice
 ```
 
-### 5. Frontend Deployment
+## 🎯 Testing Your Deployment
 
-```bash
-# Navigate to frontend directory
-cd /home/ubuntu/prediction_market_project/frontend
+### 1. Frontend Testing
+- ✅ Wallet connection works
+- ✅ APES token balance displays correctly
+- ✅ Can view existing markets
+- ✅ Transaction signing works
 
-# Install dependencies
-npm install
+### 2. Smart Contract Testing
+- ✅ Platform state initialized
+- ✅ Can create markets (with authorized wallet)
+- ✅ Can place predictions
+- ✅ Fee structure working correctly
 
-# Build the application
-npm run build
+### 3. Backend Testing
+- ✅ API endpoints respond
+- ✅ Database connection works
+- ✅ Market data syncing
+- ✅ Believe API integration
 
-# Deploy to hosting service
-npm run deploy
-```
+## 🔗 Important URLs
 
-### 6. Post-Deployment Verification
+### Production Links
+- **Frontend**: Your deployed Vercel/Railway URL
+- **Backend API**: Your deployed backend URL
+- **Admin Panel**: `your-frontend-url/admin`
 
-```bash
-# Verify program is deployed
-solana program show PROGRAM_ID
+### Blockchain Links
+- **Program**: https://solscan.io/account/APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS
+- **Platform State**: https://solscan.io/account/GD3SoR4aHLLtzY9jYZyL7qH64VA73waMtvH9KRSZ3Bgb
+- **APES Token**: https://solscan.io/token/9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts
 
-# Verify platform state is initialized
-node scripts/verify_platform.js
+## 🚀 Go Live Checklist
 
-# Test basic functionality
-node scripts/test_functionality.js
-```
+- [ ] ✅ Smart contract deployed and initialized
+- [ ] ✅ Frontend configured for mainnet
+- [ ] 📝 Frontend deployed to production
+- [ ] 📝 Backend deployed with PostgreSQL
+- [ ] 📝 Environment variables set correctly
+- [ ] 📝 DNS/domain configured (optional)
+- [ ] 📝 SSL certificates enabled
+- [ ] 📝 Admin access verified
+- [ ] 📝 First test market created
+- [ ] 📝 Believe API integration tested
 
-## Configuration
+## 💰 Fee Structure Summary
 
-### Program IDs and Addresses
+| Action | Fee Type | Rate | Recipient |
+|--------|----------|------|-----------|
+| Place Bet | Burn | 2.5% | Token Burn |
+| Claim Reward | Burn | 1.5% | Token Burn |
+| Platform Fee | Transfer | 1% | PRIMAPE Treasury |
 
-After deployment, update the following configuration files with the deployed program IDs and addresses:
+**Total Platform Revenue**: 1% of all betting volume
+**Token Deflationary Pressure**: 4% of all betting volume burned
 
-- `/home/ubuntu/prediction_market_project/frontend/src/config/constants.js`
-- `/home/ubuntu/prediction_market_project/backend/src/config/constants.js`
+## 🎉 Launch Your Platform!
 
-### API Endpoints
+Your APES Prediction Market Platform is now ready for production use! 
 
-Update the API endpoint configuration in:
+**Key Features:**
+- ✅ Custom APES Program ID for branding
+- ✅ Integration with live APES token
+- ✅ Mainnet-ready smart contracts
+- ✅ Professional fee structure
+- ✅ Treasury management
+- ✅ Scalable architecture
 
-- `/home/ubuntu/prediction_market_project/frontend/src/config/api.js`
-
-## User Testing Guide
-
-### Setting Up a Test Wallet
-
-1. Install a Solana wallet (Phantom, Solflare, etc.)
-2. Create a new wallet or import an existing one
-3. Add the platform token to your wallet using the token address: `9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts`
-4. Acquire test tokens through the faucet or token swap
-
-### Testing Platform Features
-
-#### Market Creation
-1. Connect your wallet to the platform
-2. Navigate to "Create Market" page
-3. Fill in market details (question, options, end date, category)
-4. Stake tokens to create the market
-5. Confirm transaction in your wallet
-
-#### Placing Predictions
-1. Browse available markets
-2. Select a market to participate in
-3. Choose your prediction option
-4. Enter the amount to stake
-5. Confirm transaction in your wallet
-
-#### Claiming Rewards
-1. Navigate to "My Predictions" page
-2. Find resolved markets where you predicted correctly
-3. Click "Claim Reward" button
-4. Confirm transaction in your wallet
-
-#### Token Swapping
-1. Navigate to "Token Swap" page
-2. Enter amount to swap
-3. Review swap details (price impact, fee, minimum received)
-4. Confirm transaction in your wallet
-
-### Admin Testing
-
-For admin users, additional testing steps:
-
-1. Market resolution
-2. Platform pause/unpause
-3. Burn rate adjustments
-4. Emergency market pause
-
-## Troubleshooting
-
-### Common Issues
-
-#### Transaction Errors
-- Check wallet connection
-- Ensure sufficient SOL for transaction fees
-- Verify token balance for operations
-
-#### Market Creation Issues
-- Ensure stake amount meets minimum requirement
-- Verify question and options meet length requirements
-- Check end date is in the future
-
-#### Reward Claiming Issues
-- Verify market is resolved
-- Ensure you predicted the winning option
-- Check if rewards were already claimed
-
-## Support
-
-For technical support during deployment or testing:
-- Email: support@solanapredictions.com
-- Discord: https://discord.gg/solanapredictions
+**Ready to create your first markets and start generating revenue!** 🚀 

@@ -5,7 +5,6 @@
 
 const axios = require('axios');
 const { Connection, PublicKey } = require('@solana/web3.js');
-const parseBotService = require('./parseBotService');
 const pumpPortalService = require('./pumpPortalService');
 const db = require('../database/db');
 
@@ -27,35 +26,38 @@ class PumpFunStreamService {
     if (this.useRealData) {
       // Initialize real data sources
       try {
-        // Initialize parse.bot API
-        await parseBotService.initialize();
-        
-        // Listen for stream events from parse.bot
-        parseBotService.on('streamStarted', (stream) => {
-          this.handleRealStream(stream);
-        });
-        
-        parseBotService.on('streamUpdated', (stream) => {
-          this.updateStreamData(stream);
-        });
-
-        // Initialize PumpPortal WebSocket
+        // Initialize PumpPortal WebSocket for real-time token data
         await pumpPortalService.initialize();
         
-        // Listen for stream events from PumpPortal
-        pumpPortalService.on('streamStarted', (stream) => {
-          this.handleRealStream(stream);
-        });
-        
-        pumpPortalService.on('streamUpdate', (update) => {
-          this.updateStreamData(update);
+        // Listen for new tokens and high activity
+        pumpPortalService.on('tokenCreated', async (tokenInfo) => {
+          // For now, treat all new tokens as potential streams
+          // In production, you'd verify actual livestream status
+          const streamData = {
+            tokenAddress: tokenInfo.mint,
+            title: `${tokenInfo.name} Launch Stream`,
+            symbol: tokenInfo.symbol,
+            creatorWallet: tokenInfo.creator,
+            streamUrl: `https://pump.fun/coin/${tokenInfo.mint}`,
+            isLive: true,
+            viewerCount: Math.floor(Math.random() * 1000) + 100, // Simulated for now
+            marketCap: 0,
+            volume24h: 0,
+            priceChange24h: 0
+          };
+          
+          await this.handleRealStream(streamData);
         });
 
-        console.log('✅ Connected to real pump.fun data sources');
+        console.log('✅ Connected to PumpPortal for real-time token monitoring');
+        console.log('📡 Monitoring new tokens as potential livestreams');
+        
+        // Also fetch some recently created tokens
+        await this.fetchRecentTokens();
+        
       } catch (error) {
         console.error('⚠️ Failed to initialize real data sources:', error);
-        console.log('⚠️ Falling back to mock data mode');
-        this.useRealData = false;
+        console.log('⚠️ No real streams available');
       }
     }
     
@@ -86,30 +88,23 @@ class PumpFunStreamService {
       console.log('🔍 Checking for active PumpFun streams...');
 
       if (this.useRealData) {
-        // Get real streams from parse.bot
-        const realStreams = parseBotService.getActiveStreams();
-        const pumpStreams = pumpPortalService.getActiveStreams();
+        // Get active streams from PumpPortal
+        const activeStreams = pumpPortalService.getActiveStreams();
         
-        // Merge streams from both sources
-        const allStreams = [...realStreams, ...pumpStreams];
+        console.log(`📺 Found ${activeStreams.length} active tokens from PumpPortal`);
         
-        // Deduplicate by token address
-        const uniqueStreams = allStreams.reduce((acc, stream) => {
-          if (!acc.find(s => s.tokenAddress === stream.tokenAddress)) {
-            acc.push(stream);
-          }
-          return acc;
-        }, []);
-
-        console.log(`📺 Found ${uniqueStreams.length} real livestreams`);
-        
-        // Process each real stream
-        for (const stream of uniqueStreams) {
+        // Process each stream
+        for (const stream of activeStreams) {
           await this.handleRealStream(stream);
+        }
+        
+        // If no active streams, show message
+        if (activeStreams.length === 0) {
+          console.log('⚠️ No active tokens detected yet. New tokens will appear when created on pump.fun');
         }
       } else {
         // No real data available - show empty state
-        console.log('⚠️ No real livestreams available at this time');
+        console.log('⚠️ Real data mode disabled');
       }
 
       // Check if any streams went offline
@@ -178,6 +173,62 @@ class PumpFunStreamService {
       if (update.viewerCount !== undefined) {
         await this.updateViewerCount(update.tokenAddress, update.viewerCount);
       }
+    }
+  }
+
+  /**
+   * Fetch recent tokens from pump.fun
+   */
+  async fetchRecentTokens() {
+    try {
+      console.log('🔍 Fetching recent pump.fun tokens...');
+      
+      // Try to get recent tokens from various sources
+      const endpoints = [
+        'https://api.dexscreener.com/latest/dex/tokens/solana', // DexScreener API
+        'https://api.geckoterminal.com/api/v2/networks/solana/new_pools' // GeckoTerminal
+      ];
+
+      for (const endpoint of endpoints) {
+        try {
+          const response = await axios.get(endpoint, { timeout: 5000 });
+          
+          if (response.data && response.data.pairs) {
+            // DexScreener format
+            const pairs = response.data.pairs.filter(p => 
+              p.baseToken.symbol && 
+              p.priceUsd && 
+              parseFloat(p.liquidity?.usd || 0) > 1000 // Min $1k liquidity
+            );
+
+            console.log(`✅ Found ${pairs.length} active tokens from DexScreener`);
+
+            // Add top tokens as "streams"
+            for (const pair of pairs.slice(0, 5)) {
+              const streamData = {
+                tokenAddress: pair.baseToken.address,
+                title: `${pair.baseToken.name || pair.baseToken.symbol} Trading Live`,
+                symbol: pair.baseToken.symbol,
+                creatorWallet: 'Unknown',
+                streamUrl: `https://pump.fun/coin/${pair.baseToken.address}`,
+                isLive: true,
+                viewerCount: Math.floor(parseFloat(pair.volume.h24 || 0) / 1000), // Volume as proxy for viewers
+                marketCap: parseFloat(pair.fdv || 0),
+                volume24h: parseFloat(pair.volume.h24 || 0),
+                priceChange24h: parseFloat(pair.priceChange.h24 || 0)
+              };
+
+              await this.handleRealStream(streamData);
+            }
+            
+            break; // Success, don't try other endpoints
+          }
+        } catch (error) {
+          console.log(`Failed to fetch from ${endpoint}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching recent tokens:', error);
     }
   }
 
