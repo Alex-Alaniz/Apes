@@ -180,3 +180,13 @@ build/
 
 # YoYo AI version control directory
 .yoyo/
+
+# Additional ignores for public repo
+*.local.md
+*.credentials
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials/
+secrets/

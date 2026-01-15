@@ -1,164 +1,118 @@
-# 🦍 APES Prediction Market Platform
+# APES - Decentralized Prediction Market Platform
 
-A decentralized prediction market platform built on Solana with real-time betting, leaderboards, and social features.
+A full-stack decentralized prediction market platform built on Solana, featuring on-chain betting, parlay tournaments, and social engagement mechanics.
 
-## 🚀 **LIVE ON MAINNET** ✅
+## 🏗️ Architecture
 
-- **Smart Contract**: `APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS`
-- **APES Token**: `9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts`
-- **Platform State**: `GD3SoR4aHLLtzY9jYZyL7qH64VA73waMtvH9KRSZ3Bgb`
-- **Treasury**: `APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z`
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          APES Platform                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Frontend (React/Vite)  │  Backend (Node/Express)  │  Smart Contracts   │
+│  - Wallet Integration   │  - REST API              │  - Anchor/Rust     │
+│  - Market UI            │  - PostgreSQL            │  - PDAs & Escrows  │
+│  - Leaderboards         │  - Real-time sync        │  - Token Burns     │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
-## ✨ Features
+## 🔗 Deployed Contracts (Solana Mainnet)
 
-### 🎯 **Core Betting**
-- Place predictions with APES tokens
-- Real-time market data and odds
-- Automated payouts for winners
-- Multi-option betting support
+| Contract | Address |
+|----------|---------|
+| Market System | `APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS` |
+| APES Token | `9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts` |
+| Platform State | `GD3SoR4aHLLtzY9jYZyL7qH64VA73waMtvH9KRSZ3Bgb` |
+| Treasury | `APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z` |
 
-### 💰 **Tokenomics**
-- **2.5% burn** on bet placement
-- **1.5% burn** on reward claims  
-- **1% platform fee** to treasury
-- **Deflationary token model**
+## 🦀 Smart Contract Features
 
-### 🏆 **Social & Gamification**
-- Global leaderboards
-- User profiles and stats
-- Engage-to-Earn system
-- Twitter integration
-- Follow system
-- Achievement tracking
+The Solana program (`src/smart_contracts/market_system/`) implements:
 
-### 🛡️ **Security & Trust**
-- Mainnet-ready smart contracts
-- Admin-only market creation
-- Transparent fee structure
-- Professional audit trail
+### Prediction Markets
+- **Multi-option markets** (2-4 outcomes)
+- **PDA-based escrow** for secure fund management
+- **Proportional payout** calculation with u128 precision
+- **Emergency withdraw** for cancelled markets
+
+### Parlay System
+- **Tournament-based** multi-selection betting
+- **Dynamic multipliers** (base + increment per selection)
+- **Exposure limits** to manage platform risk
+- **Match resolution** with selection validation
+
+### Security
+- **Safe math** throughout (checked_add/mul/div/sub)
+- **Access control** with admin + creator whitelist
+- **Pool overflow protection** (MAX_POOL_SIZE)
+- **Division by zero guards**
+- **Escrow balance validation**
+
+### Token Economics
+- **Bet burn**: 2.5% of each bet burned
+- **Claim burn**: 1.5% of winnings burned
+- **Platform fee**: Configurable basis points
+- **Creator fee**: Per-market fee rate
 
 ## 📁 Project Structure
 
 ```
-apes/
 ├── src/
-│   ├── frontend/          # React + Vite frontend
-│   ├── backend/           # Node.js + PostgreSQL API
-│   └── smart_contracts/   # Solana programs
-├── backend/               # Backend server
-├── scripts/              # Deployment scripts
-└── docs/                 # Documentation
+│   ├── smart_contracts/     # Solana/Anchor programs
+│   │   └── market_system/   # Main prediction market program
+│   └── frontend/            # React frontend
+├── backend/                 # Express.js API server
+├── docs/                    # Documentation
+│   ├── deployment/          # Deployment guides
+│   ├── security/            # Security documentation
+│   ├── features/            # Feature documentation
+│   └── api/                 # API documentation
+├── scripts/                 # Utility scripts
+└── tests/                   # Integration tests
 ```
 
 ## 🚀 Quick Start
 
-### Frontend Development
-```bash
-cd src/frontend
-npm install
-npm run dev
-```
+### Prerequisites
+- Node.js 18+
+- Rust & Anchor CLI
+- Solana CLI
+- PostgreSQL
 
-### Backend Development  
+### Development
+
 ```bash
+# Backend
 cd backend
 npm install
-npm run dev
+npm run dev  # Port 5001
+
+# Frontend
+cd src/frontend
+npm install
+npm run dev  # Port 3000
+
+# Smart Contracts
+cd src/smart_contracts/market_system
+anchor build
+anchor test
 ```
 
-### Environment Setup
-Create `.env` files:
-- `src/frontend/.env` - Frontend config
-- `backend/.env` - Backend config
+## 📖 Documentation
 
-See deployment guides for production configuration.
+- [Smart Contract Deep Dive](./SMART_CONTRACT_EXPLAINED.md)
+- [Running the App](./RUNNING_THE_APP.md)
+- [QA Testing Checklist](./QA_TESTING_CHECKLIST.md)
 
-## 🔧 Deployment
+## 🛡️ Security
 
-### Frontend (Vercel)
-1. Connect GitHub repo to Vercel
-2. Set environment variables in Vercel dashboard
-3. Deploy automatically on push
+The smart contracts implement comprehensive security measures:
+- Input validation on all user-provided data
+- Bounds checking for all array accesses
+- Authority verification on sensitive operations
+- Reentrancy protection via account constraints
 
-### Backend (Railway)
-1. Connect GitHub repo to Railway
-2. Add PostgreSQL database
-3. Set environment variables
-4. Deploy automatically on push
-
-## 🎯 Environment Variables
-
-### Frontend
-```env
-VITE_SOLANA_NETWORK=mainnet
-VITE_PROGRAM_ID=APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS
-VITE_TOKEN_MINT=9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts
-VITE_API_URL=https://your-backend-url.com
-```
-
-### Backend  
-```env
-DATABASE_URL=your-postgresql-url
-SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=YOUR_KEY
-PROGRAM_ID=APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS
-```
-
-## 🔗 Important Links
-
-- **Solscan**: [View Contract](https://solscan.io/account/APESCaeLW5RuxNnpNARtDZnSgeVFC5f37Z3VFNKupJUS)
-- **Token**: [APES Token](https://solscan.io/token/9BZJXtmfPpkHnM57gHEx5Pc9oQhLhJtr4mhCsNtttTts)
-- **Treasury**: [Platform Treasury](https://solscan.io/account/APEShoBNNvnM4JV6pW51vb8X4Cq6ZeZy6DqfjmTu6j4z)
-
-## 💰 Revenue Model
-
-| Action | Fee Type | Rate | Destination |
-|--------|----------|------|-------------|
-| Place Bet | Burn | 2.5% | Token Supply Reduction |
-| Claim Reward | Burn | 1.5% | Token Supply Reduction |
-| Platform Fee | Transfer | 1% | PRIMAPE Treasury |
-
-**Total Platform Revenue**: 1% of all betting volume  
-**Token Deflationary Pressure**: 4% of all volume burned
-
-## 🛠️ Technology Stack
-
-- **Frontend**: React, Vite, Tailwind CSS, Framer Motion
-- **Backend**: Node.js, Express, PostgreSQL
-- **Blockchain**: Solana, Anchor Framework
-- **Database**: Supabase/PostgreSQL
-- **Deployment**: Vercel (Frontend), Railway (Backend)
-- **Authentication**: Solana Wallet Adapter
-
-## 📊 Market Features
-
-- **Binary Markets**: Yes/No predictions
-- **Multi-option Markets**: Multiple choice betting
-- **Time-locked**: Markets with resolution dates
-- **Admin Controlled**: Professional market curation
-- **Real-time Updates**: Live betting and odds
-
-## 🏆 Leaderboard System
-
-- **Global Rankings**: Top predictors by accuracy
-- **Engagement Points**: Social interaction rewards
-- **Time-based Views**: Daily, weekly, monthly
-- **Performance Stats**: Win rate, total volume, ROI
-
-## 🔒 Security Features
-
-- **Wallet-based Auth**: No passwords, crypto-native
-- **Admin Controls**: Restricted market creation
-- **Transparent Fees**: On-chain fee collection
-- **Audit Trail**: All transactions on-chain
+See [Security Documentation](./docs/security/) for full audit details.
 
 ## 📄 License
 
-This project is proprietary. All rights reserved.
-
-## 🦍 About APES
-
-APES is building the future of decentralized prediction markets on Solana, combining cutting-edge DeFi technology with engaging social features and sustainable tokenomics.
-
----
-
-**Ready to deploy your prediction market platform!** 🚀
+MIT License - See LICENSE for details.
