@@ -22,7 +22,7 @@
     "@solana/spl-token": "^0.1.8",
     "@solana/web3.js": "^1.98.2",
     "@supabase/supabase-js": "^2.49.10",
-    "axios": "^1.7.2",
+    "axios": "^1.15.0",
     "bcryptjs": "^3.0.2",
     "bs58": "^6.0.0",
     "cors": "^2.8.5",
