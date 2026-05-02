@@ -21,8 +21,8 @@
     "@privy-io/server-auth": "^1.7.1",
     "@solana/spl-token": "^0.1.8",
     "@solana/web3.js": "^1.98.2",
-    "@supabase/supabase-js": "^2.49.10",
-    "axios": "^1.7.2",
+    "@supabase/supabase-js": "^2.105.1",
+    "axios": "^1.15.0",
     "bcryptjs": "^3.0.2",
     "bs58": "^6.0.0",
     "cors": "^2.8.5",
@@ -40,7 +40,7 @@
     "pg": "^8.16.0",
     "tweetnacl": "^1.0.3",
     "twitter-api-v2": "^1.15.0",
-    "uuid": "^9.0.1"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
